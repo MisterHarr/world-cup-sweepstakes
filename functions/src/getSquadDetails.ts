@@ -21,16 +21,22 @@ function uniq(arr: string[]): string[] {
 }
 
 export const getSquadDetails = onCall({ region: REGION }, async (request) => {
-  if (!request.auth?.uid) {
+  const auth = request.auth;
+  if (!auth?.uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
   const db = admin.firestore();
+  const callerUid = auth.uid;
+  const requestedUserId = asString(request.data?.userId) ?? callerUid;
+  const isAdmin = (auth.token as { admin?: boolean })?.admin === true;
 
-  // Allow caller to request any user in order to render leaderboard drawers.
-  // (If you want to lock this down later, we can restrict to same uid or admins.)
-  const requestedUserId =
-    asString(request.data?.userId) ?? request.auth.uid;
+  if (requestedUserId !== callerUid && !isAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "You can only access your own squad details."
+    );
+  }
 
   const userRef = db.collection("users").doc(requestedUserId);
   const userSnap = await userRef.get();

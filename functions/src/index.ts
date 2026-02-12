@@ -246,7 +246,6 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
 ====================================================== */
 
 export { setAdminClaim } from "./admin";
-export { bootstrapAdmin } from "./bootstrapAdmin";
 export { getLeaderboard } from "./getLeaderboard";
 export { getSquadDetails } from "./getSquadDetails";
 export { executeTransfer } from "./transfers";
