@@ -1,0 +1,93 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isUserCreateValid(uid) {
+      return request.resource.data.keys().hasOnly([
+          "uid",
+          "displayName",
+          "email",
+          "photoURL",
+          "portfolio",
+          "totalScore",
+          "remainingTransfers",
+          "isAdmin",
+          "createdAt",
+          "updatedAt"
+        ])
+        && request.resource.data.uid == uid
+        && request.resource.data.totalScore == 0
+        && request.resource.data.remainingTransfers == 3
+        && request.resource.data.isAdmin == false
+        && (
+          !request.resource.data.keys().hasAny(["portfolio"])
+          || request.resource.data.portfolio.size() == 0
+        );
+    }
+
+    function isUserUpdateValid(uid) {
+      return (
+        !request.resource.data.keys().hasAny(["uid"])
+        || request.resource.data.uid == uid
+      )
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          "displayName",
+          "email",
+          "photoURL",
+          "updatedAt"
+        ]);
+    }
+
+    // Teams: signed-in users can read teams
+    match /teams/{teamId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Matches: signed-in users can read, admins can write
+    match /matches/{matchId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Leaderboard: signed-in users can read, admins can write
+    match /leaderboard/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Settings (scoring, config): signed-in users can read, admins can write
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+
+      // Allow creating your doc with safe defaults only
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && isUserCreateValid(uid);
+
+      // Allow updates to profile fields only
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && isUserUpdateValid(uid);
+
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
