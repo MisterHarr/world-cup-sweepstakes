@@ -187,7 +187,7 @@ export default function TeamRevealPage() {
               Your World Cup Squad
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto">
-              You chose 1 team, and we've randomly assigned {assignedTeams.length - 1} more based on
+              You chose 1 team, and we&apos;ve randomly assigned {assignedTeams.length - 1} more based on
               the tier system. Tap to reveal each team one by one!
             </p>
           </div>

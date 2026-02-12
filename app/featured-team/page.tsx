@@ -251,7 +251,7 @@ export default function FeaturedTeamPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center p-4">
         <div className="text-center">
-          <p className="text-muted-foreground mb-4">You're not signed in.</p>
+          <p className="text-muted-foreground mb-4">You&apos;re not signed in.</p>
           <Button onClick={() => router.push("/")}>Go to Landing Page</Button>
         </div>
       </div>
@@ -467,7 +467,7 @@ export default function FeaturedTeamPage() {
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-primary" />
                 </div>
-                You're In!
+                You&apos;re In!
               </DialogTitle>
             </DialogHeader>
 

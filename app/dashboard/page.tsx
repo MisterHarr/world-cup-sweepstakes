@@ -877,19 +877,21 @@ const Bracket = ({
     () => (stages.length > 0 ? stages : [{ id: "EMPTY_STAGE", name: "Match Center" }]),
     [stages]
   );
+  const controlledStageIdx = useMemo(() => {
+    if (!activeStageId) return -1;
+    return stagesToUse.findIndex((stage) => stage.id === activeStageId);
+  }, [activeStageId, stagesToUse]);
   const hasRealStages = stages.length > 0;
   const userTeamSet = useMemo(
     () => new Set((userTeamIds ?? []).map((id) => String(id))),
     [userTeamIds]
   );
 
-  useEffect(() => {
-    if (!activeStageId) return;
-    const idx = stagesToUse.findIndex((stage) => stage.id === activeStageId);
-    if (idx >= 0) setActiveStageIdx(idx);
-  }, [activeStageId, stagesToUse]);
-
-  const safeStageIndex = Math.min(activeStageIdx, Math.max(stagesToUse.length - 1, 0));
+  const stageIndexSource = controlledStageIdx >= 0 ? controlledStageIdx : activeStageIdx;
+  const safeStageIndex = Math.min(
+    stageIndexSource,
+    Math.max(stagesToUse.length - 1, 0)
+  );
   const activeStage = stagesToUse[safeStageIndex];
   const currentMatches = activeStage ? matches[activeStage.id] || [] : [];
   const resolveName = (teamId?: string) =>
@@ -923,16 +925,28 @@ const Bracket = ({
   };
 
   const navigate = (dir: "next" | "prev") => {
-    if (dir === "next" && activeStageIdx < stagesToUse.length - 1)
-      setActiveStageIdx((p) => p + 1);
-    if (dir === "prev" && activeStageIdx > 0)
-      setActiveStageIdx((p) => p - 1);
+    const lastIdx = stagesToUse.length - 1;
+    const nextIdx =
+      dir === "next"
+        ? Math.min(safeStageIndex + 1, lastIdx)
+        : Math.max(safeStageIndex - 1, 0);
+    if (nextIdx === safeStageIndex) return;
+
+    const nextStage = stagesToUse[nextIdx];
+    if (activeStageId && onStageChange && nextStage) {
+      onStageChange(nextStage.id);
+      return;
+    }
+
+    setActiveStageIdx(nextIdx);
   };
 
   useEffect(() => {
     const stage = stagesToUse[safeStageIndex];
-    if (stage && onStageChange) onStageChange(stage.id);
-  }, [onStageChange, safeStageIndex, stagesToUse]);
+    if (!stage || !onStageChange) return;
+    if (activeStageId && stage.id === activeStageId) return;
+    onStageChange(stage.id);
+  }, [activeStageId, onStageChange, safeStageIndex, stagesToUse]);
 
   const normalizeStatus = (status?: string) => (status || "").toUpperCase();
   const isLiveMatch = (match: Match) =>
@@ -1044,7 +1058,7 @@ const Bracket = ({
       <div className="flex items-center justify-between bg-card/70 p-3 rounded-xl border border-border">
         <button
           onClick={() => navigate("prev")}
-          disabled={activeStageIdx === 0}
+          disabled={safeStageIndex === 0}
           className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft size={18} />
@@ -1061,7 +1075,7 @@ const Bracket = ({
 
         <button
           onClick={() => navigate("next")}
-          disabled={activeStageIdx === stagesToUse.length - 1}
+          disabled={safeStageIndex === stagesToUse.length - 1}
           className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronRight size={18} />
@@ -1482,6 +1496,10 @@ const TransferMarket = ({
 
   const projectedScore = selectedDrop && selectedPickup ? userScore - penalty : userScore;
   const intervalRef = useRef<any>(null);
+  const resetConfirmState = () => {
+    setIsConfirmed(false);
+    setConfirmProgress(0);
+  };
 
   const canExecuteTrade =
     Boolean(selectedDrop && selectedPickup) &&
@@ -1534,11 +1552,6 @@ const TransferMarket = ({
     clearInterval(intervalRef.current);
     setConfirmProgress(0);
   };
-
-  useEffect(() => {
-    setIsConfirmed(false);
-    setConfirmProgress(0);
-  }, [selectedDrop, selectedPickup]);
 
   useEffect(() => {
     return () => {
@@ -1614,7 +1627,10 @@ const TransferMarket = ({
               releaseTeams.map((team) => (
                 <div
                   key={team.id}
-                  onClick={() => setSelectedDrop(team)}
+                  onClick={() => {
+                    setSelectedDrop(team);
+                    resetConfirmState();
+                  }}
                   className={[
                     "p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all duration-200",
                     selectedDrop?.id === team.id
@@ -1677,7 +1693,10 @@ const TransferMarket = ({
               filteredAvailable.map((team) => (
                 <div
                   key={team.id}
-                  onClick={() => setSelectedPickup(team)}
+                  onClick={() => {
+                    setSelectedPickup(team);
+                    resetConfirmState();
+                  }}
                   className={[
                     "p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all duration-200",
                     selectedPickup?.id === team.id
