@@ -7,6 +7,7 @@ Use these documents as the active source of truth for the current build:
 3. `docs/BUILD-STATUS-NEXT-STEPS.md`
 4. `docs/TOURNAMENT-RUNBOOK.md`
 5. `docs/ADMIN-TOOLS.md`
+6. `docs/REHEARSAL-LOG.md`
 
 Archived historical planning/design references were moved to:
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { auth, functions } from "@/lib/firebase";
 import { getIdTokenResult } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
@@ -147,7 +147,7 @@ export default function FixtureIngestPage() {
   const [liveOpsCutoffInput, setLiveOpsCutoffInput] = useState("");
   const [checking, setChecking] = useState(true);
 
-  const ingestAlert = useMemo(() => buildIngestAlert(liveOps), [liveOps]);
+  const ingestAlert = buildIngestAlert(liveOps);
 
   function toIsoOrEmpty(value: any): string {
     return value?.toDate?.() instanceof Date ? value.toDate().toISOString() : "";

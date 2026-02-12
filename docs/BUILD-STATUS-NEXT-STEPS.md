@@ -6,6 +6,8 @@ Last updated: 2026-02-12
 
 The app is now in a stable pre-production state for cost-safe testing:
 
+Rehearsal command available: `npm run test:rehearsal` (emulator-only, zero-cost).
+
 - Firebase auth + admin claims are active.
 - Firestore rules are deployed and enforcing admin writes.
 - Dashboard Board/Live routes are mapped correctly.
@@ -48,7 +50,7 @@ Production operational hardening is still required.
 
 - Provider plan decision for true live scoring during tournament windows.
 - Ops alerting/monitoring for ingest failures (beyond manual admin checks).
-- Full tournament rehearsal with final scoring config and transfer rules.
+- Production smoke rehearsal sign-off (provider-enabled short window + rollback verification).
 
 ## Next Best Build Step (Priority 1)
 
@@ -87,3 +89,6 @@ Production observability and ops hardening.
 - Use fixture mode for dev verification.
 - Enable provider mode only for controlled windows.
 - Disable immediately post-tournament.
+
+
+Rehearsal log: `docs/REHEARSAL-LOG.md`.
