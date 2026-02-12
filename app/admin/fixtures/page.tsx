@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { auth, functions } from "@/lib/firebase";
 import { getIdTokenResult } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
@@ -45,6 +45,78 @@ export default function FixtureIngestPage() {
     recentRuns: [],
   };
 
+  type IngestAlertLevel = "healthy" | "warning" | "critical";
+  type IngestAlert = {
+    level: IngestAlertLevel;
+    label: "Healthy" | "Warning" | "Critical";
+    message: string;
+    stale: boolean;
+  };
+
+  const SCHEDULER_INTERVAL_MINUTES = 10;
+  const STALE_AFTER_MINUTES = SCHEDULER_INTERVAL_MINUTES * 3;
+
+  function toMillisOrNull(value?: string): number | null {
+    if (!value || typeof value !== "string") return null;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function buildIngestAlert(state: LiveOpsState): IngestAlert {
+    if (!state.enabled) {
+      return {
+        level: "healthy",
+        label: "Healthy",
+        message: "Automation is disabled (cost-safe mode).",
+        stale: false,
+      };
+    }
+
+    const failures = Math.max(0, Number(state.consecutiveFailures ?? 0));
+    const lastRunMs = toMillisOrNull(state.lastRunAt);
+    const stale =
+      lastRunMs === null ||
+      Date.now() - lastRunMs > STALE_AFTER_MINUTES * 60 * 1000;
+
+    if (failures >= 3 || (stale && failures >= 1)) {
+      return {
+        level: "critical",
+        label: "Critical",
+        message: stale
+          ? `Scheduler appears stale and has ${failures} consecutive failure(s).`
+          : `Scheduler has ${failures} consecutive failures.`,
+        stale,
+      };
+    }
+
+    if (state.lastRunStatus === "error" || failures >= 1 || stale) {
+      if (stale && lastRunMs === null) {
+        return {
+          level: "warning",
+          label: "Warning",
+          message: "Automation is enabled but no scheduler run has been recorded yet.",
+          stale: true,
+        };
+      }
+
+      return {
+        level: "warning",
+        label: "Warning",
+        message: stale
+          ? `No run in the last ${STALE_AFTER_MINUTES} minutes.`
+          : "Latest scheduler run reported an error.",
+        stale,
+      };
+    }
+
+    return {
+      level: "healthy",
+      label: "Healthy",
+      message: "Latest scheduler run succeeded and health is stable.",
+      stale: false,
+    };
+  }
+
   const [uid, setUid] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [status, setStatus] = useState("");
@@ -74,6 +146,8 @@ export default function FixtureIngestPage() {
   const [liveOpsMaxInput, setLiveOpsMaxInput] = useState("");
   const [liveOpsCutoffInput, setLiveOpsCutoffInput] = useState("");
   const [checking, setChecking] = useState(true);
+
+  const ingestAlert = useMemo(() => buildIngestAlert(liveOps), [liveOps]);
 
   function toIsoOrEmpty(value: any): string {
     return value?.toDate?.() instanceof Date ? value.toDate().toISOString() : "";
@@ -662,6 +736,33 @@ export default function FixtureIngestPage() {
 
                 <div className="rounded-lg border border-slate-800/70 bg-slate-900/50 p-3 text-xs text-slate-300 space-y-1">
                   <div className="font-semibold text-slate-100">Ingest Health</div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${
+                        ingestAlert.level === "critical"
+                          ? "border-rose-500/40 bg-rose-500/15 text-rose-200"
+                          : ingestAlert.level === "warning"
+                          ? "border-amber-500/40 bg-amber-500/15 text-amber-200"
+                          : "border-emerald-500/40 bg-emerald-500/15 text-emerald-200"
+                      }`}
+                    >
+                      Status: {ingestAlert.label}
+                    </span>
+                    {ingestAlert.stale ? (
+                      <span className="text-amber-300">stale scheduler signal</span>
+                    ) : null}
+                  </div>
+                  <div
+                    className={
+                      ingestAlert.level === "critical"
+                        ? "text-rose-300"
+                        : ingestAlert.level === "warning"
+                        ? "text-amber-300"
+                        : "text-emerald-300"
+                    }
+                  >
+                    {ingestAlert.message}
+                  </div>
                   <div className="flex items-center gap-2">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${
