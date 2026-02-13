@@ -2,7 +2,7 @@
 
 Last updated: 2026-02-12
 
-## Rehearsal 2026-02-12
+## Emulator Rehearsal 2026-02-12
 
 Command:
 
@@ -22,6 +22,23 @@ Scope covered:
 - Transfer-window guardrail
 - Squad privacy/authz guardrail (non-admin blocked, admin allowed)
 
+## Provider Smoke Sign-Off 2026-02-12 (Controlled Window)
+
+Configuration:
+- Automation: ENABLED
+- Provider: `provider` (production)
+- Fixture max matches cap: `3`
+
+Observed provider cycles:
+- `2026-02-12T14:52:05.290Z` -> success, provider, `m:3 u:0`
+- `2026-02-12T15:02:04.835Z` -> success, provider, `m:3 u:0`
+
+Shutdown evidence:
+- Automation returned to DISABLED at `2026-02-12T15:11:26.607Z`.
+- Last run remained success with provider health stable.
+
+Result: PASS
+
 Known limits:
-- This rehearsal is emulator-based and cost-safe.
-- Provider scheduling smoke remains controlled/short-window operational testing.
+- Rehearsal coverage is emulator-first plus a short production-provider smoke window.
+- Keep provider automation disabled outside controlled tournament windows.
