@@ -62,32 +62,37 @@ Rehearsal command available: `npm run test:rehearsal` (emulator-only, zero-cost)
 
 ## What Is Still Missing (Production-Critical)
 
-- Final pre-tournament checklist rerun after participant onboarding grows beyond current 2-user set.
+- (None currently tracked as production-critical in this file.)
 
 ## Next Best Build Step (Priority 1)
 
-Rerun final pre-tournament checklist after participant onboarding grows beyond the current 2-user set.
+UX finish pass on dashboard and match center (responsive QA + accessibility + performance).
 
 ### Scope
 
-1. Validate fallback drill (`Run Fixture Ingest` + `Recompute Leaderboard`) with larger participant load.
-2. Validate transfer guardrails under the larger participant set.
-3. Confirm safe reset state after checks (`scheduler DISABLED`, `transferWindow disabled`).
-4. Record timestamped evidence in `docs/REHEARSAL-LOG.md`.
+1. Responsive QA across key routes:
+   - `/dashboard` (leaderboard, bracket, transfer)
+   - `/live`
+   - `/badges`
+2. Accessibility pass:
+   - keyboard navigation
+   - focus states
+   - readable contrast on primary CTAs
+3. Performance pass:
+   - identify obvious LCP/CLS regressions
+   - reduce large image/layout shifts where practical
+4. Keep ops defaults cost-safe (`scheduler DISABLED`, `transferWindow disabled`).
 
 ### Acceptance Criteria
 
-- Operational sign-off remains PASS with larger participant load.
-- Transfer and authz guardrails remain unchanged.
-- Cost-safe defaults are restored after verification.
+- No layout regressions on desktop/mobile across key routes.
+- Accessibility improvements do not regress auth/guardrails.
+- Performance improvements do not change tournament logic.
 
 ## Recommended Build Order After Priority 1
 
-1. UX finish pass:
-   - responsive QA
-   - accessibility
-   - performance pass on dashboard and match center.
-2. Controlled provider dry-run only during explicit live-ops windows, then reset to `DISABLED`.
+1. Controlled provider dry-run only during explicit live-ops windows, then reset to `DISABLED`.
+2. Final pre-go-live runbook walkthrough immediately before tournament windows.
 
 ## Cost Guardrail Policy
 
