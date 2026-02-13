@@ -55,31 +55,31 @@ Rehearsal command available: `npm run test:rehearsal` (emulator-only, zero-cost)
   - manual fallback ingest + recompute PASS
   - transfer guardrails PASS
   - safe reset state restored (`scheduler DISABLED`, `transferWindow disabled`)
+- Transfer CTA contrast/accessibility fix is merged:
+  - commit: `66a3825` (`fix(ui): improve transfer CTA contrast in transfer window active state`)
+  - merge on `main`: `1eeed54` (PR #1)
+  - PR: `https://github.com/MisterHarr/world-cup-sweepstakes/pull/1`
 
 ## What Is Still Missing (Production-Critical)
 
-- Transfer page CTA contrast/accessibility fix (active button text readability).
 - Final pre-tournament checklist rerun after participant onboarding grows beyond current 2-user set.
 
 ## Next Best Build Step (Priority 1)
 
-Fix transfer CTA contrast/accessibility on active state.
+Rerun final pre-tournament checklist after participant onboarding grows beyond the current 2-user set.
 
 ### Scope
 
-1. Update active transfer CTA colors so text meets readable contrast on desktop/mobile.
-2. Verify states:
-   - default/inactive
-   - active/clickable
-   - disabled/blocked
-3. Keep visual style consistent with the current dark luxury theme.
-4. Capture before/after screenshots in docs if needed for handover.
+1. Validate fallback drill (`Run Fixture Ingest` + `Recompute Leaderboard`) with larger participant load.
+2. Validate transfer guardrails under the larger participant set.
+3. Confirm safe reset state after checks (`scheduler DISABLED`, `transferWindow disabled`).
+4. Record timestamped evidence in `docs/REHEARSAL-LOG.md`.
 
 ### Acceptance Criteria
 
-- Transfer CTA text remains readable in all states.
-- No layout regressions on dashboard transfer tab (desktop + mobile).
-- Existing transfer behavior and guardrails remain unchanged.
+- Operational sign-off remains PASS with larger participant load.
+- Transfer and authz guardrails remain unchanged.
+- Cost-safe defaults are restored after verification.
 
 ## Recommended Build Order After Priority 1
 
@@ -87,7 +87,7 @@ Fix transfer CTA contrast/accessibility on active state.
    - responsive QA
    - accessibility
    - performance pass on dashboard and match center.
-2. Final pre-tournament checklist rerun after larger participant load.
+2. Controlled provider dry-run only during explicit live-ops windows, then reset to `DISABLED`.
 
 ## Cost Guardrail Policy
 

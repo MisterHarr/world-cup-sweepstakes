@@ -52,6 +52,27 @@ Scope covered:
 - Transfer-window guardrail
 - Squad privacy/authz guardrail (non-admin blocked, admin allowed)
 
+## UI Contrast Checkpoint 2026-02-13
+
+Scope:
+- Transfer CTA active-state text contrast/readability fix in `/app/dashboard/page.tsx`.
+
+Git evidence:
+- Commit: `66a3825` (`fix(ui): improve transfer CTA contrast in transfer window active state`)
+- PR: `https://github.com/MisterHarr/world-cup-sweepstakes/pull/1`
+- Merge commit on `main`: `1eeed54`
+
+Quality gate evidence:
+- `npm run lint` -> PASS (warnings-only baseline, 0 errors)
+- `npm run build` -> PASS
+- `(cd functions && npm run build)` -> PASS
+- `npm run test:rehearsal` -> PASS
+  - PASS: executeTransfer + recompute regression test
+  - PASS: transfer window closed guardrail regression test
+  - PASS: getSquadDetails authz regression test
+
+Result: PASS
+
 ## Provider Smoke Sign-Off 2026-02-12 (Controlled Window)
 
 Configuration:
