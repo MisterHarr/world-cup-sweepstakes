@@ -51,42 +51,43 @@ Rehearsal command available: `npm run test:rehearsal` (emulator-only, zero-cost)
   - Alert policy: `projects/worldcup-sweepstake-2026/alertPolicies/8460958675161850743`
   - Notification channel: `projects/worldcup-sweepstake-2026/notificationChannels/5604417890488344253`
   - Synthetic incident verified at `2026-02-13T08:51:32Z`
+- Final operational sign-off checks completed for the current user set (2 users):
+  - manual fallback ingest + recompute PASS
+  - transfer guardrails PASS
+  - safe reset state restored (`scheduler DISABLED`, `transferWindow disabled`)
 
 ## What Is Still Missing (Production-Critical)
 
-- Final pre-tournament go-live checklist run with real participant data loaded.
+- Transfer page CTA contrast/accessibility fix (active button text readability).
+- Final pre-tournament checklist rerun after participant onboarding grows beyond current 2-user set.
 
 ## Next Best Build Step (Priority 1)
 
-Run final pre-tournament operational sign-off with real participant data.
+Fix transfer CTA contrast/accessibility on active state.
 
 ### Scope
 
-1. Keep scheduler `DISABLED` and run full checklist in `docs/TOURNAMENT-RUNBOOK.md` section 8.
-2. Confirm live fallback path works end-to-end:
-   - disable automation
-   - manual ingest
-   - recompute
-   - Board/Live validation
-3. Verify transfer guardrails again with the two real user accounts.
-4. Record sign-off date/time and operator in `docs/REHEARSAL-LOG.md`.
+1. Update active transfer CTA colors so text meets readable contrast on desktop/mobile.
+2. Verify states:
+   - default/inactive
+   - active/clickable
+   - disabled/blocked
+3. Keep visual style consistent with the current dark luxury theme.
+4. Capture before/after screenshots in docs if needed for handover.
 
 ### Acceptance Criteria
 
-- Pre-tournament checklist is completed against the real environment.
-- Fallback and transfer flows are verified with current production settings.
-- A dated sign-off entry is recorded in `docs/REHEARSAL-LOG.md`.
+- Transfer CTA text remains readable in all states.
+- No layout regressions on dashboard transfer tab (desktop + mobile).
+- Existing transfer behavior and guardrails remain unchanged.
 
 ## Recommended Build Order After Priority 1
 
-1. Final pre-tournament operational sign-off:
-   - run runbook checklist with real participant data
-   - confirm provider ingest window procedure
-   - verify fallback path under incident conditions
-2. UX finish pass:
+1. UX finish pass:
    - responsive QA
    - accessibility
    - performance pass on dashboard and match center.
+2. Final pre-tournament checklist rerun after larger participant load.
 
 ## Cost Guardrail Policy
 

@@ -12,6 +12,36 @@ npm run test:rehearsal
 
 Result: PASS
 
+## Pre-Tournament Operational Sign-Off 2026-02-13 (Current User Set)
+
+Environment state before checks:
+- Scheduler: `DISABLED`
+- Provider configured: `provider`
+- Ingest health: last run success, no current errors
+
+Fallback drill evidence:
+- Manual fixture ingest: `✅ Ingested 12 matches, updated 0. Leaderboard recomputed.`
+- Manual recompute: `✅ Recomputed for 2 users (15 matches).`
+- Leaderboard status timestamp: `2026-02-13T09:29:12.519Z`
+
+Transfer guardrail evidence:
+- Transfer window opened for test and then closed.
+- Valid transfer succeeded:
+  - `penaltyDelta: 15`
+  - `transfersDelta: -1`
+- Invalid second transfer attempt blocked:
+  - `code: functions/failed-precondition`
+  - `message: You can only drop one of your drawn teams.`
+
+Safe reset evidence:
+- `transferWindow disabled` confirmed after test.
+- Scheduler remained `DISABLED`.
+
+Result: PASS (for current registered users: 2)
+
+Follow-up (UI polish):
+- Transfer CTA button has low text contrast when active; track fix before production launch.
+
 Evidence:
 - PASS: executeTransfer + recompute regression test succeeded.
 - PASS: transfer window closed guardrail regression test succeeded.
