@@ -1,0 +1,7 @@
+severity>=ERROR
+(
+  textPayload:"[ingest] scheduled ingest failed:"
+  OR jsonPayload.message:"[ingest] scheduled ingest failed:"
+  OR textPayload:"[ingest] provider fetch failed:"
+  OR jsonPayload.message:"[ingest] provider fetch failed:"
+)

@@ -1,6 +1,6 @@
 # Build Status and Next Steps
 
-Last updated: 2026-02-12
+Last updated: 2026-02-13
 
 ## Current Build Status
 
@@ -47,35 +47,42 @@ Rehearsal command available: `npm run test:rehearsal` (emulator-only, zero-cost)
 - Dashboard transfer tab is wired to live callable + live transfer-window state.
 - Dashboard and Badges now share one nav source (`lib/mainNav.ts`) for consistent UX labels/order.
 - Tournament runbook includes a production readiness sign-off checklist.
+- External alerting is now live in Cloud Monitoring:
+  - Alert policy: `projects/worldcup-sweepstake-2026/alertPolicies/8460958675161850743`
+  - Notification channel: `projects/worldcup-sweepstake-2026/notificationChannels/5604417890488344253`
+  - Synthetic incident verified at `2026-02-13T08:51:32Z`
 
 ## What Is Still Missing (Production-Critical)
 
-- External alerting integration for ingest failures (email/Slack/PagerDuty), beyond in-app admin monitoring.
 - Final pre-tournament go-live checklist run with real participant data loaded.
 
 ## Next Best Build Step (Priority 1)
 
-External alerting integration for ingest failures.
+Run final pre-tournament operational sign-off with real participant data.
 
 ### Scope
 
-1. Add Cloud Logging filter and alert policy definition for repeated `ingestLiveScores` failures.
-2. Configure at least one notification destination (email is acceptable baseline).
-3. Add a short "alert test" procedure to the runbook.
-4. Record alert policy IDs/links in docs for handover continuity.
+1. Keep scheduler `DISABLED` and run full checklist in `docs/TOURNAMENT-RUNBOOK.md` section 8.
+2. Confirm live fallback path works end-to-end:
+   - disable automation
+   - manual ingest
+   - recompute
+   - Board/Live validation
+3. Verify transfer guardrails again with the two real user accounts.
+4. Record sign-off date/time and operator in `docs/REHEARSAL-LOG.md`.
 
 ### Acceptance Criteria
 
-- Ingest failure signal reaches an operator without requiring dashboard polling.
-- Operator can detect and react to bad ingest runs within minutes.
-- Alert setup is documented with a repeatable test procedure.
+- Pre-tournament checklist is completed against the real environment.
+- Fallback and transfer flows are verified with current production settings.
+- A dated sign-off entry is recorded in `docs/REHEARSAL-LOG.md`.
 
 ## Recommended Build Order After Priority 1
 
-1. External alerting and on-call wiring:
-   - failure alert policy
-   - notification channel
-   - test-and-ack procedure
+1. Final pre-tournament operational sign-off:
+   - run runbook checklist with real participant data
+   - confirm provider ingest window procedure
+   - verify fallback path under incident conditions
 2. UX finish pass:
    - responsive QA
    - accessibility
