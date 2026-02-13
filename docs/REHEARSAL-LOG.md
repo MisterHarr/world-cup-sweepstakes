@@ -73,6 +73,44 @@ Quality gate evidence:
 
 Result: PASS
 
+## Pre-Tournament Operational Sign-Off 2026-02-13 (Expanded Participant Set)
+
+Goal:
+- Rerun final pre-tournament checklist after onboarding grew beyond the initial 2-user set.
+
+Participant set:
+- Total users: 5
+- Temporary seeded users were added for this rehearsal window.
+
+Environment state before checks:
+- Scheduler / liveOps: `DISABLED` (`settings/liveOps.enabled=false`)
+- Transfer window: disabled (`settings/transferWindow.enabled=false`)
+
+Fallback drill evidence (fixture mode):
+- Preview Reset (`maxMatches=12`): `willDelete=12`, `willIngest=12`
+- Reset + Ingest (`maxMatches=12`): `deleted=12`, `ingested=12`, `updated=12`
+- Recompute: `✅ Recomputed for 5 users (15 matches).`
+- Leaderboard status timestamp: `2026-02-13T13:11:22.440Z`
+- Leaderboard rows: 5
+
+Transfer guardrail evidence:
+- Transfer window opened for test and then closed.
+- Valid transfer succeeded:
+  - `remainingTransfers: 2`
+  - `leaderboardRecomputed: true`
+- Invalid transfer attempt blocked (drop featured):
+  - `code: functions/failed-precondition`
+  - `message: Featured team cannot be transferred.`
+- Invalid transfer attempt blocked (window closed):
+  - `code: functions/failed-precondition`
+  - `message: Transfer window is closed.`
+
+Safe reset evidence:
+- `transferWindow disabled` confirmed after test.
+- Scheduler remained `DISABLED`.
+
+Result: PASS (expanded participant set: 5)
+
 ## Provider Smoke Sign-Off 2026-02-12 (Controlled Window)
 
 Configuration:
