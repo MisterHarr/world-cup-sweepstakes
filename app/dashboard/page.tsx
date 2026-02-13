@@ -1507,6 +1507,7 @@ const TransferMarket = ({
     transfersRemaining > 0 &&
     !transferBusy &&
     !isSubmitting;
+  const tradeButtonDisabled = !canExecuteTrade;
 
   const startConfirm = () => {
     if (!selectedDrop || !selectedPickup || !canExecuteTrade || isConfirmed) return;
@@ -1763,24 +1764,24 @@ const TransferMarket = ({
               </div>
             ) : (
               <button
-                disabled={!canExecuteTrade}
+                disabled={tradeButtonDisabled}
                 onMouseDown={startConfirm}
                 onMouseUp={stopConfirm}
                 onMouseLeave={stopConfirm}
                 onTouchStart={startConfirm}
                 onTouchEnd={stopConfirm}
                 className={[
-                  "relative w-full md:w-64 py-4 rounded-xl font-bold text-sm uppercase tracking-wider overflow-hidden group transition-all select-none",
-                  !transferWindowOpen || transfersRemaining <= 0 || transferBusy || isSubmitting
-                    ? "bg-white/5 text-muted-foreground/70 cursor-not-allowed border border-border"
-                    : "bg-primary text-primary-foreground cursor-pointer hover:bg-primary/90 shadow-xl shadow-emerald-500/20 hover:shadow-2xl hover:scale-[1.02] transition-all",
+                  "relative w-full md:w-64 py-4 rounded-xl border font-bold text-sm uppercase tracking-wider overflow-hidden transition-all select-none",
+                  tradeButtonDisabled
+                    ? "bg-white/5 text-muted-foreground/70 cursor-not-allowed border-border"
+                    : "bg-emerald-500 text-slate-950 cursor-pointer border-emerald-300/50 hover:bg-emerald-400 shadow-xl shadow-emerald-500/25 hover:shadow-2xl hover:scale-[1.02]",
                 ].join(" ")}
               >
                 <div
-                  className="absolute left-0 top-0 bottom-0 bg-emerald-500 transition-all duration-75 ease-linear"
+                  className="absolute left-0 top-0 bottom-0 bg-white/25 transition-all duration-75 ease-linear"
                   style={{ width: `${confirmProgress}%` }}
                 />
-                <div className="relative z-10 flex items-center justify-center gap-2 mix-blend-screen">
+                <div className="relative z-10 flex items-center justify-center gap-2 text-inherit">
                   {isSubmitting || transferBusy
                     ? "Executing..."
                     : confirmProgress > 0
