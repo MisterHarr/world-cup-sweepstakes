@@ -7,8 +7,13 @@ Project: world-cup-sweepstakes
 
 Read first (required):
 1) /docs/COMMIT_EXECUTION_HANDOVER.md
-2) /docs/INDEX.md (or equivalent point-of-truth index)
-3) Architecture/roadmap/non-negotiables docs referenced by the handover file
+2) /docs/LEAD_ENGINEER_HANDOVER.md
+3) /docs/INDEX.md (or equivalent point-of-truth index)
+4) Architecture/roadmap/non-negotiables docs referenced by the handover file
+
+Working directory rule:
+- Use /Users/harrison.j/world-cup-sweepstakes-clean as the git source of truth.
+- Treat /Users/harrison.j/world-cup-sweepstakes as non-authoritative runtime copy.
 
 Execution constraints:
 - One step at a time.
@@ -20,7 +25,8 @@ Execution constraints:
 - Follow PR-based hygiene.
 
 Primary goal:
-Safely migrate long-running local-only work into clean commits and PRs without regressions.
+Continue checkpointed delivery safely with strict git hygiene, starting from post-merge `main`, and execute the current Priority 1 item from `docs/BUILD-STATUS-NEXT-STEPS.md`:
+- Rerun final pre-tournament checklist after participant onboarding grows beyond the current 2-user set.
 
 First action now:
 1. Run and summarize:
