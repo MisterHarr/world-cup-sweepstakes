@@ -371,14 +371,14 @@ const Leaderboard = ({
   }, [hasDeptData, selectedDept, sorted, topIds]);
 
   return (
-    <div className="relative min-h-[500px]">
+    <main className="relative min-h-[500px]">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-1">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
             <Trophy className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-foreground">Leaderboard</h2>
+            <h1 className="text-lg font-bold text-foreground">Leaderboard</h1>
             <p className="text-xs text-muted-foreground">
               {sorted.length} Participants
             </p>
@@ -430,36 +430,9 @@ const Leaderboard = ({
       ) : (
         <div className="space-y-6">
           {/* Top 3 Podium */}
-          <div className="grid grid-cols-3 gap-4 mb-8 px-4">
-            {/* 2nd Place */}
-            <div className="flex flex-col items-center pt-8">
-              <div className="relative mb-3">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-400 to-slate-200 flex items-center justify-center shadow-lg ring-4 ring-slate-400/20">
-                  <span className="text-3xl font-bold text-slate-800">2</span>
-                </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-white" />
-                </div>
-              </div>
-              <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
-                {topThree[1]?.name ?? "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                {Number(topThree[1]?.totalScore ?? 0).toLocaleString()} pts
-              </p>
-              {topThree[1]?.teams?.[0] && (
-                <div className="flex gap-1 mt-2">
-                  {topThree[1].teams.slice(0, 3).map((t, i) => (
-                    <div key={i} className="w-5 h-5 text-xs">
-                      {(t.name ?? "--").slice(0, 2).toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 1st Place */}
-            <div className="flex flex-col items-center">
+          <ol className="grid grid-cols-3 gap-4 mb-8 px-4 list-none" aria-label="Top 3 leaderboard">
+            {/* 1st Place - Moved first in DOM for semantic ordering */}
+            <li className="flex flex-col items-center order-2" value="1">
               <div className="relative mb-3">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-500 via-amber-500 to-yellow-300 flex items-center justify-center shadow-xl ring-4 ring-yellow-500/30">
                   <span className="text-4xl font-bold text-amber-900">1</span>
@@ -486,10 +459,37 @@ const Leaderboard = ({
                   ))}
                 </div>
               )}
-            </div>
+            </li>
+
+            {/* 2nd Place */}
+            <li className="flex flex-col items-center pt-8 order-1" value="2">
+              <div className="relative mb-3">
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-400 to-slate-200 flex items-center justify-center shadow-lg ring-4 ring-slate-400/20">
+                  <span className="text-3xl font-bold text-slate-800">2</span>
+                </div>
+                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 flex items-center justify-center">
+                  <Shield className="w-3 h-3 text-white" />
+                </div>
+              </div>
+              <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
+                {topThree[1]?.name ?? "—"}
+              </p>
+              <p className="text-xs text-muted-foreground font-medium mt-1">
+                {Number(topThree[1]?.totalScore ?? 0).toLocaleString()} pts
+              </p>
+              {topThree[1]?.teams?.[0] && (
+                <div className="flex gap-1 mt-2">
+                  {topThree[1].teams.slice(0, 3).map((t, i) => (
+                    <div key={i} className="w-5 h-5 text-xs">
+                      {(t.name ?? "--").slice(0, 2).toUpperCase()}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </li>
 
             {/* 3rd Place */}
-            <div className="flex flex-col items-center pt-12">
+            <li className="flex flex-col items-center pt-12 order-3" value="3">
               <div className="relative mb-3">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-600 to-amber-700 flex items-center justify-center shadow-lg ring-4 ring-orange-600/20">
                   <span className="text-2xl font-bold text-amber-100">3</span>
@@ -513,8 +513,8 @@ const Leaderboard = ({
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </li>
+          </ol>
 
           {/* Department Filter Tabs */}
           <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-6">
@@ -806,7 +806,7 @@ const Leaderboard = ({
           </div>
         </>
       )}
-    </div>
+    </main>
   );
 };
 
