@@ -241,7 +241,11 @@ export default function FeaturedTeamPage() {
 
   if (checking || checkingProfile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center">
+      <div
+        className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center"
+        role="status"
+        aria-label="Loading page"
+      >
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
@@ -278,12 +282,19 @@ export default function FeaturedTeamPage() {
 
           {/* Error / Status */}
           {error && (
-            <div className="mb-4 p-3 rounded-xl border border-destructive/20 bg-destructive/10 text-sm text-destructive max-w-2xl mx-auto">
+            <div
+              className="mb-4 p-3 rounded-xl border border-destructive/20 bg-destructive/10 text-sm text-destructive max-w-2xl mx-auto"
+              role="alert"
+            >
               {error}
             </div>
           )}
           {status && (
-            <div className="mb-4 p-3 rounded-xl border border-primary/20 bg-primary/10 text-sm text-primary max-w-2xl mx-auto">
+            <div
+              className="mb-4 p-3 rounded-xl border border-primary/20 bg-primary/10 text-sm text-primary max-w-2xl mx-auto"
+              role="status"
+              aria-live="polite"
+            >
               {status}
             </div>
           )}

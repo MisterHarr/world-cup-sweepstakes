@@ -387,7 +387,11 @@ const Leaderboard = ({
         <div className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-200">
           v0 layout active
         </div>
-        <div className="text-emerald-300 text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm">
+        <div
+          className="text-emerald-300 text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm"
+          aria-live="polite"
+          aria-atomic="true"
+        >
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -397,7 +401,7 @@ const Leaderboard = ({
       </div>
 
       {isLoading ? (
-        <div className="space-y-4">
+        <div className="space-y-4" aria-busy="true" aria-label="Loading leaderboard">
           <div className="grid grid-cols-3 gap-2">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="flex flex-col items-center gap-2">
