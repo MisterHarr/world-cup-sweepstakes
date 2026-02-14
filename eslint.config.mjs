@@ -26,6 +26,8 @@ const eslintConfig = defineConfig([
     // Local archive/reference material and generated output:
     "archive/**",
     "functions/lib/**",
+    // Local reference app (not part of the build/lint surface for this repo):
+    "sweepstakes-game-ux/**",
   ]),
 ]);
 
