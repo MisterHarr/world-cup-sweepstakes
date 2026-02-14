@@ -7,23 +7,25 @@ Last updated: 2026-02-14
 Use these documents in priority order:
 
 1. **`docs/COMMIT_EXECUTION_HANDOVER.md`** - Git workflow and checkpoint hygiene
-2. **`docs/LEAD_ENGINEER_HANDOVER.md`** - Operational context and handover state
-3. **`docs/PRODUCTION-READINESS-ROADMAP.md`** - Sprint plan for production launch ⭐ NEW
-4. **`docs/HANDOVER_PROMPT_CONTEXT_SWITCH.md`** - Context bootstrap prompt template
-5. **`docs/TOURNAMENT-RUNBOOK.md`** - Live operations procedures
-6. **`docs/REHEARSAL-LOG.md`** - Test evidence and sign-off log
-7. **`docs/ADMIN-TOOLS.md`** - Admin tool reference guide
-8. **`ops/monitoring/`** - Alerting setup assets (Cloud Monitoring)
+2. **`docs/TOKEN-REDUCTION-STRATEGIES.md`** - Token efficiency and output compression ⭐ NEW
+3. **`docs/LEAD_ENGINEER_HANDOVER.md`** - Operational context and handover state
+4. **`docs/PRODUCTION-READINESS-ROADMAP.md`** - Sprint plan for production launch
+5. **`docs/HANDOVER_PROMPT_CONTEXT_SWITCH.md`** - Context bootstrap prompt template
+6. **`docs/TOURNAMENT-RUNBOOK.md`** - Live operations procedures
+7. **`docs/REHEARSAL-LOG.md`** - Test evidence and sign-off log
+8. **`docs/ADMIN-TOOLS.md`** - Admin tool reference guide
+9. **`ops/monitoring/`** - Alerting setup assets (Cloud Monitoring)
 
 ## Read Order for New Context
 
 When starting a new session, read in this sequence:
 
 1. `COMMIT_EXECUTION_HANDOVER.md` (workflow rules)
-2. `LEAD_ENGINEER_HANDOVER.md` (current state)
-3. `PRODUCTION-READINESS-ROADMAP.md` (what to build next)
-4. `TOURNAMENT-RUNBOOK.md` (if working on ops/live features)
-5. `REHEARSAL-LOG.md` (for test evidence baseline)
+2. `TOKEN-REDUCTION-STRATEGIES.md` (efficiency discipline)
+3. `LEAD_ENGINEER_HANDOVER.md` (current state)
+4. `PRODUCTION-READINESS-ROADMAP.md` (what to build next)
+5. `TOURNAMENT-RUNBOOK.md` (if working on ops/live features)
+6. `REHEARSAL-LOG.md` (for test evidence baseline)
 
 ## Archived Documents
 
