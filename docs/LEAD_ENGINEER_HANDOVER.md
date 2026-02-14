@@ -52,9 +52,15 @@ Follow-on docs checkpoint is also completed:
 
 - Commit on `main`: `f9fa4c2` (`docs(ops): record CTA checkpoint merge and next-step rollover`)
 
+Expanded participant set rerun checkpoint is completed:
+
+- Commit: `750f71f` (`docs(ops): record 5-user pre-tournament rerun evidence`)
+- PR: `https://github.com/MisterHarr/world-cup-sweepstakes/pull/2`
+- Evidence: `docs/REHEARSAL-LOG.md` (section: "Pre-Tournament Operational Sign-Off 2026-02-13 (Expanded Participant Set)")
+
 Current open build item (Priority 1):
 
-- Rerun final pre-tournament checklist after participant onboarding grows beyond the current 2-user set.
+- UX finish pass on dashboard and match center (responsive QA + accessibility + performance).
 - Use `docs/BUILD-STATUS-NEXT-STEPS.md` as scope and acceptance authority.
 
 ## 5) Mandatory Workflow Routine
@@ -131,7 +137,7 @@ After merge cleanup:
    - `git remote -v`
    - `git fetch origin --prune`
    - `git log --oneline --decorate -n 20`
-3. Confirm `main` includes latest merged checkpoints (`1eeed54`, `f9fa4c2`) and no local-only commits.
+3. Confirm `main` includes latest merged checkpoints (`a882ea3`, `1eeed54`, `f9fa4c2`) and no local-only commits.
 4. Confirm ops defaults remain cost-safe before next rehearsal window (`scheduler DISABLED`, `transferWindow disabled`).
 5. Read `docs/BUILD-STATUS-NEXT-STEPS.md` and lock the current Priority 1 scope.
 6. Create branch `codex/<next-checkpoint-name>` for the open item.
