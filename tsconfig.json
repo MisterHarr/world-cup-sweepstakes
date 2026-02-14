@@ -33,6 +33,7 @@
   "exclude": [
     "node_modules",
     "archive",
-    "sweepstakes-game-ux"
+    "sweepstakes-game-ux",
+    "docs/sweepstakes-game-ux"
   ]
 }
