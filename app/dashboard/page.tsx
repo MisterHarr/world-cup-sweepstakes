@@ -375,7 +375,7 @@ const Leaderboard = ({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-1">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-primary" />
+            <Trophy className="w-5 h-5 text-primary" aria-hidden="true" />
           </div>
           <div>
             <h1 className="text-lg font-bold text-foreground">Leaderboard</h1>
@@ -438,10 +438,10 @@ const Leaderboard = ({
                   <span className="text-4xl font-bold text-amber-900">1</span>
                 </div>
                 <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-                  <Crown className="w-8 h-8 text-yellow-500 drop-shadow-lg" />
+                  <Crown className="w-8 h-8 text-yellow-500 drop-shadow-lg" aria-hidden="true" />
                 </div>
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center">
-                  <Trophy className="w-3 h-3 text-amber-900" />
+                  <Trophy className="w-3 h-3 text-amber-900" aria-hidden="true" />
                 </div>
               </div>
               <p className="text-base font-bold text-foreground text-center line-clamp-1">
@@ -468,7 +468,7 @@ const Leaderboard = ({
                   <span className="text-3xl font-bold text-slate-800">2</span>
                 </div>
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-white" />
+                  <Shield className="w-3 h-3 text-white" aria-hidden="true" />
                 </div>
               </div>
               <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
@@ -495,7 +495,7 @@ const Leaderboard = ({
                   <span className="text-2xl font-bold text-amber-100">3</span>
                 </div>
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-orange-600 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-white" />
+                  <Shield className="w-3 h-3 text-white" aria-hidden="true" />
                 </div>
               </div>
               <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
@@ -735,7 +735,7 @@ const Leaderboard = ({
                         >
                           {isCaptain && (
                             <div className="absolute -top-3 -right-2 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm z-10">
-                              <Crown size={12} className="fill-current" />
+                              <Crown size={12} className="fill-current" aria-hidden="true" />
                               CAPTAIN • 2x
                             </div>
                           )}
@@ -1617,7 +1617,7 @@ const TransferMarket = ({
         <div className="bg-card/70 border border-border rounded-2xl overflow-hidden flex flex-col shadow-[0_12px_24px_rgba(0,0,0,0.08)]">
           <div className="p-5 border-b border-border bg-white/5 flex justify-between items-center">
             <h3 className="font-bold text-foreground flex items-center gap-2">
-              <Shield size={18} className="text-muted-foreground/70" /> My Squad
+              <Shield size={18} className="text-muted-foreground/70" aria-hidden="true" /> My Squad
             </h3>
             <span className="text-xs text-muted-foreground/70 font-bold uppercase tracking-wider">
               Select to Release
