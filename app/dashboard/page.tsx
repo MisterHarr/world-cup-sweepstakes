@@ -183,12 +183,12 @@ function tierLabel(tier: number) {
 
 function tierPillClass(tier: number) {
   if (tier === 1)
-    return "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 border-yellow-500/40 shadow-sm shadow-yellow-500/20";
-  if (tier === 2) 
-    return "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-200 border-slate-400/40 shadow-sm shadow-slate-400/20";
+    return "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/40 shadow-sm shadow-yellow-500/20";
+  if (tier === 2)
+    return "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-100 border-slate-400/40 shadow-sm shadow-slate-400/20";
   if (tier === 3)
-    return "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-300 border-orange-600/40 shadow-sm shadow-orange-600/20";
-  return "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-300 border-rose-800/40 shadow-sm shadow-rose-900/20";
+    return "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-200 border-orange-600/40 shadow-sm shadow-orange-600/20";
+  return "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-200 border-rose-800/40 shadow-sm shadow-rose-900/20";
 }
 
 function tierIcon(tier: number) {
