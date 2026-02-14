@@ -45,7 +45,7 @@ function DepartmentPageContent() {
   useEffect(() => {
     if (authLoading) return;
     if (!uid) {
-      router.replace("/");
+      router.replace("/login");
     }
   }, [authLoading, uid, router]);
 
