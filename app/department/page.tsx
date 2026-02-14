@@ -148,7 +148,11 @@ function DepartmentPageContent() {
           <div className="bg-card/50 backdrop-blur-xl border border-border rounded-2xl p-6 shadow-2xl shadow-black/20">
             {/* Loading State */}
             {(checkingExisting || submitting) && (
-              <div className="mb-4 p-3 rounded-xl bg-muted/50 border border-border text-sm text-foreground flex items-center gap-2">
+              <div
+                className="mb-4 p-3 rounded-xl bg-muted/50 border border-border text-sm text-foreground flex items-center gap-2"
+                role="status"
+                aria-live="polite"
+              >
                 <Loader2 className="w-4 h-4 animate-spin" />
                 {checkingExisting
                   ? "Checking your existing profile..."
@@ -158,7 +162,10 @@ function DepartmentPageContent() {
 
             {/* Error Message */}
             {error && (
-              <div className="mb-4 p-3 rounded-xl border border-destructive/20 bg-destructive/10 text-sm text-destructive">
+              <div
+                className="mb-4 p-3 rounded-xl border border-destructive/20 bg-destructive/10 text-sm text-destructive"
+                role="alert"
+              >
                 {error}
               </div>
             )}
@@ -254,7 +261,11 @@ function DepartmentPageContent() {
 export default function DepartmentPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center">
+      <div
+        className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center"
+        role="status"
+        aria-label="Loading page"
+      >
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     }>
