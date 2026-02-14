@@ -164,15 +164,13 @@ function DepartmentPageContent() {
             )}
 
             {/* Department Options */}
-            <div className="space-y-3 mb-6">
+            <fieldset className="space-y-3 mb-6">
+              <legend className="sr-only">Select your department</legend>
               {departments.map((dept) => (
-                <button
+                <label
                   key={dept.value}
-                  type="button"
-                  onClick={() => setSelected(dept.value)}
-                  disabled={checkingExisting || submitting}
                   className={`
-                    w-full rounded-xl border p-4 text-left transition-all duration-200
+                    w-full rounded-xl border p-4 text-left transition-all duration-200 block
                     ${
                       selected === dept.value
                         ? "border-primary bg-primary/5 ring-2 ring-primary/20"
@@ -183,8 +181,18 @@ function DepartmentPageContent() {
                         ? "opacity-50 cursor-not-allowed"
                         : "cursor-pointer"
                     }
+                    focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary
                   `}
                 >
+                  <input
+                    type="radio"
+                    name="department"
+                    value={dept.value}
+                    checked={selected === dept.value}
+                    onChange={() => setSelected(dept.value)}
+                    disabled={checkingExisting || submitting}
+                    className="sr-only"
+                  />
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="font-bold text-foreground">{dept.label}</div>
@@ -199,6 +207,7 @@ function DepartmentPageContent() {
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
+                          aria-hidden="true"
                         >
                           <path
                             strokeLinecap="round"
@@ -210,9 +219,9 @@ function DepartmentPageContent() {
                       </div>
                     )}
                   </div>
-                </button>
+                </label>
               ))}
-            </div>
+            </fieldset>
 
             {/* Action Button */}
             <Button
