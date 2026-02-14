@@ -234,9 +234,9 @@ export default function FeaturedTeamPage() {
     }
   }
 
-  function closeSuccessAndGoDashboard() {
+  function closeSuccessAndGoReveal() {
     setSuccessOpen(false);
-    router.push("/dashboard");
+    router.push("/reveal");
   }
 
   if (checking || checkingProfile) {
@@ -531,8 +531,8 @@ export default function FeaturedTeamPage() {
                 </div>
               </div>
 
-              <Button onClick={closeSuccessAndGoDashboard} className="w-full" size="lg">
-                Continue to Dashboard →
+              <Button onClick={closeSuccessAndGoReveal} className="w-full" size="lg">
+                Reveal Your Teams →
               </Button>
             </div>
           </DialogContent>

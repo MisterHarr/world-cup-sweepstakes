@@ -28,6 +28,7 @@ const eslintConfig = defineConfig([
     "functions/lib/**",
     // Local reference app (not part of the build/lint surface for this repo):
     "sweepstakes-game-ux/**",
+    "docs/sweepstakes-game-ux/**",
   ]),
 ]);
 

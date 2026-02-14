@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AppShell } from "@/components/AppShell";
 import { auth, db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 type RevealTeam = {
@@ -61,6 +61,13 @@ export default function TeamRevealPage() {
       if (!userSnap.exists()) return;
 
       const userData = userSnap.data();
+
+      // If user has already seen reveal, redirect to dashboard
+      if (userData.hasSeenReveal) {
+        router.replace("/dashboard");
+        return;
+      }
+
       const featuredTeamId = userData.featuredTeam;
       const drawnTeamIds = userData.drawnTeams || [];
 
@@ -125,7 +132,17 @@ export default function TeamRevealPage() {
     }, 400);
   };
 
-  const handleViewPortfolio = () => {
+  const handleViewPortfolio = async () => {
+    // Mark reveal as seen
+    if (user?.uid) {
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          hasSeenReveal: true,
+        });
+      } catch (err) {
+        console.error("Error updating hasSeenReveal:", err);
+      }
+    }
     router.push("/dashboard");
   };
 
