@@ -26,7 +26,7 @@ Execution constraints:
 
 Primary goal:
 Continue checkpointed delivery safely with strict git hygiene, starting from post-merge `main`, and execute the current Priority 1 item from `docs/BUILD-STATUS-NEXT-STEPS.md`:
-- Rerun final pre-tournament checklist after participant onboarding grows beyond the current 2-user set.
+- UX finish pass on dashboard and match center (responsive QA + accessibility + performance).
 
 First action now:
 1. Run and summarize:
