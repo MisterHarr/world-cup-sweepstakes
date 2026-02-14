@@ -25,8 +25,8 @@ Execution constraints:
 - Follow PR-based hygiene.
 
 Primary goal:
-Continue checkpointed delivery safely with strict git hygiene, starting from post-merge `main`, and execute the current Priority 1 item from `docs/BUILD-STATUS-NEXT-STEPS.md`:
-- UX finish pass on dashboard and match center (responsive QA + accessibility + performance).
+Continue checkpointed delivery safely with strict git hygiene, starting from post-merge `main`, and execute the current Priority 1 sprint from `docs/PRODUCTION-READINESS-ROADMAP.md`:
+- Sprint 1: Accessibility & WCAG 2.1 AA Compliance (P0 - blocks launch)
 
 First action now:
 1. Run and summarize:

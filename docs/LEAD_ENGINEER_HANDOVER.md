@@ -1,6 +1,6 @@
 # Lead Engineer Handover
 
-Last updated: 2026-02-13
+Last updated: 2026-02-14
 
 ## 1) Scope and Intent
 
@@ -58,10 +58,17 @@ Expanded participant set rerun checkpoint is completed:
 - PR: `https://github.com/MisterHarr/world-cup-sweepstakes/pull/2`
 - Evidence: `docs/REHEARSAL-LOG.md` (section: "Pre-Tournament Operational Sign-Off 2026-02-13 (Expanded Participant Set)")
 
+Auth UX checkpoint completed and merged:
+
+- Commit: `9ed534d` (`fix(auth): restore login UI and redirect on sign-out`)
+- PR: `https://github.com/MisterHarr/world-cup-sweepstakes/pull/4`
+- Invariants: `/login` shows v0 landing UI, sign-out redirects to `/login`
+
 Current open build item (Priority 1):
 
-- UX finish pass on dashboard and match center (responsive QA + accessibility + performance).
-- Use `docs/BUILD-STATUS-NEXT-STEPS.md` as scope and acceptance authority.
+- **Production readiness sprint plan** now defined in `docs/PRODUCTION-READINESS-ROADMAP.md`.
+- **Next sprint:** Sprint 1 - Accessibility & WCAG 2.1 AA Compliance (P0, blocks launch).
+- Use `docs/PRODUCTION-READINESS-ROADMAP.md` as scope and acceptance authority.
 
 ## 5) Mandatory Workflow Routine
 
@@ -155,8 +162,10 @@ After merge cleanup:
 1. `docs/COMMIT_EXECUTION_HANDOVER.md`
 2. `docs/LEAD_ENGINEER_HANDOVER.md`
 3. `docs/INDEX.md`
-4. `docs/BUILD-STATUS-NEXT-STEPS.md`
+4. `docs/PRODUCTION-READINESS-ROADMAP.md` ⭐ (replaces BUILD-STATUS-NEXT-STEPS.md)
 5. `docs/TOURNAMENT-RUNBOOK.md`
 6. `docs/REHEARSAL-LOG.md`
 
 If any conflict is found between these docs, stop and escalate with file references before implementation.
+
+**Note:** `BUILD-STATUS-NEXT-STEPS.md` was archived to `archive/docs-legacy/BUILD-STATUS-NEXT-STEPS-2026-02-13.md` on 2026-02-14.
