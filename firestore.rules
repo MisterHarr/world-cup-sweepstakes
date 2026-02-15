@@ -38,6 +38,9 @@ service cloud.firestore {
         !request.resource.data.keys().hasAny(["uid"])
         || request.resource.data.uid == uid
       )
+        // Prevent client-side updates to sensitive fields
+        // portfolio, totalScore, remainingTransfers, entry, department, isAdmin
+        // can only be updated via Cloud Functions (Admin SDK)
         && request.resource.data.diff(resource.data).changedKeys().hasOnly([
           "displayName",
           "email",
@@ -58,10 +61,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Leaderboard: signed-in users can read, admins can write
+    // Leaderboard: signed-in users can read, admins + Cloud Functions can write
     match /leaderboard/{docId} {
       allow read: if signedIn();
+      // Admin users can write
       allow write: if isAdmin();
+      // Note: Cloud Functions write via Admin SDK (bypasses rules)
     }
 
     // Settings (scoring, config): signed-in users can read, admins can write
@@ -78,7 +83,8 @@ service cloud.firestore {
         && request.auth.uid == uid
         && isUserCreateValid(uid);
 
-      // Allow updates to profile fields only
+      // Allow updates to profile fields only (NOT portfolio, totalScore, remainingTransfers)
+      // Cloud Functions handle portfolio/score updates via Admin SDK
       allow update: if signedIn()
         && request.auth.uid == uid
         && isUserUpdateValid(uid);

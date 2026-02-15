@@ -3,6 +3,8 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requireAuth } from "./auth";
 import { recomputeScoresCore } from "./scoring";
+import { checkRateLimit, RateLimits } from "./utils/rateLimiter";
+import { validateTeamId } from "./utils/validation";
 
 const REGION = "asia-southeast1";
 const TRANSFER_WINDOW_DOC = "transferWindow";
@@ -100,15 +102,13 @@ function getSquadFromUser(userData: any): {
 export const executeTransfer = onCall({ region: REGION }, async (request) => {
   const auth = requireAuth(request);
   const uid = auth.uid;
-  const dropTeamId = asString(request.data?.dropTeamId);
-  const pickupTeamId = asString(request.data?.pickupTeamId);
 
-  if (!dropTeamId || !pickupTeamId) {
-    throw new HttpsError(
-      "invalid-argument",
-      "dropTeamId and pickupTeamId are required."
-    );
-  }
+  // Rate limiting: max 5 transfer attempts per minute
+  checkRateLimit(uid, RateLimits.transfer);
+
+  // Input validation
+  const dropTeamId = validateTeamId(request.data?.dropTeamId, "dropTeamId");
+  const pickupTeamId = validateTeamId(request.data?.pickupTeamId, "pickupTeamId");
 
   if (dropTeamId === pickupTeamId) {
     throw new HttpsError(

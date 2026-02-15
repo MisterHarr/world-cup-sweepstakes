@@ -1,6 +1,9 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { checkRateLimit, RateLimits } from "./utils/rateLimiter";
+import { logError } from "./utils/logger";
+import { validateTeamId, validateEnum } from "./utils/validation";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -92,10 +95,11 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const teamId = request.data?.teamId;
-  if (typeof teamId !== "string" || teamId.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "teamId must be provided.");
-  }
+  // Rate limiting: max 10 featured team selections per minute
+  checkRateLimit(uid, RateLimits.featuredTeam);
+
+  // Input validation
+  const teamId = validateTeamId(request.data?.teamId, "teamId");
 
   const userRef = db.collection("users").doc(uid);
 
@@ -205,7 +209,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     };
   } catch (err: any) {
     if (err?.code) throw err;
-    console.error("confirmFeaturedTeam failed:", err);
+    logError("confirmFeaturedTeam", err);
     throw new HttpsError("internal", "Failed to confirm featured team.");
   }
 });
@@ -215,7 +219,6 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
 ====================================================== */
 
 const ALLOWED_DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
-type Department = (typeof ALLOWED_DEPARTMENTS)[number];
 
 export const setDepartment = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
@@ -223,13 +226,15 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const department = request.data?.department as Department | undefined;
-  if (!department || !ALLOWED_DEPARTMENTS.includes(department)) {
-    throw new HttpsError(
-      "invalid-argument",
-      "Department must be Primary, Secondary, or Admin."
-    );
-  }
+  // Rate limiting: max 3 department changes per hour
+  checkRateLimit(uid, RateLimits.department);
+
+  // Input validation
+  const department = validateEnum(
+    request.data?.department,
+    "department",
+    ALLOWED_DEPARTMENTS
+  );
 
   const isAdmin = request.auth?.token?.admin === true;
 

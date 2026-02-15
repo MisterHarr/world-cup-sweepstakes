@@ -8,7 +8,7 @@ export function requireAuth(request: CallableRequest) {
   return request.auth;
 }
 
-export function requireAdmin(request: CallableRequest) {
+export function requireAdmin(request: CallableRequest): string {
   const auth = requireAuth(request);
   const isAdmin = (auth.token as { admin?: boolean })?.admin === true;
 
@@ -16,5 +16,5 @@ export function requireAdmin(request: CallableRequest) {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
 
-  return auth;
+  return auth.uid;
 }

@@ -913,7 +913,7 @@ export const adminResetFixtureIngest = onCall(
 export const setLiveOpsSettings = onCall(
   { region: REGION, secrets: [FOOTBALL_DATA_TOKEN] },
   async (request) => {
-    const auth = requireAdmin(request);
+    const adminUid = requireAdmin(request);
     const payload = request.data ?? {};
 
     const providerInput = payload.provider;
@@ -958,7 +958,7 @@ export const setLiveOpsSettings = onCall(
         provider,
         fixtureMaxMatches,
         fixtureCutoffIso,
-        updatedBy: auth.uid,
+        updatedBy: adminUid,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }

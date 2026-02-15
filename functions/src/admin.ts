@@ -1,6 +1,8 @@
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAdmin } from "./auth";
+import { checkRateLimit, RateLimits } from "./utils/rateLimiter";
+import { validateUid, validateBoolean } from "./utils/validation";
 const REGION = "asia-southeast1";
 
 // Prevent double init during hot reloads
@@ -17,14 +19,14 @@ if (!admin.apps.length) {
  * - This avoids using a writable Firestore `admins` collection
  */
 export const setAdminClaim = onCall({ region: REGION }, async (request) => {
-  requireAdmin(request);
+  const callerUid = requireAdmin(request);
 
-  const targetUid = String((request.data as any)?.uid ?? "");
-  const makeAdmin = Boolean((request.data as any)?.admin ?? true);
+  // Rate limiting for admin operations
+  checkRateLimit(callerUid, RateLimits.admin);
 
-  if (!targetUid) {
-    throw new HttpsError("invalid-argument", "Missing target uid.");
-  }
+  // Input validation
+  const targetUid = validateUid(request.data?.uid, "uid");
+  const makeAdmin = validateBoolean(request.data?.admin, "admin", false) ?? true;
 
   await admin.auth().setCustomUserClaims(targetUid, {
     admin: makeAdmin,
