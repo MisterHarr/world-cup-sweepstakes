@@ -25,87 +25,9 @@ import {
 } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
-const achievements = [
-  {
-    id: 1,
-    title: "First Blood",
-    desc: "Your team scores the first goal of the tournament",
-    icon: Zap,
-    unlocked: true,
-    unlockedAt: "Jun 12, 2026",
-    rarity: "common",
-  },
-  {
-    id: 2,
-    title: "Clean Sheet King",
-    desc: "Your team keeps 3 clean sheets",
-    icon: Shield,
-    unlocked: true,
-    unlockedAt: "Jun 15, 2026",
-    progress: 3,
-    total: 3,
-    rarity: "uncommon",
-  },
-  {
-    id: 3,
-    title: "Giant Slayer",
-    desc: "Your lower-tier team beats a Tier 1 team",
-    icon: Target,
-    unlocked: false,
-    progress: 0,
-    total: 1,
-    rarity: "rare",
-  },
-  {
-    id: 4,
-    title: "Hat Trick Hero",
-    desc: "A player from your team scores 3 goals in one match",
-    icon: Flame,
-    unlocked: false,
-    progress: 0,
-    total: 1,
-    rarity: "epic",
-  },
-  {
-    id: 5,
-    title: "Underdog Champion",
-    desc: "Score 50+ points from Tier 4 teams alone",
-    icon: Star,
-    unlocked: false,
-    progress: 28,
-    total: 50,
-    rarity: "rare",
-  },
-  {
-    id: 6,
-    title: "World Champion",
-    desc: "Your team wins the World Cup",
-    icon: TrophyIcon,
-    unlocked: false,
-    progress: 0,
-    total: 1,
-    rarity: "legendary",
-  },
-  {
-    id: 7,
-    title: "Prediction Master",
-    desc: "Correctly predict 10 match outcomes",
-    icon: Target,
-    unlocked: false,
-    progress: 4,
-    total: 10,
-    rarity: "uncommon",
-  },
-  {
-    id: 8,
-    title: "Early Bird",
-    desc: "Make your team selection in the first 24 hours",
-    icon: Clock,
-    unlocked: true,
-    unlockedAt: "Jun 1, 2026",
-    rarity: "common",
-  },
-];
+// Badges will be fetched from Firestore when implemented
+// For now, show empty state until tournament starts
+const achievements: any[] = [];
 
 const rarityColors: Record<string, string> = {
   common: "from-zinc-500 to-zinc-400",
@@ -256,9 +178,10 @@ export default function BadgesPage() {
             ))}
           </div>
 
-          {/* Achievements Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {achievements.map((achievement) => {
+          {/* Achievements Grid or Empty State */}
+          {achievements.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {achievements.map((achievement) => {
               const Icon = achievement.icon;
               const hasProgress = typeof achievement.progress === "number";
 
@@ -338,8 +261,22 @@ export default function BadgesPage() {
                   </div>
                 </div>
               );
-            })}
-          </div>
+              })}
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-xl p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+                  <TrophyIcon className="w-8 h-8 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2">No Badges Yet</h3>
+                <p className="text-sm text-muted-foreground">
+                  Badges will be awarded during the tournament based on your team's performance and achievements.
+                  Check back when the World Cup begins!
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </AppShellV0>
