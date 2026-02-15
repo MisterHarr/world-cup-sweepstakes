@@ -6,6 +6,7 @@ import { defineSecret } from "firebase-functions/params";
 import fixtures from "./fixtures/worldcup2022.json";
 import { recomputeScoresCore } from "./scoring";
 import { requireAdmin } from "./auth";
+import { logError, devLog, devWarn } from "./utils/logger";
 
 const REGION = "asia-southeast1";
 const SCHEDULE = "every 10 minutes";
@@ -380,7 +381,7 @@ async function getFootballDataMatches(
   const token = asString(FOOTBALL_DATA_TOKEN.value()) ??
     asString(process.env.FOOTBALL_DATA_TOKEN);
   if (!token) {
-    console.warn("[ingest] FOOTBALL_DATA_TOKEN missing. Skipping provider ingest.");
+    devWarn("[ingest] FOOTBALL_DATA_TOKEN missing. Skipping provider ingest.");
     return [];
   }
 
@@ -451,7 +452,7 @@ async function getFootballDataMatches(
   });
 
   const limited = filterAndLimitMatches(mapped, options);
-  console.log(
+  devLog(
     `[ingest] provider loaded ${limited.length} mapped matches` +
       ` (competition ${competition})` +
       (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
@@ -481,7 +482,7 @@ async function fetchProviderMatches(
     asIsoOrNull(process.env.FIXTURE_CUTOFF);
 
   if (provider === "stub") {
-    console.log(
+    devLog(
       "[ingest] LIVE_SCORES_PROVIDER not set. Skipping ingestion."
     );
     const rawMatches: any[] = [];
@@ -498,12 +499,12 @@ async function fetchProviderMatches(
     try {
       return await getFootballDataMatches({ maxMatches, cutoffIso });
     } catch (err) {
-      console.error("[ingest] provider fetch failed:", err);
+      logError("ingest:provider", err);
       return [];
     }
   }
 
-  console.error(`[ingest] Unsupported provider: ${String(provider)}`);
+  logError("ingest:unsupportedProvider", new Error(`Unsupported provider: ${String(provider)}`));
   return [];
 }
 
@@ -637,7 +638,7 @@ async function writeLiveOpsHealth(data: {
       tx.set(ref, payload, { merge: true });
     });
   } catch (err) {
-    console.error("[ingest] failed to write liveOps health:", err);
+    logError("ingest:writeHealth", err);
   }
 }
 
@@ -651,7 +652,7 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
     .filter((item): item is ProviderMatch => Boolean(item));
   const limited = filterAndLimitMatches(normalized, { maxMatches, cutoffIso });
 
-  console.log(
+  devLog(
     `[ingest] fixture provider loaded ${limited.length} matches` +
       (cutoffIso ? ` (cutoff ${cutoffIso})` : "") +
       (maxMatches > 0 ? ` (max ${maxMatches})` : "")
@@ -800,7 +801,7 @@ export const ingestLiveScores = onSchedule(
   async (_event: ScheduledEvent) => {
     const liveOps = await getLiveOpsConfig();
     if (!liveOps.enabled) {
-      console.log("[ingest] liveOps disabled. Skipping scheduled ingest.");
+      devLog("[ingest] liveOps disabled. Skipping scheduled ingest.");
       return;
     }
 
@@ -825,7 +826,7 @@ export const ingestLiveScores = onSchedule(
         errorMessage: null,
       });
     } catch (err) {
-      console.error("[ingest] scheduled ingest failed:", err);
+      logError("ingest:scheduled", err);
       await writeLiveOpsHealth({
         provider: liveOps.provider,
         errorMessage: getErrorMessage(err),

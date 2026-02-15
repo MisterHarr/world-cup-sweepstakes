@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requireAuth } from "./auth";
 import { recomputeScoresCore } from "./scoring";
+import { logError } from "./utils/logger";
 
 const REGION = "asia-southeast1";
 const TRANSFER_WINDOW_DOC = "transferWindow";
@@ -260,7 +261,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
     });
     leaderboardRecomputed = true;
   } catch (err) {
-    console.error("[transfer] recompute after transfer failed:", err);
+    logError("transfer:recompute", err);
   }
 
   return {

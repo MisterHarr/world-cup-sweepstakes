@@ -8,6 +8,7 @@ import { auth, db, functions } from "@/lib/firebase";
 import { fetchTeamsByIds } from "@/lib/dashboardData";
 import { buildMainNavItems } from "@/lib/mainNav";
 import type { User } from "@/types";
+import { devError } from "@/lib/logger";
 
 import {
   GoogleAuthProvider,
@@ -2096,10 +2097,8 @@ function DashboardPageContent() {
           setLoadingLeaderboard(false);
           return;
         }
-        console.error(err);
-        setError(
-          `[leaderboard] ${err?.message ?? "Failed to load leaderboard."}`
-        );
+        devError(err);
+        setError("Failed to load leaderboard.");
         setLoadingLeaderboard(false);
       }
     );

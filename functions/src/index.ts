@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logError } from "./utils/logger";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -205,7 +206,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     };
   } catch (err: any) {
     if (err?.code) throw err;
-    console.error("confirmFeaturedTeam failed:", err);
+    logError("confirmFeaturedTeam", err);
     throw new HttpsError("internal", "Failed to confirm featured team.");
   }
 });

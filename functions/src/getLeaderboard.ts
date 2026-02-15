@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
+import { logError } from "./utils/logger";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -52,10 +53,10 @@ export const getLeaderboard = onCall(
 
       return { ok: true, rows };
     } catch (err: any) {
-      console.error("getLeaderboard failed:", err);
+      logError("getLeaderboard", err);
       throw new HttpsError(
         "internal",
-        err?.message ?? "Failed to load leaderboard."
+        "Failed to load leaderboard."
       );
     }
   }

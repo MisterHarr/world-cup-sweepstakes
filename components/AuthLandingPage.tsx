@@ -15,6 +15,7 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
+import { devError, sanitizeError } from "@/lib/logger";
 
 export function AuthLandingPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export function AuthLandingPage() {
           photoURL: u.photoURL,
         });
       } catch (err) {
-        console.error("ensureUserDoc failed:", err);
+        devError("ensureUserDoc failed:", err);
       }
     });
     return () => unsub();
@@ -64,9 +65,9 @@ export function AuthLandingPage() {
       await signInWithPopup(auth, provider);
       setStatus("");
     } catch (e: any) {
-      console.error(e);
+      devError(e);
       setStatus("");
-      setError(e?.message ?? "Sign-in failed.");
+      setError(sanitizeError(e));
     }
   }
 
@@ -116,8 +117,8 @@ export function AuthLandingPage() {
 
       router.push(nextPath);
     } catch (e: any) {
-      console.error(e);
-      setError(e?.message ?? "Failed to load your profile.");
+      devError(e);
+      setError(sanitizeError(e));
       setStatus("");
       setContinuing(false);
     }
