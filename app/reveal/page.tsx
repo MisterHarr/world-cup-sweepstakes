@@ -68,10 +68,10 @@ export default function TeamRevealPage() {
         return;
       }
 
-      const featuredTeamId = userData.featuredTeam;
-      const drawnTeamIds = userData.drawnTeams || [];
+      const featuredTeamId = userData.entry?.featuredTeamId;
+      const drawnTeamIds = userData.entry?.drawnTeamIds || [];
 
-      // Fetch all teams
+      // Fetch all 6 teams (featured + 5 drawn)
       const allTeamIds = [featuredTeamId, ...drawnTeamIds].filter(Boolean);
       const teams: RevealTeam[] = [];
 
@@ -90,7 +90,7 @@ export default function TeamRevealPage() {
         }
       }
 
-      // Sort: featured first, then by tier
+      // Sort: featured first (already revealed), then by tier
       teams.sort((a, b) => {
         if (a.isChosen) return -1;
         if (b.isChosen) return 1;
@@ -98,26 +98,32 @@ export default function TeamRevealPage() {
       });
 
       setAssignedTeams(teams);
+      // Auto-reveal the featured team (first card)
+      if (teams.length > 0 && teams[0].isChosen) {
+        setRevealedCount(1);
+      }
     } catch (err) {
       console.error("Error loading teams:", err);
     }
   }
 
-  const handleRevealNext = () => {
-    if (revealedCount >= assignedTeams.length || isRevealing) return;
+  const handleRevealNext = (index?: number) => {
+    // If index provided, reveal that specific card
+    const targetIndex = index !== undefined ? index : revealedCount;
+
+    if (targetIndex >= assignedTeams.length || isRevealing) return;
+    if (targetIndex < revealedCount) return; // Already revealed
 
     setIsRevealing(true);
 
     setTimeout(() => {
-      setRevealedCount((prev) => prev + 1);
+      setRevealedCount(targetIndex + 1);
       setIsRevealing(false);
 
-      // Show confetti for tier 1 teams
-      if (assignedTeams[revealedCount]?.tier === 1) {
-        setShowConfetti(true);
-        setTimeout(() => setShowConfetti(false), 2000);
-      }
-    }, 800);
+      // Show confetti on every reveal
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 2000);
+    }, 300);
   };
 
   const handleRevealAll = () => {
@@ -146,7 +152,7 @@ export default function TeamRevealPage() {
     router.push("/dashboard");
   };
 
-  if (loading) {
+  if (loading || assignedTeams.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -154,7 +160,7 @@ export default function TeamRevealPage() {
     );
   }
 
-  if (assignedTeams.length === 0) {
+  if (false) {
     return (
       <AppShell user={user}>
         <div className="min-h-[calc(100vh-73px)] flex items-center justify-center bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50">
@@ -204,8 +210,8 @@ export default function TeamRevealPage() {
               Your World Cup Squad
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto">
-              You chose 1 team, and we&apos;ve randomly assigned {assignedTeams.length - 1} more based on
-              the tier system. Tap to reveal each team one by one!
+              Your featured team plus {assignedTeams.length - 1} randomly drawn teams.
+              Tap each card to reveal!
             </p>
           </div>
 
@@ -227,8 +233,10 @@ export default function TeamRevealPage() {
             {assignedTeams.map((team, index) => (
               <div
                 key={team.code}
+                onClick={() => handleRevealNext(index)}
                 className={cn(
-                  "relative aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000"
+                  "relative aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
+                  index >= revealedCount && "cursor-pointer hover:scale-105"
                 )}
               >
                 {/* Card Container - Flip Animation */}
@@ -272,7 +280,13 @@ export default function TeamRevealPage() {
 
                     {/* Team Content */}
                     <div className="flex flex-col items-center justify-center h-full pt-6">
-                      <span className="text-6xl md:text-7xl mb-3">{team.flag}</span>
+                      <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-border">
+                        {team.flag ? (
+                          <img src={team.flag} alt={team.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-4xl">🏳️</span>
+                        )}
+                      </div>
                       <h3 className="text-xl font-bold text-foreground">{team.name}</h3>
                       <p className="text-sm text-muted-foreground">{team.code}</p>
                     </div>
@@ -311,29 +325,14 @@ export default function TeamRevealPage() {
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             {revealedCount < assignedTeams.length ? (
-              <>
-                <Button
-                  size="lg"
-                  onClick={handleRevealNext}
-                  disabled={isRevealing}
-                  className="w-full sm:w-auto gap-2"
-                >
-                  {isRevealing ? (
-                    <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
-                  ) : (
-                    <Sparkles className="w-5 h-5" />
-                  )}
-                  Reveal Next Team
-                </Button>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handleRevealAll}
-                  className="w-full sm:w-auto bg-transparent"
-                >
-                  Reveal All
-                </Button>
-              </>
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleRevealAll}
+                className="w-full sm:w-auto"
+              >
+                Reveal All
+              </Button>
             ) : (
               <Button size="lg" className="gap-2" onClick={handleViewPortfolio}>
                 View My Portfolio

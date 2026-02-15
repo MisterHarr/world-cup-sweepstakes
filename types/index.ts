@@ -28,12 +28,23 @@ export interface Team {
     displayName: string;
     email: string;
     photoURL?: string;
-    
+
     // The Game Data
     portfolio: PortfolioItem[];
     totalScore: number;
     remainingTransfers: number;
     isAdmin: boolean;
+
+    // Entry confirmation
+    entry?: {
+      confirmedAt: any;
+      featuredTeamId: string;
+      drawnTeamIds: string[];
+      version: number;
+    };
+
+    // UX state
+    hasSeenReveal?: boolean;
   }
   
   export interface Match {

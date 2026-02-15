@@ -136,7 +136,9 @@ export default function FeaturedTeamPage() {
 
           if (!didAutoForward) {
             setDidAutoForward(true);
-            router.replace("/dashboard");
+            // If user hasn't seen reveal yet, show them the reveal screen
+            const hasSeenReveal = data?.hasSeenReveal ?? false;
+            router.replace(hasSeenReveal ? "/dashboard" : "/reveal");
             return;
           }
         }
@@ -484,50 +486,35 @@ export default function FeaturedTeamPage() {
 
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Your featured team is locked and your 5 teams have been drawn.
+                Your featured team is locked and 5 additional teams have been randomly drawn for you!
               </p>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1 mb-2">
-                    <Crown className="w-3 h-3" /> Featured
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1 mb-2">
+                  <Crown className="w-3 h-3" /> Your Featured Team
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/20 bg-background">
+                    {confirmResult?.featured?.flagUrl ? (
+                      <img
+                        src={confirmResult.featured.flagUrl}
+                        alt={confirmResult.featured.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full overflow-hidden border border-primary/20 bg-background">
-                      {confirmResult?.featured?.flagUrl ? (
-                        <img
-                          src={confirmResult.featured.flagUrl}
-                          alt={confirmResult.featured.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : null}
-                    </div>
-                    <div className="text-sm font-bold text-foreground">
-                      {confirmResult?.featured?.name ?? "—"}
-                    </div>
+                  <div className="text-base font-bold text-foreground">
+                    {confirmResult?.featured?.name ?? "—"}
                   </div>
                 </div>
+              </div>
 
-                <div className="rounded-xl border border-border bg-muted/50 p-4">
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                    Drawn Teams (5)
-                  </div>
-                  <div className="space-y-2">
-                    {(confirmResult?.drawn ?? []).map((t: any) => (
-                      <div key={t.id ?? t.name} className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full overflow-hidden border border-border bg-background">
-                          {t.flagUrl ? (
-                            <img
-                              src={t.flagUrl}
-                              alt={t.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        <div className="text-sm text-foreground">{t.name}</div>
-                      </div>
-                    ))}
-                  </div>
+              <div className="rounded-xl border border-border bg-muted/30 p-4 text-center">
+                <div className="text-sm text-muted-foreground mb-1">
+                  🎲 5 mystery teams await!
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Click below to reveal them one by one
                 </div>
               </div>
 
