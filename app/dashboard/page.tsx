@@ -305,6 +305,8 @@ const Leaderboard = ({
   const [squad, setSquad] = useState<SquadVM | null>(null);
   const [loadingSquad, setLoadingSquad] = useState(false);
   const [squadErr, setSquadErr] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 25;
 
   async function openDrawerFor(user: LBUser) {
     setSelectedUser(user);
@@ -362,6 +364,112 @@ const Leaderboard = ({
         : sorted;
     return source.filter((u) => !topIds.has(u.id));
   }, [hasDeptData, selectedDept, sorted, topIds]);
+
+  const paginatedList = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredList.slice(startIndex, endIndex);
+  }, [filteredList, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredList.length / itemsPerPage);
+  const startRank = filteredList.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0;
+  const endRank = Math.min(startRank + paginatedList.length - 1, filteredList.length);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDept]);
+
+  const PaginationControls = () => {
+    if (totalPages <= 1) return null; // Hide if only 1 page
+
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    // Adjust if we're near the end
+    if (endPage - startPage + 1 < maxVisiblePages) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    const pageNumbers = [];
+    for (let i = startPage; i <= endPage; i++) {
+      pageNumbers.push(i);
+    }
+
+    return (
+      <div className="flex items-center justify-between px-1 py-3 border-t border-border/50">
+        {/* Results count */}
+        <p className="text-sm text-muted-foreground">
+          Showing {startRank}-{endRank} of {filteredList.length} participants
+        </p>
+
+        {/* Page controls */}
+        <div className="flex items-center gap-1">
+          {/* Previous button */}
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1.5 text-sm rounded-lg border border-border bg-card hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Previous page"
+          >
+            ← Prev
+          </button>
+
+          {/* Page numbers */}
+          {startPage > 1 && (
+            <>
+              <button
+                onClick={() => setCurrentPage(1)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-card hover:bg-accent transition-colors"
+              >
+                1
+              </button>
+              {startPage > 2 && <span className="px-2 text-muted-foreground">...</span>}
+            </>
+          )}
+
+          {pageNumbers.map(page => (
+            <button
+              key={page}
+              onClick={() => setCurrentPage(page)}
+              className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                currentPage === page
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-card border-border hover:bg-accent'
+              }`}
+              aria-label={`Page ${page}`}
+              aria-current={currentPage === page ? 'page' : undefined}
+            >
+              {page}
+            </button>
+          ))}
+
+          {endPage < totalPages && (
+            <>
+              {endPage < totalPages - 1 && <span className="px-2 text-muted-foreground">...</span>}
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                className="px-3 py-1.5 text-sm rounded-lg border border-border bg-card hover:bg-accent transition-colors"
+              >
+                {totalPages}
+              </button>
+            </>
+          )}
+
+          {/* Next button */}
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1.5 text-sm rounded-lg border border-border bg-card hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            aria-label="Next page"
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <main className="relative min-h-[500px]">
@@ -546,9 +654,12 @@ const Leaderboard = ({
             </button>
           </div>
 
+          {/* Pagination Controls */}
+          <PaginationControls />
+
           {/* Rankings List */}
           <div className="space-y-2">
-            {filteredList.length > 0 ? filteredList.map((user) => {
+            {filteredList.length > 0 ? paginatedList.map((user) => {
               const isYou = Boolean(currentUserId && user.id === currentUserId);
               const dept = (user as any)?.department ?? (user as any)?.dept;
               return (
