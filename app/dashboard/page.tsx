@@ -2008,6 +2008,20 @@ function DashboardPageContent() {
     if (!department) router.replace("/department?next=/dashboard");
   }, [signedIn, loadingUser, error, department, router]);
 
+  // Reveal gate - redirect to reveal screen if user hasn't seen it yet
+  useEffect(() => {
+    if (!signedIn) return;
+    if (loadingUser) return;
+    if (!userDoc) return;
+
+    const hasTeams = userDoc.entry?.featuredTeamId && userDoc.entry?.drawnTeamIds?.length >= 5;
+    const hasSeenReveal = userDoc.hasSeenReveal ?? false;
+
+    if (hasTeams && !hasSeenReveal) {
+      router.replace("/reveal");
+    }
+  }, [signedIn, loadingUser, userDoc, router]);
+
   // Load the 1 + 5 teams used in the strip
   useEffect(() => {
     let cancelled = false;

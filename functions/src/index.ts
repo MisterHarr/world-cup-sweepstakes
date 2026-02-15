@@ -121,7 +121,26 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("failed-precondition", "Not enough teams to draw from.");
   }
 
-  const drawnTeams = shuffle(eligibleForDraw).slice(0, 5);
+  // Tier-balanced draw: 1 from tier-1, 1 from tier-2, 2 from tier-3, 1 from tier-4
+  const tier1 = eligibleForDraw.filter((t) => t.tier === 1);
+  const tier2 = eligibleForDraw.filter((t) => t.tier === 2);
+  const tier3 = eligibleForDraw.filter((t) => t.tier === 3);
+  const tier4 = eligibleForDraw.filter((t) => t.tier === 4);
+
+  const drawnTeams = [
+    ...shuffle(tier1).slice(0, 1),
+    ...shuffle(tier2).slice(0, 1),
+    ...shuffle(tier3).slice(0, 2),
+    ...shuffle(tier4).slice(0, 1),
+  ];
+
+  // Fallback if not enough teams in specific tiers
+  if (drawnTeams.length < 5) {
+    const remaining = 5 - drawnTeams.length;
+    const drawnIds = new Set(drawnTeams.map((t) => t.id));
+    const available = eligibleForDraw.filter((t) => !drawnIds.has(t.id));
+    drawnTeams.push(...shuffle(available).slice(0, remaining));
+  }
 
   try {
     const result = await db.runTransaction(async (tx) => {

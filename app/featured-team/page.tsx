@@ -136,7 +136,9 @@ export default function FeaturedTeamPage() {
 
           if (!didAutoForward) {
             setDidAutoForward(true);
-            router.replace("/dashboard");
+            // If user hasn't seen reveal yet, show them the reveal screen
+            const hasSeenReveal = data?.hasSeenReveal ?? false;
+            router.replace(hasSeenReveal ? "/dashboard" : "/reveal");
             return;
           }
         }
