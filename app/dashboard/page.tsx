@@ -305,16 +305,76 @@ const Leaderboard = ({
   const [squad, setSquad] = useState<SquadVM | null>(null);
   const [loadingSquad, setLoadingSquad] = useState(false);
   const [squadErr, setSquadErr] = useState<string>("");
+  const [squadCache, setSquadCache] = useState<Map<string, SquadVM>>(new Map());
+  const [prefetchingSquads, setPrefetchingSquads] = useState(false);
+
+  async function prefetchTopSquads(users: LBUser[], count: number = 10) {
+    setPrefetchingSquads(true);
+
+    const topUsers = users.slice(0, count);
+    const uncachedUsers = topUsers.filter(u => !squadCache.has(u.id));
+
+    if (uncachedUsers.length === 0) {
+      setPrefetchingSquads(false);
+      return;
+    }
+
+    try {
+      // Batch fetch all squads in parallel
+      const squadPromises = uncachedUsers.map(user =>
+        fetchSquad(user.id, user.name)
+          .then(squad => ({ userId: user.id, squad }))
+          .catch(err => {
+            console.error(`Failed to prefetch squad for ${user.id}:`, err);
+            return null;
+          })
+      );
+
+      const results = await Promise.all(squadPromises);
+
+      // Update cache with successful fetches
+      setSquadCache(prev => {
+        const next = new Map(prev);
+        results.forEach(result => {
+          if (result?.squad) {
+            next.set(result.userId, result.squad);
+          }
+        });
+        return next;
+      });
+    } catch (err) {
+      console.error('Prefetch failed:', err);
+    } finally {
+      setPrefetchingSquads(false);
+    }
+  }
 
   async function openDrawerFor(user: LBUser) {
     setSelectedUser(user);
-    setSquad(null);
     setSquadErr("");
+
+    // Check cache first
+    const cached = squadCache.get(user.id);
+    if (cached) {
+      setSquad(cached);
+      setLoadingSquad(false);
+      return;
+    }
+
+    // Cache miss - fetch and cache
+    setSquad(null);
     setLoadingSquad(true);
 
     try {
       const vm = await fetchSquad(user.id, user.name);
       setSquad(vm);
+
+      // Add to cache for future opens
+      setSquadCache(prev => {
+        const next = new Map(prev);
+        next.set(user.id, vm);
+        return next;
+      });
     } catch (e: any) {
       console.error(e);
       setSquadErr(e?.message ?? "Failed to load squad details.");
@@ -362,6 +422,28 @@ const Leaderboard = ({
         : sorted;
     return source.filter((u) => !topIds.has(u.id));
   }, [hasDeptData, selectedDept, sorted, topIds]);
+
+  // Prefetch top 10 squads when data loads
+  useEffect(() => {
+    if (data.length > 0 && !isLoading) {
+      prefetchTopSquads(data, 10);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.length, isLoading]);
+
+  // Clear cache when leaderboard data becomes empty (error/logout)
+  useEffect(() => {
+    if (data.length === 0) {
+      setSquadCache(new Map());
+    }
+  }, [data.length]);
+
+  // Clear cache on unmount
+  useEffect(() => {
+    return () => {
+      setSquadCache(new Map());
+    };
+  }, []);
 
   return (
     <main className="relative min-h-[500px]">
