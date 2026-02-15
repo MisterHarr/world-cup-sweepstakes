@@ -162,6 +162,7 @@ type UITeam = {
   group: string;
   tier: number;
   flagUrl: string;
+  isEliminated?: boolean;
 };
 
 function toUITeam(id: string, t: any | null): UITeam {
@@ -171,6 +172,7 @@ function toUITeam(id: string, t: any | null): UITeam {
     group: (t?.group as string) ?? "?",
     tier: typeof t?.tier === "number" ? t.tier : Number(t?.tier ?? 0),
     flagUrl: (t?.flagUrl as string) ?? "",
+    isEliminated: t?.isEliminated === true,
   };
 }
 
@@ -349,16 +351,7 @@ const Leaderboard = ({
   }, [sorted]);
   const deptFilters = deptFromData.length
     ? deptFromData
-    : [
-        "Engineering",
-        "Marketing",
-        "Design",
-        "Sales",
-        "HR",
-        "Finance",
-        "Operations",
-        "Product",
-      ];
+    : ["Primary", "Secondary", "Admin"];
 
   const filteredList = useMemo(() => {
     const source =
@@ -432,7 +425,7 @@ const Leaderboard = ({
           {/* Top 3 Podium */}
           <ol className="grid grid-cols-3 gap-4 mb-8 px-4 list-none" aria-label="Top 3 leaderboard">
             {/* 1st Place - Moved first in DOM for semantic ordering */}
-            <li className="flex flex-col items-center order-2" value="1">
+            <li className="flex flex-col items-center order-2 cursor-pointer hover:scale-105 transition-transform" value="1" onClick={() => topThree[0] && openDrawerFor(topThree[0])}>
               <div className="relative mb-3">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-500 via-amber-500 to-yellow-300 flex items-center justify-center shadow-xl ring-4 ring-yellow-500/30">
                   <span className="text-4xl font-bold text-amber-900">1</span>
@@ -462,7 +455,7 @@ const Leaderboard = ({
             </li>
 
             {/* 2nd Place */}
-            <li className="flex flex-col items-center pt-8 order-1" value="2">
+            <li className="flex flex-col items-center pt-8 order-1 cursor-pointer hover:scale-105 transition-transform" value="2" onClick={() => topThree[1] && openDrawerFor(topThree[1])}>
               <div className="relative mb-3">
                 <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-400 to-slate-200 flex items-center justify-center shadow-lg ring-4 ring-slate-400/20">
                   <span className="text-3xl font-bold text-slate-800">2</span>
@@ -489,7 +482,7 @@ const Leaderboard = ({
             </li>
 
             {/* 3rd Place */}
-            <li className="flex flex-col items-center pt-12 order-3" value="3">
+            <li className="flex flex-col items-center pt-12 order-3 cursor-pointer hover:scale-105 transition-transform" value="3" onClick={() => topThree[2] && openDrawerFor(topThree[2])}>
               <div className="relative mb-3">
                 <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-600 to-amber-700 flex items-center justify-center shadow-lg ring-4 ring-orange-600/20">
                   <span className="text-2xl font-bold text-amber-100">3</span>
@@ -549,7 +542,7 @@ const Leaderboard = ({
               disabled
               className="shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold bg-card border border-border text-muted-foreground/50 cursor-not-allowed"
             >
-              Awards
+              Badges
             </button>
           </div>
 
@@ -2685,13 +2678,7 @@ function DashboardPageContent() {
                 </div>
                 <div className="text-right">
                   {userStats.rank ? (
-                    <>
-                      <div className="flex items-center justify-end gap-1 text-primary">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-sm font-medium">+12 today</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">Rank #{userStats.rank} of {leaderboardData.length}</p>
-                    </>
+                    <p className="text-xs text-muted-foreground mt-1">Rank #{userStats.rank} of {leaderboardData.length}</p>
                   ) : (
                     <div className="flex items-center gap-1 text-primary">
                       <TrendingUp className="w-4 h-4" />
@@ -2820,12 +2807,13 @@ function DashboardPageContent() {
 
               {/* Drawn Teams */}
               {drawnDisplay.map((team, idx) => {
-                const isEliminated = idx >= 4; // Placeholder: last 2 teams are "eliminated"
+                const isEliminated = team.isEliminated === true;
+                const teamPoints = calculateTeamPoints(teamsById[team.id]);
                 const teamKey = `drawn-${team.id}`;
-                
+
                 return (
-                  <div 
-                    key={team.id} 
+                  <div
+                    key={team.id}
                     className={`bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 ${
                       isEliminated ? 'opacity-60' : ''
                     } ${expandedTeam === teamKey ? 'ring-2 ring-primary/30' : ''}`}
@@ -2856,7 +2844,7 @@ function DashboardPageContent() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-foreground">{isEliminated ? '8' : idx === 0 ? '38' : idx === 1 ? '22' : '31'}</p>
+                        <p className="text-2xl font-bold text-foreground">{teamPoints}</p>
                         <p className="text-xs text-muted-foreground">pts</p>
                       </div>
                       <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedTeam === teamKey ? 'rotate-90' : ''}`} />

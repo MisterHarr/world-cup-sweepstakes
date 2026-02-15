@@ -14,18 +14,19 @@ This roadmap defines the path to **production-grade robustness** for the World C
 
 ## Sprint Priority Matrix
 
-| Sprint | Focus Area | Priority | Effort | Blocks Launch |
-|--------|-----------|----------|--------|---------------|
-| 1 | Accessibility & WCAG 2.1 AA | P0 | 2-3d | ✅ YES |
-| 2 | Performance Optimization | P1 | 3-4d | ⚠️ Recommended |
-| 3 | Security Hardening & Privacy | P1 | 2d | ⚠️ Recommended |
-| 4 | Error Boundaries & Resilience | P2 | 2d | No |
-| 5 | Responsive Design & Mobile UX | P2 | 3d | ⚠️ Recommended |
-| 6 | Metadata & SEO | P3 | 1d | No |
-| 7 | Observability & Monitoring | P2 | 2d | No |
-| 8 | Progressive Enhancement | P3 | 3d | No |
+| Sprint | Focus Area | Priority | Effort | Blocks Launch | Status |
+|--------|-----------|----------|--------|---------------|--------|
+| 1 | Accessibility & WCAG 2.1 AA | P0 | 2-3d | ✅ YES | ✅ COMPLETE |
+| 9 | Data Integrity & Mock Removal | P0 | 2d | ✅ YES | 🔄 CURRENT |
+| 2 | Performance Optimization | P1 | 3-4d | ⚠️ Recommended | ⏸️ Pending |
+| 3 | Security Hardening & Privacy | P1 | 2d | ⚠️ Recommended | ⏸️ Pending |
+| 4 | Error Boundaries & Resilience | P2 | 2d | No | ⏸️ Pending |
+| 5 | Responsive Design & Mobile UX | P2 | 3d | ⚠️ Recommended | ⏸️ Pending |
+| 6 | Metadata & SEO | P3 | 1d | No | ⏸️ Pending |
+| 7 | Observability & Monitoring | P2 | 2d | No | ⏸️ Pending |
+| 8 | Progressive Enhancement | P3 | 3d | No | ⏸️ Pending |
 
-**Recommended Launch Gate:** Complete Sprints 1, 2, 3, 5 before public launch.
+**Recommended Launch Gate:** Complete Sprints 1, 9, 2, 3, 5 before public launch.
 
 ---
 
@@ -94,6 +95,117 @@ This roadmap defines the path to **production-grade robustness** for the World C
 - `components/ui/dialog.tsx` (focus trap)
 - `components/ui/button.tsx` (focus styles)
 - `components/AuthLandingPage.tsx` (form accessibility)
+
+---
+
+## SPRINT 9: Data Integrity & Mock Removal 🧹
+
+**Priority:** P0 (BLOCKING for production launch)
+**Effort:** 2 days
+**Risk Level:** Critical (hardcoded data prevents real tournament operation)
+
+### Context
+
+After completing accessibility fixes (Sprint 1), pre-production testing revealed hardcoded/mock data throughout the dashboard and badges pages that must be replaced with actual Firestore data before launch. These issues prevent the app from functioning correctly with real tournament data.
+
+### Objectives
+
+1. **Remove Hardcoded Score Delta**
+   - Remove "+12 today" hardcoded text (dashboard line 2691)
+   - Calculate actual score delta from historical leaderboard data
+   - Store previous score in user document or leaderboard snapshots
+   - Display calculated delta or hide if no historical data
+
+2. **Fix Department Filter Tabs**
+   - Replace hardcoded "By Engineering" / "By Marketing" with actual department values
+   - Use "By Primary", "By Secondary", "By Admin" (matching signup departments)
+   - Read available departments from Firestore users collection
+   - Dynamically generate filter buttons
+
+3. **Rename Awards Tab to Badges**
+   - Change "Awards" button text to "Badges" (dashboard line 552)
+   - Ensure disabled state remains until badges functionality is implemented
+   - Align with actual badge event naming convention
+
+4. **Fix Team Elimination Status**
+   - Remove hardcoded `isEliminated = idx >= 4` logic (dashboard line 2823)
+   - Read `isEliminated` from team Firestore documents
+   - Only show "Eliminated" badge when team.isEliminated === true
+   - Respect actual knockout round results
+
+5. **Remove Mock Team Points**
+   - Remove hardcoded points `38`, `22`, `31`, `8` (dashboard line 2859)
+   - Calculate actual points from team stats (wins, goals, cards)
+   - Use same logic as recomputeScores (featuredPoints × 2 + drawnPoints)
+   - Display 0 points for teams with no match data
+
+6. **Make Podium Clickable**
+   - Add onClick handler to podium items (lines 435-516)
+   - Open squad drawer when clicking 1st, 2nd, or 3rd place users
+   - Reuse existing `openDrawerFor(user)` function
+   - Add cursor-pointer and hover states
+
+7. **Clean Up Badges Page**
+   - Audit `/app/badges/page.tsx` for hardcoded badge data
+   - Remove mock badge awards and statistics
+   - Display message: "Badges will be awarded during tournament" if no real data
+   - Ensure badge logic only triggers from actual match/transfer events
+
+### Acceptance Criteria
+
+- ✅ No "+12 today" text unless calculated from real data
+- ✅ Department tabs show "Primary", "Secondary", "Admin"
+- ✅ Tab label reads "Badges" not "Awards"
+- ✅ Team elimination status matches Firestore `isEliminated` field
+- ✅ Team points calculated from actual stats, not hardcoded
+- ✅ Clicking podium (1st/2nd/3rd) opens squad drawer
+- ✅ Badges page shows no mock data
+- ✅ App functions correctly with 2022 World Cup test data + 20 mock users
+- ✅ App functions correctly in production with zero matches (pre-tournament)
+
+### Recommended PR Slices
+
+1. **PR 1: Dashboard Data Cleanup** - ~1 file, 250-350 LOC
+   - Remove hardcoded score delta
+   - Fix department filter tabs
+   - Rename "Awards" tab to "Badges"
+   - Fix team elimination status (read from Firestore)
+   - Remove mock team points (calculate from stats)
+   - Make podium clickable
+
+2. **PR 2: Badges Page Cleanup** - ~1 file, 150-250 LOC
+   - Remove all hardcoded badge data
+   - Display "Badges will be awarded during tournament" if no real data
+   - Ensure badge logic only triggers from actual events
+
+### Files Likely Affected
+
+- `app/dashboard/page.tsx` (score delta, department tabs, podium, elimination, points)
+- `app/badges/page.tsx` (remove all mock data)
+- `lib/dashboardData.ts` (add score delta calculation if needed)
+
+### Testing Requirements
+
+**Test with 2022 World Cup data:**
+1. Import 2022 match results into Firestore `matches` collection
+2. Create 20 mock users with diverse portfolios
+3. Run `recomputeScores`
+4. Verify:
+   - Department filters work correctly
+   - Team elimination reflects actual knockout results
+   - Podium is clickable
+   - Points match historical 2022 results
+   - Badges awarded for historical events
+
+**Test in production mode (pre-tournament):**
+1. Delete all matches from Firestore
+2. Run `recomputeScores`
+3. Verify:
+   - All users show 0 points
+   - No teams marked as eliminated
+   - No "+12 today" text displayed
+   - Badges page shows "No badges yet" message
+   - Department tabs work with actual signup departments
 
 ---
 
