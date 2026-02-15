@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { updateSingleUserScore } from "./updateSingleUserScore";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -197,6 +198,18 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
         drawn: drawnTeams,
       };
     });
+
+    // Update user's score and add to leaderboard (lightweight operation)
+    try {
+      await updateSingleUserScore({
+        uid,
+        includeLive: true,
+        scoringVersion: "v1",
+      });
+    } catch (scoreErr) {
+      // Log error but don't fail the squad confirmation
+      console.error("Failed to update user score after confirmation:", scoreErr);
+    }
 
     return {
       ok: true,

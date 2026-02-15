@@ -4,9 +4,9 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "./auth";
 
 const REGION = "asia-southeast1";
-const DEFAULT_TRANSFER_PENALTY_POINTS = 15;
+export const DEFAULT_TRANSFER_PENALTY_POINTS = 15;
 
-type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
+export type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
 type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
 
 type MatchInput = {
@@ -24,25 +24,25 @@ type MatchInput = {
   awayYellowCards?: unknown;
 };
 
-function asString(value: unknown): string | null {
+export function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null;
 }
 
-function asNumberOrNull(value: unknown): number | null {
+export function asNumberOrNull(value: unknown): number | null {
   if (value === null) return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   return null;
 }
 
-function asNonNegativeNumber(value: unknown): number | null {
+export function asNonNegativeNumber(value: unknown): number | null {
   const num = asNumberOrNull(value);
   if (num === null) return null;
   return num < 0 ? null : num;
 }
 
-function asStatus(value: unknown): MatchStatus | null {
+export function asStatus(value: unknown): MatchStatus | null {
   return value === "SCHEDULED" || value === "LIVE" || value === "FINISHED"
     ? value
     : null;
@@ -145,7 +145,7 @@ export const adminUpsertMatch = onCall({ region: REGION }, async (request) => {
   return { ok: true, matchId };
 });
 
-type TeamStats = {
+export type TeamStats = {
   wins: number;
   draws: number;
   losses: number;
@@ -156,7 +156,7 @@ type TeamStats = {
   yellowCards: number;
 };
 
-function emptyStats(): TeamStats {
+export function emptyStats(): TeamStats {
   return {
     wins: 0,
     draws: 0,
@@ -169,7 +169,7 @@ function emptyStats(): TeamStats {
   };
 }
 
-function calcTeamPoints(stats: TeamStats): number {
+export function calcTeamPoints(stats: TeamStats): number {
   return (
     stats.wins * 3 +
     stats.draws * 1 +
