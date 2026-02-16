@@ -8,6 +8,13 @@ import { auth, db, functions } from "@/lib/firebase";
 import { fetchTeamsByIds } from "@/lib/dashboardData";
 import { buildMainNavItems } from "@/lib/mainNav";
 import type { User } from "@/types";
+import {
+  getTeamRecentForm,
+  getTeamNextMatch,
+  formatMatchDate,
+  type MatchResult,
+  type NextMatch,
+} from "@/lib/teamMatchData";
 
 import {
   GoogleAuthProvider,
@@ -1824,6 +1831,18 @@ function DashboardPageContent() {
 
   const [expandedTeam, setExpandedTeam] = useState<string | null>(null);
 
+  // Match data for expanded teams (lazy-loaded)
+  const [teamMatchData, setTeamMatchData] = useState<
+    Record<
+      string,
+      {
+        recentForm: MatchResult[];
+        nextMatch: NextMatch | null;
+        loading: boolean;
+      }
+    >
+  >({});
+
   // Team lookup for My Teams strip (same working approach you already used)
   const [teamsById, setTeamsById] = useState<Record<string, any>>({});
   const [loadingTeams, setLoadingTeams] = useState(false);
@@ -2452,6 +2471,44 @@ function DashboardPageContent() {
     };
   }
 
+  // Handle team expansion with lazy match data loading
+  async function handleTeamExpand(teamKey: string, teamId: string) {
+    // Toggle collapse if already expanded
+    if (expandedTeam === teamKey) {
+      setExpandedTeam(null);
+      return;
+    }
+
+    // Expand team
+    setExpandedTeam(teamKey);
+
+    // Fetch match data if not already loaded
+    if (!teamMatchData[teamId]) {
+      setTeamMatchData((prev) => ({
+        ...prev,
+        [teamId]: { recentForm: [], nextMatch: null, loading: true },
+      }));
+
+      try {
+        const [recentForm, nextMatch] = await Promise.all([
+          getTeamRecentForm(teamId),
+          getTeamNextMatch(teamId),
+        ]);
+
+        setTeamMatchData((prev) => ({
+          ...prev,
+          [teamId]: { recentForm, nextMatch, loading: false },
+        }));
+      } catch (error) {
+        console.error("[dashboard] Error fetching match data:", error);
+        setTeamMatchData((prev) => ({
+          ...prev,
+          [teamId]: { recentForm: [], nextMatch: null, loading: false },
+        }));
+      }
+    }
+  }
+
   // User's score and rank from leaderboard
   const userStats = useMemo(() => {
     const fallbackScore = Number((userDoc as any)?.totalScore ?? 0);
@@ -2715,7 +2772,7 @@ function DashboardPageContent() {
               {featuredDisplay && (
                 <div className="bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:ring-2 hover:ring-primary/30">
                   <button
-                    onClick={() => setExpandedTeam(expandedTeam === `featured-${featuredDisplay.id}` ? null : `featured-${featuredDisplay.id}`)}
+                    onClick={() => handleTeamExpand(`featured-${featuredDisplay.id}`, featuredDisplay.id)}
                     className="w-full p-4 flex items-center gap-4 text-left"
                   >
                     <div className="relative">
@@ -2752,20 +2809,30 @@ function DashboardPageContent() {
                         {/* Recent Form */}
                         <div>
                           <p className="text-xs text-muted-foreground mb-2">Recent Form</p>
-                          <div className="flex gap-1">
-                            {['W', 'W', 'D', 'W', 'W'].map((result, i) => (
-                              <div
-                                key={i}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                  result === 'W' ? 'bg-primary/20 text-primary' :
-                                  result === 'D' ? 'bg-muted text-muted-foreground' :
-                                  'bg-destructive/20 text-destructive'
-                                }`}
-                              >
-                                {result}
-                              </div>
-                            ))}
-                          </div>
+                          {teamMatchData[featuredDisplay.id]?.loading ? (
+                            <div className="flex gap-1">
+                              {[...Array(5)].map((_, i) => (
+                                <div key={i} className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
+                              ))}
+                            </div>
+                          ) : teamMatchData[featuredDisplay.id]?.recentForm?.length > 0 ? (
+                            <div className="flex gap-1">
+                              {teamMatchData[featuredDisplay.id].recentForm.map((result, i) => (
+                                <div
+                                  key={i}
+                                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                    result === 'W' ? 'bg-primary/20 text-primary' :
+                                    result === 'D' ? 'bg-muted text-muted-foreground' :
+                                    'bg-destructive/20 text-destructive'
+                                  }`}
+                                >
+                                  {result}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No matches yet</p>
+                          )}
                         </div>
 
                         {/* Next Match */}
@@ -2774,8 +2841,23 @@ function DashboardPageContent() {
                             <Clock className="w-3 h-3" />
                             <span>Next Match</span>
                           </div>
-                          <p className="font-medium text-foreground">vs Mexico</p>
-                          <p className="text-xs text-muted-foreground">Tomorrow 18:00</p>
+                          {teamMatchData[featuredDisplay.id]?.loading ? (
+                            <div className="space-y-1">
+                              <div className="h-4 bg-muted rounded animate-pulse w-24" />
+                              <div className="h-3 bg-muted rounded animate-pulse w-32" />
+                            </div>
+                          ) : teamMatchData[featuredDisplay.id]?.nextMatch ? (
+                            <>
+                              <p className="font-medium text-foreground">
+                                vs {teamsById[teamMatchData[featuredDisplay.id].nextMatch!.opponentId]?.name || 'TBD'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatMatchDate(teamMatchData[featuredDisplay.id].nextMatch!.scheduledAt)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No upcoming matches</p>
+                          )}
                         </div>
 
                         {/* Points Breakdown */}
@@ -2820,7 +2902,7 @@ function DashboardPageContent() {
                     } ${expandedTeam === teamKey ? 'ring-2 ring-primary/30' : ''}`}
                   >
                     <button
-                      onClick={() => setExpandedTeam(expandedTeam === teamKey ? null : teamKey)}
+                      onClick={() => handleTeamExpand(teamKey, team.id)}
                       className="w-full p-4 flex items-center gap-4 text-left"
                     >
                       <div className="relative w-12 h-12">
@@ -2858,20 +2940,30 @@ function DashboardPageContent() {
                           {/* Recent Form */}
                           <div>
                             <p className="text-xs text-muted-foreground mb-2">Recent Form</p>
-                            <div className="flex gap-1">
-                              {(idx === 0 ? ['W', 'D', 'W', 'L', 'W'] : idx === 1 ? ['W', 'W', 'W', 'D', 'L'] : ['D', 'W', 'W', 'W', 'D']).map((result, i) => (
-                                <div
-                                  key={i}
-                                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                    result === 'W' ? 'bg-primary/20 text-primary' :
-                                    result === 'D' ? 'bg-muted text-muted-foreground' :
-                                    'bg-destructive/20 text-destructive'
-                                  }`}
-                                >
-                                  {result}
-                                </div>
-                              ))}
-                            </div>
+                            {teamMatchData[team.id]?.loading ? (
+                              <div className="flex gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <div key={i} className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
+                                ))}
+                              </div>
+                            ) : teamMatchData[team.id]?.recentForm?.length > 0 ? (
+                              <div className="flex gap-1">
+                                {teamMatchData[team.id].recentForm.map((result, i) => (
+                                  <div
+                                    key={i}
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                      result === 'W' ? 'bg-primary/20 text-primary' :
+                                      result === 'D' ? 'bg-muted text-muted-foreground' :
+                                      'bg-destructive/20 text-destructive'
+                                    }`}
+                                  >
+                                    {result}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No matches yet</p>
+                            )}
                           </div>
 
                           {/* Next Match */}
@@ -2880,12 +2972,23 @@ function DashboardPageContent() {
                               <Clock className="w-3 h-3" />
                               <span>Next Match</span>
                             </div>
-                            <p className="font-medium text-foreground">
-                              {idx === 0 ? 'vs France' : idx === 1 ? 'vs Australia' : 'vs Senegal'}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {idx === 0 ? 'Today 21:00' : idx === 1 ? 'Wed 15:00' : 'Thu 18:00'}
-                            </p>
+                            {teamMatchData[team.id]?.loading ? (
+                              <div className="space-y-1">
+                                <div className="h-4 bg-muted rounded animate-pulse w-24" />
+                                <div className="h-3 bg-muted rounded animate-pulse w-32" />
+                              </div>
+                            ) : teamMatchData[team.id]?.nextMatch ? (
+                              <>
+                                <p className="font-medium text-foreground">
+                                  vs {teamsById[teamMatchData[team.id].nextMatch!.opponentId]?.name || 'TBD'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatMatchDate(teamMatchData[team.id].nextMatch!.scheduledAt)}
+                                </p>
+                              </>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No upcoming matches</p>
+                            )}
                           </div>
                         </div>
                       </div>
