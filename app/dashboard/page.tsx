@@ -644,6 +644,7 @@ const Leaderboard = ({
               "fixed inset-y-0 right-0 w-full md:w-[520px] bg-card/70 z-50 overflow-y-auto",
               "animate-in slide-in-from-right duration-500", // slower slide
               "shadow-[0_30px_80px_rgba(0,0,0,0.35)]", // stronger shadow
+              "pb-safe", // iOS safe area bottom padding
             ].join(" ")}
           >
             <div className="p-8">
