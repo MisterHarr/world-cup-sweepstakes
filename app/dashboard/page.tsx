@@ -364,8 +364,8 @@ const Leaderboard = ({
   }, [hasDeptData, selectedDept, sorted, topIds]);
 
   return (
-    <main className="relative min-h-[500px]">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-1">
+    <main className="relative min-h-[500px] max-w-full overflow-x-hidden">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 sm:px-1">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
             <Trophy className="w-5 h-5 text-primary" aria-hidden="true" />
@@ -395,7 +395,7 @@ const Leaderboard = ({
 
       {isLoading ? (
         <div className="space-y-4" aria-busy="true" aria-label="Loading leaderboard">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[...Array(3)].map((_, i) => (
               <div key={i} className="flex flex-col items-center gap-2">
                 <Skeleton className="h-16 w-16 rounded-full" />
@@ -423,7 +423,7 @@ const Leaderboard = ({
       ) : (
         <div className="space-y-6">
           {/* Top 3 Podium */}
-          <ol className="grid grid-cols-3 gap-4 mb-8 px-4 list-none" aria-label="Top 3 leaderboard">
+          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 px-2 sm:px-4 list-none" aria-label="Top 3 leaderboard">
             {/* 1st Place - Moved first in DOM for semantic ordering */}
             <li className="flex flex-col items-center order-2 cursor-pointer hover:scale-105 transition-transform" value="1" onClick={() => topThree[0] && openDrawerFor(topThree[0])}>
               <div className="relative mb-3">
@@ -687,7 +687,7 @@ const Leaderboard = ({
               )}
 
               {loadingSquad && (
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {[...Array(6)].map((_, i) => (
                     <div
                       key={i}
@@ -708,7 +708,7 @@ const Leaderboard = ({
               )}
 
               {!loadingSquad && (
-                <div className="grid grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                   {squadTeams.length > 0 ? (
                     squadTeams.map((team) => {
                       const isCaptain = team.role === "featured";
@@ -2689,7 +2689,7 @@ function DashboardPageContent() {
               </div>
 
               {/* Team Status Summary */}
-              <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
                 <div className="bg-background/50 rounded-xl p-3 text-center">
                   <p className="text-2xl font-bold text-primary">{teamStats.active}</p>
                   <p className="text-xs text-muted-foreground">Active</p>
@@ -2780,7 +2780,7 @@ function DashboardPageContent() {
                         {/* Points Breakdown */}
                         <div>
                           <p className="text-xs text-muted-foreground mb-2">Points Breakdown</p>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <div className="text-center">
                               <p className="text-lg font-bold text-foreground">18</p>
                               <p className="text-[10px] text-muted-foreground">Wins</p>
