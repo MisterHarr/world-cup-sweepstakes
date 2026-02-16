@@ -2865,20 +2865,28 @@ function DashboardPageContent() {
                           <p className="text-xs text-muted-foreground mb-2">Points Breakdown</p>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">18</p>
+                              <p className="text-lg font-bold text-foreground">
+                                {teamsById[featuredDisplay.id]?.wins ?? 0}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">Wins</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">12</p>
+                              <p className="text-lg font-bold text-foreground">
+                                {teamsById[featuredDisplay.id]?.goalsScored ?? 0}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">Goals</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">9</p>
+                              <p className="text-lg font-bold text-foreground">
+                                {teamsById[featuredDisplay.id]?.cleanSheets ?? 0}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">C.Sheets</p>
                             </div>
                             <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">6</p>
-                              <p className="text-[10px] text-muted-foreground">Bonus</p>
+                              <p className="text-lg font-bold text-foreground">
+                                {teamsById[featuredDisplay.id]?.draws ?? 0}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">Draws</p>
                             </div>
                           </div>
                         </div>
@@ -2989,6 +2997,37 @@ function DashboardPageContent() {
                             ) : (
                               <p className="text-sm text-muted-foreground">No upcoming matches</p>
                             )}
+                          </div>
+
+                          {/* Points Breakdown */}
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-2">Points Breakdown</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-foreground">
+                                  {teamsById[team.id]?.wins ?? 0}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Wins</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-foreground">
+                                  {teamsById[team.id]?.goalsScored ?? 0}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Goals</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-foreground">
+                                  {teamsById[team.id]?.cleanSheets ?? 0}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">C.Sheets</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-lg font-bold text-foreground">
+                                  {teamsById[team.id]?.draws ?? 0}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground">Draws</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>
