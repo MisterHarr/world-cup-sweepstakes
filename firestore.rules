@@ -25,7 +25,7 @@ service cloud.firestore {
         ])
         && request.resource.data.uid == uid
         && request.resource.data.totalScore == 0
-        && request.resource.data.remainingTransfers == 3
+        && request.resource.data.remainingTransfers == 2
         && request.resource.data.isAdmin == false
         && (
           !request.resource.data.keys().hasAny(["portfolio"])

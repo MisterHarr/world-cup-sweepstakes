@@ -6,8 +6,13 @@ import { recomputeScoresCore } from "./scoring";
 
 const REGION = "asia-southeast1";
 const TRANSFER_WINDOW_DOC = "transferWindow";
-const TRANSFER_PENALTY_POINTS = 15;
-const TRANSFER_SCORING_VERSION = "v1-transfer-penalty";
+const TRANSFER_SCORING_VERSION = "v2-tiered-cost";
+
+// Tiered transfer cost system
+const BASE_COST = 10;
+const UPGRADE_MULTIPLIER = 15; // Cost per tier when upgrading to better team
+const DOWNGRADE_DISCOUNT = 3; // Discount per tier when downgrading
+const MINIMUM_COST = 5; // Floor for any transfer
 
 type PortfolioRole = "featured" | "drawn";
 type PortfolioItem = { teamId: string; role: PortfolioRole };
@@ -61,6 +66,31 @@ function isTransferWindowOpen(config: any, nowMs: number): boolean {
   if (endsAt !== null && nowMs > endsAt) return false;
 
   return true;
+}
+
+function calculateTransferCost(dropTier: number, pickupTier: number): number {
+  // Normalize tiers to valid range (1-5)
+  const normalizedDropTier = Math.max(1, Math.min(5, Math.floor(dropTier)));
+  const normalizedPickupTier = Math.max(1, Math.min(5, Math.floor(pickupTier)));
+
+  // Calculate tier difference
+  // Negative = upgrading (picking better tier, lower number)
+  // Positive = downgrading (picking worse tier, higher number)
+  const tierDifference = normalizedPickupTier - normalizedDropTier;
+
+  let tierPenalty = 0;
+
+  if (tierDifference < 0) {
+    // UPGRADING: Expensive (penalize)
+    tierPenalty = Math.abs(tierDifference) * UPGRADE_MULTIPLIER;
+  } else if (tierDifference > 0) {
+    // DOWNGRADING: Cheap (reward)
+    tierPenalty = -(tierDifference * DOWNGRADE_DISCOUNT);
+  }
+  // else: LATERAL (same tier) - no penalty
+
+  // Apply minimum cost floor
+  return Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
 }
 
 function getSquadFromUser(userData: any): {
@@ -120,13 +150,15 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
   const nowMs = Date.now();
   const db = admin.firestore();
   const userRef = db.collection("users").doc(uid);
+  const dropTeamRef = db.collection("teams").doc(dropTeamId);
   const pickupTeamRef = db.collection("teams").doc(pickupTeamId);
   const transferWindowRef = db.collection("settings").doc(TRANSFER_WINDOW_DOC);
   const transferEventRef = db.collection("transferEvents").doc();
 
   const result = await db.runTransaction(async (tx) => {
-    const [userSnap, pickupTeamSnap, transferWindowSnap] = await Promise.all([
+    const [userSnap, dropTeamSnap, pickupTeamSnap, transferWindowSnap] = await Promise.all([
       tx.get(userRef),
+      tx.get(dropTeamRef),
       tx.get(pickupTeamRef),
       tx.get(transferWindowRef),
     ]);
@@ -138,9 +170,22 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       );
     }
 
+    if (!dropTeamSnap.exists) {
+      throw new HttpsError("not-found", "Drop team does not exist.");
+    }
+
     if (!pickupTeamSnap.exists) {
       throw new HttpsError("not-found", "Pickup team does not exist.");
     }
+
+    // Get team tiers for cost calculation
+    const dropTeamData = dropTeamSnap.data() as any;
+    const pickupTeamData = pickupTeamSnap.data() as any;
+    const dropTier = typeof dropTeamData?.tier === "number" ? dropTeamData.tier : 3;
+    const pickupTier = typeof pickupTeamData?.tier === "number" ? pickupTeamData.tier : 3;
+
+    // Calculate transfer cost based on tier difference
+    const transferCost = calculateTransferCost(dropTier, pickupTier);
 
     const transferWindowData = transferWindowSnap.exists
       ? transferWindowSnap.data()
@@ -234,10 +279,12 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       uid,
       dropTeamId,
       pickupTeamId,
+      dropTier,
+      pickupTier,
       remainingTransfersBefore,
       remainingTransfersAfter,
       scoringPenaltyApplied: true,
-      scoringPenaltyPoints: TRANSFER_PENALTY_POINTS,
+      scoringPenaltyPoints: transferCost,
       scoringPenaltyVersion: TRANSFER_SCORING_VERSION,
       createdAt: FieldValue.serverTimestamp(),
       source: "executeTransfer",
@@ -248,6 +295,9 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       featuredTeamId,
       drawnTeamIds: nextDrawnTeamIds,
       transferEventId: transferEventRef.id,
+      transferCost,
+      dropTier,
+      pickupTier,
     };
   });
 
@@ -265,7 +315,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
 
   return {
     ok: true,
-    transferPenaltyPoints: TRANSFER_PENALTY_POINTS,
+    transferPenaltyPoints: result.transferCost,
     scoringPenaltyVersion: TRANSFER_SCORING_VERSION,
     leaderboardRecomputed,
     ...result,
