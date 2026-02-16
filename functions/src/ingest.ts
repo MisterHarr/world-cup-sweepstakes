@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule, type ScheduledEvent } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import fixtures from "./fixtures/worldcup2022.json";
+import preTournamentFixtures from "./fixtures/pretournament2022.json";
 import { recomputeScoresCore } from "./scoring";
 import { requireAdmin } from "./auth";
 
@@ -667,9 +668,6 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
 function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[] {
   const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
   const cutoffIso = asIsoOrNull(options.cutoffIso);
-
-  // Import pre-tournament fixture file
-  const preTournamentFixtures = require('./fixtures/pretournament2022.json');
 
   const raw = Array.isArray(preTournamentFixtures) ? preTournamentFixtures : [];
   const normalized = raw
