@@ -2738,7 +2738,7 @@ function DashboardPageContent() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-bold text-foreground">45</p>
+                      <p className="text-2xl font-bold text-foreground">{calculateTeamPoints(teamsById[featuredDisplay.id])}</p>
                       <p className="text-xs text-muted-foreground">pts</p>
                     </div>
                     <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedTeam === `featured-${featuredDisplay.id}` ? 'rotate-90' : ''}`} />
