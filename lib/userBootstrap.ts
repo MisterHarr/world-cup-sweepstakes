@@ -25,7 +25,7 @@ export async function ensureUserDoc(params: {
       // Game defaults
       portfolio: [],
       totalScore: 0,
-      remainingTransfers: 3,
+      remainingTransfers: 2,
       isAdmin: false,
     };
 
