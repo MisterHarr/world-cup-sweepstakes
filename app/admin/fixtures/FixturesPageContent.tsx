@@ -129,6 +129,10 @@ export default function FixtureIngestPage() {
   const [previewing, setPreviewing] = useState(false);
   const [resetRunning, setResetRunning] = useState(false);
   const [resetPreviewing, setResetPreviewing] = useState(false);
+  const [preTournamentRunning, setPreTournamentRunning] = useState(false);
+  const [preTournamentPreviewing, setPreTournamentPreviewing] = useState(false);
+  const [preTournamentStatus, setPreTournamentStatus] = useState("");
+  const [preTournamentPreview, setPreTournamentPreview] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
   const [leaderboardStatus, setLeaderboardStatus] = useState<{
     lastUpdated?: string;
@@ -540,6 +544,67 @@ export default function FixtureIngestPage() {
     }
   }
 
+  async function previewPreTournament() {
+    setPreTournamentStatus("");
+    setPreTournamentPreview("");
+    if (!uid || !isAdmin) {
+      setPreTournamentPreview("❌ Not authorized.");
+      return;
+    }
+
+    setPreTournamentPreviewing(true);
+    try {
+      const fn = httpsCallable(functions, "adminIngestPreTournament");
+      const res = await fn({ dryRun: true });
+      const data = res.data as any;
+      setPreTournamentPreview(
+        `Preview: ${data?.matches ?? 0} pre-tournament matches available.`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setPreTournamentPreview(`❌ ${err?.message ?? String(err)}`);
+    } finally {
+      setPreTournamentPreviewing(false);
+    }
+  }
+
+  async function runPreTournamentIngest() {
+    setPreTournamentStatus("");
+    setPreTournamentPreview("");
+    if (!uid || !isAdmin) {
+      setPreTournamentStatus("❌ Not authorized.");
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        "Import pre-tournament match data? This will add historical friendlies and qualifiers."
+      )
+    ) {
+      setPreTournamentStatus("Cancelled.");
+      return;
+    }
+
+    setPreTournamentRunning(true);
+    setPreTournamentStatus("Importing pre-tournament matches...");
+
+    try {
+      const fn = httpsCallable(functions, "adminIngestPreTournament");
+      const res = await fn({});
+      const data = res.data as any;
+      setPreTournamentStatus(
+        `✅ Imported ${data?.matches ?? 0} pre-tournament matches, ` +
+          `updated ${data?.updated ?? 0}. Leaderboard recomputed.`
+      );
+    } catch (err: any) {
+      console.error(err);
+      setPreTournamentStatus(`❌ ${err?.message ?? String(err)}`);
+    } finally {
+      setPreTournamentRunning(false);
+    }
+  }
+
   async function recomputeLeaderboard() {
     setRecomputeStatus("");
     if (!uid) {
@@ -941,6 +1006,51 @@ export default function FixtureIngestPage() {
                 ) : null}
                 {resetStatus ? (
                   <div className="text-sm text-slate-300">{resetStatus}</div>
+                ) : null}
+              </div>
+
+              <div className="border-t border-slate-800/60 pt-4 space-y-3">
+                <div className="text-sm font-semibold text-slate-100">
+                  Pre-Tournament Match Data
+                </div>
+                <p className="text-xs text-slate-400">
+                  Import pre-tournament friendlies and qualifiers (3-5 matches per
+                  team) so users see match history from day one.
+                </p>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <button
+                    onClick={runPreTournamentIngest}
+                    disabled={
+                      !uid || !isAdmin || preTournamentRunning || !acknowledged
+                    }
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
+                  >
+                    {preTournamentRunning
+                      ? "Importing..."
+                      : "Import Pre-Tournament Data"}
+                  </button>
+
+                  <button
+                    onClick={previewPreTournament}
+                    disabled={!uid || !isAdmin || preTournamentPreviewing}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
+                  >
+                    {preTournamentPreviewing
+                      ? "Previewing..."
+                      : "Preview Pre-Tournament"}
+                  </button>
+                </div>
+
+                {preTournamentPreview ? (
+                  <div className="text-sm text-slate-300">
+                    {preTournamentPreview}
+                  </div>
+                ) : null}
+                {preTournamentStatus ? (
+                  <div className="text-sm text-slate-300">
+                    {preTournamentStatus}
+                  </div>
                 ) : null}
               </div>
 

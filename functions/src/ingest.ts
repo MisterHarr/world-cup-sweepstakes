@@ -660,6 +660,33 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
   return limited;
 }
 
+/**
+ * Load pre-tournament matches from fixture file
+ * Used to provide match history before tournament starts
+ */
+function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[] {
+  const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
+  const cutoffIso = asIsoOrNull(options.cutoffIso);
+
+  // Import pre-tournament fixture file
+  const preTournamentFixtures = require('./fixtures/pretournament2022.json');
+
+  const raw = Array.isArray(preTournamentFixtures) ? preTournamentFixtures : [];
+  const normalized = raw
+    .map((item) => toProviderMatch(item))
+    .filter((item): item is ProviderMatch => Boolean(item));
+
+  const limited = filterAndLimitMatches(normalized, { maxMatches, cutoffIso });
+
+  console.log(
+    `[ingest] pre-tournament fixture loaded ${limited.length} matches` +
+      (cutoffIso ? ` (cutoff ${cutoffIso})` : "") +
+      (maxMatches > 0 ? ` (max ${maxMatches})` : "")
+  );
+
+  return limited;
+}
+
 function isDifferent(
   existing: FirebaseFirestore.DocumentData | undefined,
   incoming: ProviderMatch
@@ -905,6 +932,42 @@ export const adminResetFixtureIngest = onCall(
     return {
       ok: true,
       deletedFixtureMatches,
+      ...result,
+    };
+  }
+);
+
+/**
+ * Import pre-tournament match data (friendlies and qualifiers)
+ * Provides match history from tournament start
+ */
+export const adminIngestPreTournament = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const maxMatches = Number(request.data?.maxMatches ?? 0);
+    const cutoffIso = asString(request.data?.cutoffIso) ?? null;
+    const dryRun = request.data?.dryRun === true;
+
+    const matches = getPreTournamentFixtures({ maxMatches, cutoffIso });
+
+    if (dryRun) {
+      return {
+        ok: true,
+        matches: matches.length,
+        updated: 0,
+        dryRun: true,
+      };
+    }
+
+    const result = await applyMatchUpdates(matches, {
+      source: "fixture",
+      initiatedBy: request.auth?.uid ?? "admin",
+    });
+
+    return {
+      ok: true,
       ...result,
     };
   }

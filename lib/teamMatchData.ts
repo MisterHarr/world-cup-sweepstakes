@@ -25,7 +25,7 @@ export interface Match {
   homeScore: number | null;
   awayScore: number | null;
   scheduledAt: Date;
-  status: "scheduled" | "live" | "completed";
+  status: "SCHEDULED" | "LIVE" | "FINISHED";
   stage: "group" | "round_16" | "quarter" | "semi" | "final" | "third_place";
   group?: string; // e.g., "A", "B", etc.
 }
@@ -53,7 +53,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
     const homeQuery = query(
       matchesRef,
       where("homeTeamId", "==", teamId),
-      where("status", "==", "completed"),
+      where("status", "==", "FINISHED"),
       orderBy("scheduledAt", "desc"),
       limit(10) // Get extra in case some are mixed with away games
     );
@@ -62,7 +62,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
     const awayQuery = query(
       matchesRef,
       where("awayTeamId", "==", teamId),
-      where("status", "==", "completed"),
+      where("status", "==", "FINISHED"),
       orderBy("scheduledAt", "desc"),
       limit(10)
     );
@@ -147,7 +147,7 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
     const homeQuery = query(
       matchesRef,
       where("homeTeamId", "==", teamId),
-      where("status", "==", "scheduled"),
+      where("status", "==", "SCHEDULED"),
       where("scheduledAt", ">", now),
       orderBy("scheduledAt", "asc"),
       limit(1)
@@ -157,7 +157,7 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
     const awayQuery = query(
       matchesRef,
       where("awayTeamId", "==", teamId),
-      where("status", "==", "scheduled"),
+      where("status", "==", "SCHEDULED"),
       where("scheduledAt", ">", now),
       orderBy("scheduledAt", "asc"),
       limit(1)
