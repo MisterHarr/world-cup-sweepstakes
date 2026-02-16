@@ -29,14 +29,9 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   const db = admin.firestore();
   const callerUid = auth.uid;
   const requestedUserId = asString(request.data?.userId) ?? callerUid;
-  const isAdmin = (auth.token as { admin?: boolean })?.admin === true;
 
-  if (requestedUserId !== callerUid && !isAdmin) {
-    throw new HttpsError(
-      "permission-denied",
-      "You can only access your own squad details."
-    );
-  }
+  // All authenticated users can view any squad (public visibility for engagement)
+  // Privacy settings may be added in future if needed
 
   const userRef = db.collection("users").doc(requestedUserId);
   const userSnap = await userRef.get();
