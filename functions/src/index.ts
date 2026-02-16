@@ -273,5 +273,6 @@ export {
   ingestLiveScores,
   adminIngestFixture,
   adminResetFixtureIngest,
+  adminIngestPreTournament,
   setLiveOpsSettings,
 } from "./ingest";
