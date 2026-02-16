@@ -406,7 +406,7 @@ const Leaderboard = ({
           </div>
           <div className="flex gap-2 overflow-x-auto pb-2">
             {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-8 w-24 rounded-full" />
+              <Skeleton key={i} className="h-11 w-24 rounded-full" />
             ))}
           </div>
           <div className="space-y-2">
@@ -514,7 +514,7 @@ const Leaderboard = ({
             <button
               onClick={() => setSelectedDept(null)}
               className={[
-                "shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all",
+                "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
                 selectedDept === null
                   ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                   : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
@@ -529,7 +529,7 @@ const Leaderboard = ({
                   setSelectedDept((prev) => (prev === dept ? null : dept))
                 }
                 className={[
-                  "shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all",
+                  "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
                   selectedDept === dept
                     ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                     : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
@@ -540,7 +540,7 @@ const Leaderboard = ({
             ))}
             <button
               disabled
-              className="shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold bg-card border border-border text-muted-foreground/50 cursor-not-allowed"
+              className="shrink-0 rounded-lg px-4 py-3 text-sm font-semibold bg-card border border-border text-muted-foreground/50 cursor-not-allowed min-h-[44px]"
             >
               Badges
             </button>
@@ -556,7 +556,7 @@ const Leaderboard = ({
                   key={user.id}
                   onClick={() => openDrawerFor(user)}
                   className={[
-                    "flex items-center gap-4 p-4 bg-card border border-border rounded-xl transition-all cursor-pointer hover:bg-card/80",
+                    "flex items-center gap-4 p-4 bg-card border border-border rounded-xl transition-all cursor-pointer hover:bg-card/80 min-h-[60px]",
                     isYou
                       ? "border-primary/60 ring-2 ring-primary/30 bg-gradient-to-r from-primary/15 to-primary/5"
                       : "hover:border-primary/20",
