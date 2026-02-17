@@ -284,13 +284,13 @@ type SquadTeamVM = {
   tier?: number;
   flagUrl?: string;
   role: "featured" | "drawn";
-  contribution: number; // placeholder 0
+  contribution: number;
 };
 
 type SquadVM = {
   userId: string;
   displayName: string;
-  totalScore: number; // placeholder 0
+  totalScore: number;
   featured: SquadTeamVM | null;
   drawn: SquadTeamVM[];
 };
@@ -671,7 +671,6 @@ const Leaderboard = ({
                     <div className="font-mono font-bold text-foreground">
                       {Number(squad?.totalScore ?? 0).toLocaleString()}
                     </div>
-                    <span className="text-[10px] text-muted-foreground/70">(placeholder)</span>
                   </div>
                 </div>
 
@@ -788,9 +787,6 @@ const Leaderboard = ({
                               <span className="text-xs text-emerald-300 font-bold">
                                 pts
                               </span>
-                            </div>
-                            <div className="text-[10px] text-muted-foreground/70 mt-1">
-                              (placeholder)
                             </div>
                           </div>
                         </div>
@@ -2446,7 +2442,7 @@ function DashboardPageContent() {
           tier: Number(featuredRaw.tier ?? 4),
           flagUrl: String(featuredRaw.flagUrl ?? ""),
           role: "featured",
-          contribution: 0,
+          contribution: Number(featuredRaw.contribution ?? 0),
         }
       : null;
 
@@ -2458,14 +2454,24 @@ function DashboardPageContent() {
         tier: Number(t.tier ?? 4),
         flagUrl: String(t.flagUrl ?? ""),
         role: "drawn" as const,
-        contribution: 0,
+        contribution: Number(t.contribution ?? 0),
       }))
       .filter((t: SquadTeamVM) => Boolean(t.id));
+
+    const payloadTotalScore = Number(payload?.totalScore);
+    const derivedTotalScore =
+      Number(featured?.contribution ?? 0) +
+      drawn.reduce(
+        (sum, team) => sum + Number(team.contribution ?? 0),
+        0
+      );
 
     return {
       userId: String(payload?.userId ?? userId),
       displayName: String(payload?.displayName ?? displayNameFallback),
-      totalScore: 0,
+      totalScore: Number.isFinite(payloadTotalScore)
+        ? payloadTotalScore
+        : derivedTotalScore,
       featured,
       drawn: drawn.slice(0, 5),
     };
