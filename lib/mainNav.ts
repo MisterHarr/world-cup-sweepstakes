@@ -59,7 +59,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       id: "leaderboard",
       label: "Leaderboard",
       icon: Users,
-      href: "/dashboard?tab=leaderboard",
+      href: "/leaderboard",
       onClick: onLeaderboard,
     },
     {
