@@ -54,7 +54,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
       matchesRef,
       where("homeTeamId", "==", teamId),
       where("status", "==", "FINISHED"),
-      orderBy("scheduledAt", "desc"),
+      orderBy("kickoffTime", "desc"),
       limit(10) // Get extra in case some are mixed with away games
     );
 
@@ -63,7 +63,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
       matchesRef,
       where("awayTeamId", "==", teamId),
       where("status", "==", "FINISHED"),
-      orderBy("scheduledAt", "desc"),
+      orderBy("kickoffTime", "desc"),
       limit(10)
     );
 
@@ -91,7 +91,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
         awayTeamId: data.awayTeamId,
         homeScore,
         awayScore,
-        scheduledAt: (data.scheduledAt as Timestamp).toDate(),
+        scheduledAt: data.kickoffTime ? new Date(data.kickoffTime as string) : new Date(),
         status: data.status,
         stage: data.stage,
         result,
@@ -114,7 +114,7 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
         awayTeamId: data.awayTeamId,
         homeScore,
         awayScore,
-        scheduledAt: (data.scheduledAt as Timestamp).toDate(),
+        scheduledAt: data.kickoffTime ? new Date(data.kickoffTime as string) : new Date(),
         status: data.status,
         stage: data.stage,
         result,
@@ -140,7 +140,8 @@ export async function getTeamRecentForm(teamId: string): Promise<MatchResult[]> 
  */
 export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null> {
   try {
-    const now = Timestamp.now();
+    const now = new Date();
+    const nowISO = now.toISOString();
     const matchesRef = collection(db, "matches");
 
     // Query upcoming matches where team is home
@@ -148,8 +149,8 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
       matchesRef,
       where("homeTeamId", "==", teamId),
       where("status", "==", "SCHEDULED"),
-      where("scheduledAt", ">", now),
-      orderBy("scheduledAt", "asc"),
+      where("kickoffTime", ">", nowISO),
+      orderBy("kickoffTime", "asc"),
       limit(1)
     );
 
@@ -158,8 +159,8 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
       matchesRef,
       where("awayTeamId", "==", teamId),
       where("status", "==", "SCHEDULED"),
-      where("scheduledAt", ">", now),
-      orderBy("scheduledAt", "asc"),
+      where("kickoffTime", ">", nowISO),
+      orderBy("kickoffTime", "asc"),
       limit(1)
     );
 
@@ -180,7 +181,7 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
         awayTeamId: data.awayTeamId,
         homeScore: null,
         awayScore: null,
-        scheduledAt: (data.scheduledAt as Timestamp).toDate(),
+        scheduledAt: new Date(data.kickoffTime as string),
         status: data.status,
         stage: data.stage,
         isHome: true,
@@ -191,7 +192,7 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
     if (!awaySnap.empty) {
       const doc = awaySnap.docs[0];
       const data = doc.data();
-      const awayMatchDate = (data.scheduledAt as Timestamp).toDate();
+      const awayMatchDate = new Date(data.kickoffTime as string);
 
       // If no home match or away match is earlier
       if (!nextMatch || awayMatchDate < nextMatch.scheduledAt) {
