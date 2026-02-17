@@ -1,11 +1,18 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Admin Operations
+## Documentation
 
-- Admin tools: `http://localhost:3000/admin`
+📖 **Start here:** [`docs/README.md`](./docs/README.md) - Complete documentation guide
+
+**Quick Links:**
+- 🔧 [Admin Tools Guide](./docs/current/ADMIN-TOOLS.md)
+- 🏆 [Tournament Runbook](./docs/current/TOURNAMENT-RUNBOOK.md)
+- 🚀 [Build Status & Roadmap](./docs/current/BUILD-STATUS-NEXT-STEPS.md)
+- 🎖️ [Badge System Design](./docs/current/BADGE-SYSTEM-DESIGN.md)
+
+**Admin Operations:**
+- Admin tools UI: `http://localhost:3000/admin`
 - In-app runbook: `http://localhost:3000/admin/runbook`
-- Source markdown runbook: `docs/TOURNAMENT-RUNBOOK.md`
-- Build status + roadmap: `docs/BUILD-STATUS-NEXT-STEPS.md`
 
 ## Getting Started
 
