@@ -1,6 +1,6 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2025-02-16
+**Last Updated:** 2026-02-17
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
@@ -13,12 +13,14 @@
 - ✅ **Featured Team Multiplier** - Captain teams now correctly show 2x points
 - ✅ **Recent Form Display** - Fixed field name mismatch (`kickoffTime` vs `scheduledAt`)
 - ✅ **Firestore Indexes** - Deployed composite indexes for match queries
+- ✅ **Squad Details Placeholder Cleanup** - Replaced placeholder scores with real callable-driven totals/contributions
 
 ### Core Features
 - ✅ Google Authentication with Firebase
 - ✅ Department selection (Primary/Secondary/Admin)
 - ✅ Featured team selection with tier-balanced draw
 - ✅ Dashboard with My Teams, Leaderboard, Match Center, Transfer tabs
+- ✅ Standalone leaderboard page at `/leaderboard`
 - ✅ Pre-tournament match data import system
 - ✅ Real-time leaderboard with squad viewer
 - ✅ Admin tools for user management and fixture ingestion
@@ -29,7 +31,7 @@
 
 ### Priority 1: User Experience Improvements
 
-#### 1.1 Create Standalone Leaderboard Page
+#### 1.1 Create Standalone Leaderboard Page ✅ Completed (2026-02-17)
 **Why:** Better user experience and code organization
 **Benefit:** Users can focus on leaderboard without dashboard clutter
 **Files:** Create `/app/leaderboard/page.tsx`
@@ -43,11 +45,11 @@ Right now, the leaderboard is just one tab in a big dashboard page. Imagine if N
 - **Cleaner code** - Dashboard file is currently 3,100 lines (way too big!)
 - **Better navigation** - Users can find what they need quickly
 
-**Effort:** Medium (4-6 hours)
+**Status:** Completed
 
 ---
 
-#### 1.2 Complete Squad Details (Remove Placeholders)
+#### 1.2 Complete Squad Details (Remove Placeholders) ✅ Completed (2026-02-17)
 **Why:** Feature completeness
 **Benefit:** Users see real team stats instead of "(placeholder)" text
 **Files:** `app/dashboard/page.tsx` around lines 287, 293, 674
@@ -60,7 +62,7 @@ Imagine going to a sports app to check your fantasy team's score, but it just sa
 - **Complete information** - Users see full team contribution scores
 - **User trust** - Looks finished and reliable, not half-built
 
-**Effort:** Low-Medium (2-3 hours)
+**Status:** Completed
 
 ---
 
@@ -172,8 +174,8 @@ When you visit the dashboard, the browser downloads ALL the code for My Teams, L
 
 | Task | Priority | Impact | Effort | Users Benefit |
 |------|----------|--------|--------|---------------|
-| **Standalone Leaderboard** | High | High | Medium | Faster loading, better UX |
-| **Complete Squad Details** | High | Medium | Low | Professional appearance |
+| **Standalone Leaderboard (Completed)** | Done | High | Done | Faster loading, better UX |
+| **Complete Squad Details (Completed)** | Done | Medium | Done | Professional appearance |
 | **Improve Type Safety** | Medium | High | Medium | Fewer bugs |
 | **Refactor Dashboard** | Medium | High | High | Easier maintenance |
 | **Transfer History** | Medium | Medium | Medium | User transparency |
@@ -187,11 +189,11 @@ When you visit the dashboard, the browser downloads ALL the code for My Teams, L
 We recommend tackling these in order:
 
 ### Week 1: Quick Wins
-1. **Complete Squad Details** (2-3 hours) - Immediate visual improvement
+1. **Complete Squad Details** ✅ - Immediate visual improvement
 2. **Remove Debug Logs** (1-2 hours) - Easy cleanup
 
 ### Week 2: User Features
-3. **Standalone Leaderboard** (4-6 hours) - Better UX
+3. **Standalone Leaderboard** ✅ - Better UX
 4. **Transfer History** (5-6 hours) - New feature
 
 ### Week 3-4: Code Quality
