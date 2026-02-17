@@ -21,6 +21,51 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+function hasAssignedTeams(user: any): boolean {
+  const portfolio = Array.isArray(user?.portfolio) ? user.portfolio : [];
+  const hasFeaturedInPortfolio = portfolio.some((item: any) => {
+    return (
+      item?.role === "featured" &&
+      typeof item?.teamId === "string" &&
+      item.teamId.trim().length > 0
+    );
+  });
+
+  const hasFeaturedInEntry =
+    typeof user?.entry?.featuredTeamId === "string" &&
+    user.entry.featuredTeamId.trim().length > 0;
+
+  return hasFeaturedInPortfolio || hasFeaturedInEntry;
+}
+
+function getAssignedTeamCount(user: any): number {
+  const ids = new Set<string>();
+
+  const portfolio = Array.isArray(user?.portfolio) ? user.portfolio : [];
+  portfolio.forEach((item: any) => {
+    if (typeof item?.teamId === "string" && item.teamId.trim().length > 0) {
+      ids.add(item.teamId.trim());
+    }
+  });
+
+  if (
+    typeof user?.entry?.featuredTeamId === "string" &&
+    user.entry.featuredTeamId.trim().length > 0
+  ) {
+    ids.add(user.entry.featuredTeamId.trim());
+  }
+
+  if (Array.isArray(user?.entry?.drawnTeamIds)) {
+    user.entry.drawnTeamIds.forEach((rawId: unknown) => {
+      if (typeof rawId === "string" && rawId.trim().length > 0) {
+        ids.add(rawId.trim());
+      }
+    });
+  }
+
+  return ids.size;
+}
+
 /* ======================================================
    FEATURED TEAM + DRAW LOGIC (unchanged)
 ====================================================== */
@@ -263,6 +308,141 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
 /* ======================================================
    ADMIN / BOOTSTRAP EXPORTS (unchanged)
 ====================================================== */
+
+/* ======================================================
+   ADMIN: ASSIGN TEAMS TO USERS WITHOUT THEM
+====================================================== */
+
+export const adminListUsers = onCall({ region: REGION }, async (request) => {
+  const isAdmin = request.auth?.token?.admin === true;
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  try {
+    const usersSnap = await db.collection("users").orderBy("email").get();
+
+    const users = usersSnap.docs.map((doc) => {
+      const data = doc.data();
+      const hasTeams = hasAssignedTeams(data);
+      const teamCount = getAssignedTeamCount(data);
+
+      return {
+        uid: doc.id,
+        displayName: data.displayName || "Unknown",
+        email: data.email || "",
+        hasTeams,
+        teamCount,
+      };
+    });
+
+    return {
+      ok: true,
+      users,
+    };
+  } catch (err: any) {
+    console.error("adminListUsers error:", err);
+    throw new HttpsError("internal", "Failed to list users.");
+  }
+});
+
+export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request) => {
+  const isAdmin = request.auth?.token?.admin === true;
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const targetUidRaw = request.data?.userId;
+  if (typeof targetUidRaw !== "string" || targetUidRaw.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "userId must be provided.");
+  }
+  const targetUid = targetUidRaw.trim();
+
+  const userRef = db.collection("users").doc(targetUid);
+  const userSnap = await userRef.get();
+
+  if (!userSnap.exists) {
+    throw new HttpsError("not-found", "User not found.");
+  }
+
+  const user = userSnap.data() as any;
+  const hasTeams = hasAssignedTeams(user);
+  if (hasTeams) {
+    return { ok: true, message: "User already has teams assigned.", skipped: true };
+  }
+
+  // Get all teams
+  const teamsSnap = await db.collection("teams").get();
+  const allTeams = teamsSnap.docs.map((d) => {
+    const data = d.data() as any;
+    return {
+      id: data.id ?? d.id,
+      name: data.name,
+      group: data.group,
+      tier: data.tier,
+      flagUrl: data.flagUrl,
+    };
+  });
+
+  if (allTeams.length < 6) {
+    throw new HttpsError("failed-precondition", "Not enough teams in database.");
+  }
+
+  // Pick a random featured team
+  const shuffledTeams = shuffle(allTeams);
+  const featuredTeam = shuffledTeams[0];
+  const eligibleForDraw = shuffledTeams.slice(1);
+
+  // Tier-balanced draw: 1 from tier-1, 1 from tier-2, 2 from tier-3, 1 from tier-4
+  const tier1 = eligibleForDraw.filter((t) => t.tier === 1);
+  const tier2 = eligibleForDraw.filter((t) => t.tier === 2);
+  const tier3 = eligibleForDraw.filter((t) => t.tier === 3);
+  const tier4 = eligibleForDraw.filter((t) => t.tier === 4);
+
+  const drawnTeams = [
+    ...shuffle(tier1).slice(0, 1),
+    ...shuffle(tier2).slice(0, 1),
+    ...shuffle(tier3).slice(0, 2),
+    ...shuffle(tier4).slice(0, 1),
+  ];
+
+  // Fallback if not enough teams in specific tiers
+  if (drawnTeams.length < 5) {
+    const remaining = 5 - drawnTeams.length;
+    const drawnIds = new Set(drawnTeams.map((t) => t.id));
+    const available = eligibleForDraw.filter((t) => !drawnIds.has(t.id));
+    drawnTeams.push(...shuffle(available).slice(0, remaining));
+  }
+
+  // Create portfolio and entry
+  const nextPortfolio = [
+    { teamId: featuredTeam.id, role: "featured" as const },
+    ...drawnTeams.map((t) => ({
+      teamId: t.id,
+      role: "drawn" as const,
+    })),
+  ];
+
+  const entry = {
+    confirmedAt: FieldValue.serverTimestamp(),
+    featuredTeamId: featuredTeam.id,
+    drawnTeamIds: drawnTeams.map((t) => t.id),
+    version: 1,
+  };
+
+  await userRef.update({
+    entry,
+    portfolio: nextPortfolio,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    ok: true,
+    message: `Assigned ${featuredTeam.name} (featured) + 5 drawn teams.`,
+    featured: featuredTeam.name,
+    drawn: drawnTeams.map((t) => t.name),
+  };
+});
 
 export { setAdminClaim } from "./admin";
 export { getLeaderboard } from "./getLeaderboard";

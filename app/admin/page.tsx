@@ -70,6 +70,12 @@ export default function AdminHomePage() {
                   Seed Teams
                 </a>
                 <a
+                  href="/admin/users"
+                  className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-3 text-slate-100 shadow-sm transition hover:border-emerald-400/60 hover:text-emerald-200"
+                >
+                  User Management
+                </a>
+                <a
                   href="/admin/fixtures"
                   className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-3 text-slate-100 shadow-sm transition hover:border-emerald-400/60 hover:text-emerald-200"
                 >
