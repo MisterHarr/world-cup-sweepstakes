@@ -32,7 +32,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
+          "fieldPath": "kickoffTime",
           "order": "DESCENDING"
         }
       ]
@@ -50,7 +50,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
+          "fieldPath": "kickoffTime",
           "order": "ASCENDING"
         }
       ]
@@ -68,7 +68,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
+          "fieldPath": "kickoffTime",
           "order": "DESCENDING"
         }
       ]
@@ -86,7 +86,7 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "scheduledAt",
+          "fieldPath": "kickoffTime",
           "order": "ASCENDING"
         }
       ]
