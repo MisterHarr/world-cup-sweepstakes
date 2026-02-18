@@ -10,14 +10,13 @@ import LeaderboardPanel, {
   type SquadVM,
 } from "@/components/leaderboard/LeaderboardPanel";
 import { auth, db, functions } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
 import type { User } from "@/types";
 
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
-  signOut,
+  signOut
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
@@ -34,6 +33,10 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
   return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export default function StandaloneLeaderboardPage() {
   const router = useRouter();
 
@@ -46,25 +49,42 @@ export default function StandaloneLeaderboardPage() {
 
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [authBusy, setAuthBusy] = useState(false);
 
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
-  const department: Department | null = (userDoc as any)?.department ?? null;
+  const userDocData = useMemo<Record<string, unknown>>(
+    () => (isRecord(userDoc) ? userDoc : {}),
+    [userDoc]
+  );
+  const department: Department | null =
+    userDocData.department === "Primary" ||
+    userDocData.department === "Secondary" ||
+    userDocData.department === "Admin"
+      ? userDocData.department
+      : null;
 
   async function handleGoogleSignIn() {
+    if (authBusy) return;
+
     setError("");
-    setStatus("Signing in...");
+    setStatus("Opening Google sign-in...");
+    setAuthBusy(true);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
+      const mode = await signInWithGoogle(auth);
+      if (mode === "redirect") {
+        setStatus("Redirecting to Google sign-in...");
+        return;
+      }
       setStatus("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus("");
-      setError(err?.message ?? "Sign-in failed.");
+      setError(friendlyErrorMessage(err, "Sign-in failed."));
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -74,10 +94,10 @@ export default function StandaloneLeaderboardPage() {
     try {
       await signOut(auth);
       setStatus("");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
       setStatus("");
-      setError(err?.message ?? "Sign-out failed.");
+      setError(friendlyErrorMessage(err, "Sign-out failed."));
     }
   }
 
@@ -87,10 +107,10 @@ export default function StandaloneLeaderboardPage() {
   ): Promise<SquadVM> {
     const fn = httpsCallable(functions, "getSquadDetails");
     const res = await fn({ userId });
-    const payload = res.data as any;
+    const payload = isRecord(res.data) ? res.data : {};
 
-    const featuredRaw = payload?.featured ?? null;
-    const drawnRaw = Array.isArray(payload?.drawn) ? payload.drawn : [];
+    const featuredRaw = isRecord(payload.featured) ? payload.featured : null;
+    const drawnRaw = Array.isArray(payload.drawn) ? payload.drawn : [];
 
     const featured: SquadTeamVM | null = featuredRaw
       ? {
@@ -105,25 +125,28 @@ export default function StandaloneLeaderboardPage() {
       : null;
 
     const drawn: SquadTeamVM[] = drawnRaw
-      .map((team: any) => ({
-        id: String(team.id ?? team.teamId ?? ""),
-        name: String(team.name ?? "Team"),
-        group: String(team.group ?? ""),
-        tier: Number(team.tier ?? 4),
-        flagUrl: String(team.flagUrl ?? ""),
-        role: "drawn" as const,
-        contribution: Number(team.contribution ?? 0),
-      }))
+      .map((team: unknown) => {
+        const teamData = isRecord(team) ? team : {};
+        return {
+          id: String(teamData.id ?? teamData.teamId ?? ""),
+          name: String(teamData.name ?? "Team"),
+          group: String(teamData.group ?? ""),
+          tier: Number(teamData.tier ?? 4),
+          flagUrl: String(teamData.flagUrl ?? ""),
+          role: "drawn" as const,
+          contribution: Number(teamData.contribution ?? 0),
+        };
+      })
       .filter((team: SquadTeamVM) => Boolean(team.id));
 
-    const payloadTotalScore = Number(payload?.totalScore);
+    const payloadTotalScore = Number(payload.totalScore);
     const derivedTotalScore =
       Number(featured?.contribution ?? 0) +
       drawn.reduce((sum, team) => sum + Number(team.contribution ?? 0), 0);
 
     return {
-      userId: String(payload?.userId ?? userId),
-      displayName: String(payload?.displayName ?? displayNameFallback),
+      userId: String(payload.userId ?? userId),
+      displayName: String(payload.displayName ?? displayNameFallback),
       totalScore: Number.isFinite(payloadTotalScore)
         ? payloadTotalScore
         : derivedTotalScore,
@@ -149,9 +172,11 @@ export default function StandaloneLeaderboardPage() {
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) setUserDoc(snap.data() as User);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err);
-        setError(`[users] ${err?.message ?? "Failed to load your profile."}`);
+        setError(
+          `[users] ${friendlyErrorMessage(err, "Failed to load your profile.")}`
+        );
       } finally {
         setLoadingUser(false);
       }
@@ -187,19 +212,27 @@ export default function StandaloneLeaderboardPage() {
           return;
         }
 
-        const payload = snap.data() as any;
-        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+        const rawData = snap.data();
+        const payload = isRecord(rawData) ? rawData : {};
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
 
         const mapped: LBUser[] = rows
-          .map((row: any, idx: number) => ({
-            id: String(row.userId ?? row.id ?? ""),
-            rank: Number(row.rank ?? idx + 1),
-            name: String(row.displayName ?? row.name ?? "Anonymous"),
-            totalScore: Number(row.totalScore ?? 0),
-            department: typeof row.department === "string" ? row.department : null,
-            dept: typeof row.dept === "string" ? row.dept : null,
-            teams: [],
-          }))
+          .map((row: unknown, idx: number) => {
+            const rowData = isRecord(row) ? row : {};
+            return {
+              id: String(rowData.userId ?? rowData.id ?? ""),
+              rank: Number(rowData.rank ?? idx + 1),
+              name: String(rowData.displayName ?? rowData.name ?? "Anonymous"),
+              totalScore: Number(rowData.totalScore ?? 0),
+              badgeCount: Number(rowData.badgeCount ?? 0),
+              department:
+                typeof rowData.department === "string"
+                  ? rowData.department
+                  : null,
+              dept: typeof rowData.dept === "string" ? rowData.dept : null,
+              teams: [],
+            };
+          })
           .filter((row: LBUser) => Boolean(row.id));
 
         setLeaderboardData(mapped);
@@ -230,7 +263,7 @@ export default function StandaloneLeaderboardPage() {
 
   const navItems = buildMainNavItems({
     signedIn,
-    authBusy: checkingAuth,
+    authBusy: checkingAuth || authBusy,
     onSignIn: handleGoogleSignIn,
     onSignOut: handleSignOut,
     onPortfolio: () => router.push("/dashboard?tab=portfolio"),
@@ -250,7 +283,9 @@ export default function StandaloneLeaderboardPage() {
                   src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
                   alt="GIS Logo"
                   className="w-full h-full object-contain"
-                  onError={(e: any) => (e.currentTarget.style.display = "none")}
+                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                    e.currentTarget.style.display = "none";
+                  }}
                 />
               </div>
               <h1 className="font-bold text-lg tracking-tight">
@@ -293,9 +328,10 @@ export default function StandaloneLeaderboardPage() {
               </p>
               <button
                 onClick={handleGoogleSignIn}
+                disabled={authBusy}
                 className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 text-emerald-200 px-4 py-2 text-sm font-semibold hover:bg-emerald-500/25 transition-colors"
               >
-                Sign in with Google
+                {authBusy ? "Please wait..." : "Sign in with Google"}
               </button>
             </div>
           )}

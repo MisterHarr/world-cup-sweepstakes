@@ -1,25 +1,41 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppShellV0 } from "@/components/app-shell-v0";
+import type {
+  LBUser,
+  SquadTeamVM,
+  SquadVM,
+} from "@/components/leaderboard/LeaderboardPanel";
+import type {
+  MarketTeam,
+  TradeResult,
+} from "@/components/dashboard/DashboardTransferMarket";
+import {
+  STAGE_ORDER,
+  isKnownStage,
+  matchStatusLabel,
+  stageLabel,
+  type BracketMatch as Match,
+  type BracketStage as Stage,
+} from "@/lib/bracketUtils";
 import { auth, db, functions } from "@/lib/firebase";
 import { fetchTeamsByIds } from "@/lib/dashboardData";
+import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
 import type { User } from "@/types";
 import {
   getTeamRecentForm,
   getTeamNextMatch,
-  formatMatchDate,
   type MatchResult,
   type NextMatch,
 } from "@/lib/teamMatchData";
 
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
 } from "firebase/auth";
 
@@ -37,114 +53,40 @@ import {
   where,
 } from "firebase/firestore";
 
-import {
-  Bell,
-  BellOff,
-  Clock,
-  Tv,
-  Zap,
-} from "lucide-react";
-
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-
-/** ---------- ICON COMPONENTS (from your HTML) ---------- **/
-const IconBase = ({
-  size = 24,
-  className = "",
-  children,
-}: {
-  size?: number;
-  className?: string;
-  children: React.ReactNode;
-}) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    {children}
-  </svg>
+const LeaderboardPanel = dynamic(
+  () => import("@/components/leaderboard/LeaderboardPanel"),
+  { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
-const Trophy = (props: any) => (
-  <IconBase {...props}>
-    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-    <path d="M4 22h16" />
-    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-  </IconBase>
+const DashboardBracket = dynamic(
+  () => import("@/components/dashboard/DashboardBracket"),
+  { ssr: false, loading: () => <TabPanelLoading /> }
 );
-const Shield = (props: any) => (
-  <IconBase {...props}>
-    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-  </IconBase>
+
+const DashboardTransferMarket = dynamic(
+  () => import("@/components/dashboard/DashboardTransferMarket"),
+  { ssr: false, loading: () => <TabPanelLoading /> }
 );
-const ChevronRight = (props: any) => (
-  <IconBase {...props}>
-    <path d="m9 18 6-6-6-6" />
-  </IconBase>
-);
-const ChevronLeft = (props: any) => (
-  <IconBase {...props}>
-    <path d="m15 18-6-6 6-6" />
-  </IconBase>
-);
-const TrendingUp = (props: any) => (
-  <IconBase {...props}>
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-    <polyline points="17 6 23 6 23 12" />
-  </IconBase>
-);
-const Crown = (props: any) => (
-  <IconBase {...props}>
-    <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" />
-  </IconBase>
-);
-const X = (props: any) => (
-  <IconBase {...props}>
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
-  </IconBase>
-);
-const Search = (props: any) => (
-  <IconBase {...props}>
-    <circle cx="11" cy="11" r="8" />
-    <path d="m21 21-4.3-4.3" />
-  </IconBase>
-);
-const CheckCircle2 = (props: any) => (
-  <IconBase {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="m9 12 2 2 4-4" />
-  </IconBase>
-);
-const AlertTriangle = (props: any) => (
-  <IconBase {...props}>
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-    <line x1="12" y1="9" x2="12" y2="13" />
-    <line x1="12" y1="17" x2="12.01" y2="17" />
-  </IconBase>
-);
-const Loader2 = (props: any) => (
-  <IconBase {...props}>
-    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-  </IconBase>
+
+const DashboardPortfolio = dynamic(
+  () => import("@/components/dashboard/DashboardPortfolio"),
+  { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
 /** ---------- Small UI helpers ---------- **/
 const Skeleton = ({ className }: { className: string }) => (
   <div className={`animate-pulse bg-white/10 rounded ${className}`} />
 );
+
+function TabPanelLoading() {
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-7 w-48" />
+      <Skeleton className="h-28 w-full" />
+      <Skeleton className="h-28 w-full" />
+    </div>
+  );
+}
 
 type Department = "Primary" | "Secondary" | "Admin";
 type DashboardTab = "portfolio" | "leaderboard" | "bracket" | "market";
@@ -172,52 +114,52 @@ type UITeam = {
   isEliminated?: boolean;
 };
 
-function toUITeam(id: string, t: any | null): UITeam {
+type TeamRecord = {
+  name?: string;
+  group?: string;
+  tier?: number | string;
+  flagUrl?: string;
+  isEliminated?: boolean;
+  wins?: number;
+  draws?: number;
+  cleanSheets?: number;
+  goalsScored?: number;
+  losses?: number;
+  gf?: number;
+  ga?: number;
+  gd?: number;
+  points?: number;
+  totalScore?: number;
+  coach?: string;
+  confederation?: string;
+  foundedYear?: number;
+  fifaRank?: number;
+  worldCupAppearances?: number;
+  bestFinish?: string;
+  countryCode?: string;
+  [key: string]: unknown;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function toTrimmedString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function toUITeam(id: string, t: Record<string, unknown> | null): UITeam {
+  const team = t ?? {};
   return {
     id,
-    name: (t?.name as string) ?? id,
-    group: (t?.group as string) ?? "?",
-    tier: typeof t?.tier === "number" ? t.tier : Number(t?.tier ?? 0),
-    flagUrl: (t?.flagUrl as string) ?? "",
-    isEliminated: t?.isEliminated === true,
+    name: toTrimmedString(team.name) ?? id,
+    group: toTrimmedString(team.group) ?? "?",
+    tier: typeof team.tier === "number" ? team.tier : Number(team.tier ?? 0),
+    flagUrl: toTrimmedString(team.flagUrl) ?? "",
+    isEliminated: team.isEliminated === true,
   };
-}
-
-function tierLabel(tier: number) {
-  if (tier === 1) return "Elite";
-  if (tier === 2) return "Strong";
-  if (tier === 3) return "Competitive";
-  return "Underdog";
-}
-
-function tierPillClass(tier: number) {
-  if (tier === 1)
-    return "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/40 shadow-sm shadow-yellow-500/20";
-  if (tier === 2)
-    return "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-100 border-slate-400/40 shadow-sm shadow-slate-400/20";
-  if (tier === 3)
-    return "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-200 border-orange-600/40 shadow-sm shadow-orange-600/20";
-  return "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-200 border-rose-800/40 shadow-sm shadow-rose-900/20";
-}
-
-function tierIcon(tier: number) {
-  if (tier === 1) return "👑";
-  if (tier === 2) return "⚡";
-  if (tier === 3) return "🔥";
-  return "💪";
-}
-
-function TierPill({ tier }: { tier: number }) {
-  return (
-    <span
-      className={[
-        "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
-        tierPillClass(tier),
-      ].join(" ")}
-    >
-      {tierIcon(tier)} Tier {tier} • {tierLabel(tier)}
-    </span>
-  );
 }
 
 function toMillis(value: unknown): number | null {
@@ -241,8 +183,17 @@ function toMillis(value: unknown): number | null {
   return null;
 }
 
-function calculateTeamPoints(team: Record<string, any> | null | undefined): number {
-  if (!team) return 0;
+function toIsoString(value: unknown): string {
+  if (typeof value === "string" && value.trim().length > 0) return value;
+  if (!isRecord(value) || typeof value.toDate !== "function") return "";
+  const date = (value.toDate as () => unknown)();
+  return date instanceof Date ? date.toISOString() : "";
+}
+
+function calculateTeamPoints(
+  team: Record<string, unknown> | null | undefined
+): number {
+  if (!team || !isRecord(team)) return 0;
   const wins = Number(team.wins ?? 0);
   const draws = Number(team.draws ?? 0);
   const goalsScored = Number(team.goalsScored ?? 0);
@@ -264,1547 +215,6 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
 }
 
 /** ---------- LEADERBOARD (your UI; now powered by Firestore snapshot) ---------- **/
-type LBUser = {
-  id: string;
-  rank: number;
-  name: string;
-  totalScore: number;
-  teams?: Array<{
-    name: string;
-    points: number;
-    status?: string;
-    isCaptain?: boolean;
-  }>;
-};
-
-type SquadTeamVM = {
-  id: string;
-  name: string;
-  group?: string;
-  tier?: number;
-  flagUrl?: string;
-  role: "featured" | "drawn";
-  contribution: number;
-};
-
-type SquadVM = {
-  userId: string;
-  displayName: string;
-  totalScore: number;
-  featured: SquadTeamVM | null;
-  drawn: SquadTeamVM[];
-};
-
-const Leaderboard = ({
-  data = [],
-  isLoading = false,
-  fetchSquad,
-  currentUserId,
-}: {
-  data: LBUser[];
-  isLoading: boolean;
-  fetchSquad: (userId: string, displayNameFallback: string) => Promise<SquadVM>;
-  currentUserId?: string | null;
-}) => {
-  const [selectedUser, setSelectedUser] = useState<LBUser | null>(null);
-  const [selectedDept, setSelectedDept] = useState<string | null>(null);
-
-  const [squad, setSquad] = useState<SquadVM | null>(null);
-  const [loadingSquad, setLoadingSquad] = useState(false);
-  const [squadErr, setSquadErr] = useState<string>("");
-
-  async function openDrawerFor(user: LBUser) {
-    setSelectedUser(user);
-    setSquad(null);
-    setSquadErr("");
-    setLoadingSquad(true);
-
-    try {
-      const vm = await fetchSquad(user.id, user.name);
-      setSquad(vm);
-    } catch (e: any) {
-      console.error(e);
-      setSquadErr(e?.message ?? "Failed to load squad details.");
-    } finally {
-      setLoadingSquad(false);
-    }
-  }
-
-  const squadTeams: SquadTeamVM[] = useMemo(() => {
-    if (!squad) return [];
-    const out: SquadTeamVM[] = [];
-    if (squad.featured) out.push(squad.featured);
-    out.push(...(squad.drawn ?? []));
-    return out;
-  }, [squad]);
-
-  const sorted = useMemo(() => {
-    return [...data].sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
-  }, [data]);
-
-  const topThree = useMemo(() => sorted.slice(0, 3), [sorted]);
-  const topIds = useMemo(() => new Set(topThree.map((u) => u.id)), [topThree]);
-  const hasDeptData = useMemo(
-    () => sorted.some((u: any) => Boolean(u?.department || u?.dept)),
-    [sorted]
-  );
-  const deptFromData = useMemo(() => {
-    const set = new Set<string>();
-    sorted.forEach((u: any) => {
-      const dept = u?.department ?? u?.dept;
-      if (dept) set.add(String(dept));
-    });
-    return Array.from(set);
-  }, [sorted]);
-  const deptFilters = deptFromData.length
-    ? deptFromData
-    : ["Primary", "Secondary", "Admin"];
-
-  const filteredList = useMemo(() => {
-    const source =
-      hasDeptData && selectedDept
-        ? sorted.filter(
-            (u: any) => (u?.department ?? u?.dept) === selectedDept
-          )
-        : sorted;
-    return source.filter((u) => !topIds.has(u.id));
-  }, [hasDeptData, selectedDept, sorted, topIds]);
-
-  return (
-    <main className="relative min-h-[500px] max-w-full overflow-x-hidden">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 sm:px-1">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-primary" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Leaderboard</h1>
-            <p className="text-xs text-muted-foreground">
-              {sorted.length} Participants
-            </p>
-          </div>
-        </div>
-        <div className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-200">
-          v0 layout active
-        </div>
-        <div
-          className="text-emerald-300 text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          LIVE
-        </div>
-      </div>
-
-      {isLoading ? (
-        <div className="space-y-4" aria-busy="true" aria-label="Loading leaderboard">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex flex-col items-center gap-2">
-                <Skeleton className="h-16 w-16 rounded-full" />
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-11 w-24 rounded-full" />
-            ))}
-          </div>
-          <div className="space-y-2">
-            {[...Array(6)].map((_, i) => (
-              <div
-                key={i}
-                className="p-4 rounded-xl border border-border bg-card/70"
-              >
-                <Skeleton className="h-4 w-48" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Top 3 Podium */}
-          <ol className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 px-2 sm:px-4 list-none" aria-label="Top 3 leaderboard">
-            {/* 1st Place - Moved first in DOM for semantic ordering */}
-            <li className="flex flex-col items-center order-2 cursor-pointer hover:scale-105 transition-transform" value="1" onClick={() => topThree[0] && openDrawerFor(topThree[0])}>
-              <div className="relative mb-3">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-500 via-amber-500 to-yellow-300 flex items-center justify-center shadow-xl ring-4 ring-yellow-500/30">
-                  <span className="text-4xl font-bold text-amber-900">1</span>
-                </div>
-                <div className="absolute -top-2 left-1/2 -translate-x-1/2">
-                  <Crown className="w-8 h-8 text-yellow-500 drop-shadow-lg" aria-hidden="true" />
-                </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center">
-                  <Trophy className="w-3 h-3 text-amber-900" aria-hidden="true" />
-                </div>
-              </div>
-              <p className="text-base font-bold text-foreground text-center line-clamp-1">
-                {topThree[0]?.name ?? "—"}
-              </p>
-              <p className="text-sm text-primary font-bold mt-1">
-                {Number(topThree[0]?.totalScore ?? 0).toLocaleString()} pts
-              </p>
-              {topThree[0]?.teams?.[0] && (
-                <div className="flex gap-1 mt-2">
-                  {topThree[0].teams.slice(0, 3).map((t, i) => (
-                    <div key={i} className="w-5 h-5 text-xs">
-                      {(t.name ?? "--").slice(0, 2).toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </li>
-
-            {/* 2nd Place */}
-            <li className="flex flex-col items-center pt-8 order-1 cursor-pointer hover:scale-105 transition-transform" value="2" onClick={() => topThree[1] && openDrawerFor(topThree[1])}>
-              <div className="relative mb-3">
-                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-slate-400 to-slate-200 flex items-center justify-center shadow-lg ring-4 ring-slate-400/20">
-                  <span className="text-3xl font-bold text-slate-800">2</span>
-                </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-slate-400 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-white" aria-hidden="true" />
-                </div>
-              </div>
-              <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
-                {topThree[1]?.name ?? "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                {Number(topThree[1]?.totalScore ?? 0).toLocaleString()} pts
-              </p>
-              {topThree[1]?.teams?.[0] && (
-                <div className="flex gap-1 mt-2">
-                  {topThree[1].teams.slice(0, 3).map((t, i) => (
-                    <div key={i} className="w-5 h-5 text-xs">
-                      {(t.name ?? "--").slice(0, 2).toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </li>
-
-            {/* 3rd Place */}
-            <li className="flex flex-col items-center pt-12 order-3 cursor-pointer hover:scale-105 transition-transform" value="3" onClick={() => topThree[2] && openDrawerFor(topThree[2])}>
-              <div className="relative mb-3">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-orange-600 to-amber-700 flex items-center justify-center shadow-lg ring-4 ring-orange-600/20">
-                  <span className="text-2xl font-bold text-amber-100">3</span>
-                </div>
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-orange-600 flex items-center justify-center">
-                  <Shield className="w-3 h-3 text-white" aria-hidden="true" />
-                </div>
-              </div>
-              <p className="text-sm font-semibold text-foreground text-center line-clamp-1">
-                {topThree[2]?.name ?? "—"}
-              </p>
-              <p className="text-xs text-muted-foreground font-medium mt-1">
-                {Number(topThree[2]?.totalScore ?? 0).toLocaleString()} pts
-              </p>
-              {topThree[2]?.teams?.[0] && (
-                <div className="flex gap-1 mt-2">
-                  {topThree[2].teams.slice(0, 3).map((t, i) => (
-                    <div key={i} className="w-5 h-5 text-xs">
-                      {(t.name ?? "--").slice(0, 2).toUpperCase()}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </li>
-          </ol>
-
-          {/* Department Filter Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mb-6">
-            <button
-              onClick={() => setSelectedDept(null)}
-              className={[
-                "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
-                selectedDept === null
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                  : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
-              ].join(" ")}
-            >
-              Overall
-            </button>
-            {deptFilters.slice(0, 2).map((dept) => (
-              <button
-                key={dept}
-                onClick={() =>
-                  setSelectedDept((prev) => (prev === dept ? null : dept))
-                }
-                className={[
-                  "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
-                  selectedDept === dept
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
-                ].join(" ")}
-              >
-                By {dept}
-              </button>
-            ))}
-            <button
-              disabled
-              className="shrink-0 rounded-lg px-4 py-3 text-sm font-semibold bg-card border border-border text-muted-foreground/50 cursor-not-allowed min-h-[44px]"
-            >
-              Badges
-            </button>
-          </div>
-
-          {/* Rankings List */}
-          <div className="space-y-2">
-            {filteredList.length > 0 ? filteredList.map((user) => {
-              const isYou = Boolean(currentUserId && user.id === currentUserId);
-              const dept = (user as any)?.department ?? (user as any)?.dept;
-              return (
-                <div
-                  key={user.id}
-                  onClick={() => openDrawerFor(user)}
-                  className={[
-                    "flex items-center gap-4 p-4 bg-card border border-border rounded-xl transition-all cursor-pointer hover:bg-card/80 min-h-[60px]",
-                    isYou
-                      ? "border-primary/60 ring-2 ring-primary/30 bg-gradient-to-r from-primary/15 to-primary/5"
-                      : "hover:border-primary/20",
-                  ].join(" ")}
-                >
-                  <div className="w-8 text-center">
-                    <span
-                      className={[
-                        "text-lg font-bold",
-                        isYou ? "text-primary" : "text-muted-foreground",
-                      ].join(" ")}
-                    >
-                      {user.rank}
-                    </span>
-                  </div>
-
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={[
-                          "font-medium",
-                          isYou ? "text-primary" : "text-foreground",
-                        ].join(" ")}
-                      >
-                        {user.name}
-                      </span>
-                      {isYou && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                          You
-                        </span>
-                      )}
-                    </div>
-                    {dept ? (
-                      <p className="text-xs text-muted-foreground">{dept}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="text-right w-16">
-                    <span className="text-lg font-bold text-foreground">
-                      {Number(user.totalScore ?? 0).toLocaleString()}
-                    </span>
-                    <p className="text-[10px] text-muted-foreground">pts</p>
-                  </div>
-                </div>
-              );
-            }) : (
-              [...Array(6)].map((_, i) => (
-                <div
-                  key={`placeholder-row-${i}`}
-                  className="flex items-center gap-4 p-4 bg-card border border-border rounded-xl"
-                >
-                  <div className="w-8 text-center">
-                    <span className="text-lg font-bold text-muted-foreground/60">
-                      {i + 4}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <div className="h-4 w-40 bg-white/10 rounded animate-pulse" />
-                    <div className="h-3 w-24 bg-white/5 rounded animate-pulse mt-2" />
-                  </div>
-                  <div className="text-right w-16">
-                    <div className="h-4 w-12 bg-white/10 rounded animate-pulse ml-auto" />
-                    <p className="text-[10px] text-muted-foreground/70 mt-1">pts</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      )}
-
-      {selectedUser && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity"
-            onClick={() => {
-              setSelectedUser(null);
-              setSquad(null);
-              setSquadErr("");
-              setLoadingSquad(false);
-            }}
-          />
-          <div
-            className={[
-              "fixed inset-y-0 right-0 w-full md:w-[520px] bg-card/70 z-50 overflow-y-auto",
-              "animate-in slide-in-from-right duration-500", // slower slide
-              "shadow-[0_30px_80px_rgba(0,0,0,0.35)]", // stronger shadow
-              "pb-safe", // iOS safe area bottom padding
-            ].join(" ")}
-          >
-            <div className="p-8">
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <div className="text-muted-foreground/70 text-xs font-bold uppercase tracking-widest mb-2">
-                    Squad Details
-                  </div>
-                  <h3 className="text-3xl font-bold text-foreground tracking-tight">
-                    {selectedUser.name}
-                  </h3>
-
-                  <div className="mt-2 flex items-center gap-3">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">
-                      Total Score
-                    </div>
-                    <div className="font-mono font-bold text-foreground">
-                      {Number(squad?.totalScore ?? 0).toLocaleString()}
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setSelectedUser(null);
-                    setSquad(null);
-                    setSquadErr("");
-                    setLoadingSquad(false);
-                  }}
-                  className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-muted-foreground/80 hover:text-foreground transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {squadErr && (
-                <div className="mb-4 p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
-                  {squadErr}
-                </div>
-              )}
-
-              {loadingSquad && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  {[...Array(6)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="p-5 rounded-2xl bg-card/70 border border-border shadow-[0_10px_24px_rgba(0,0,0,0.08)]"
-                    >
-                      <Skeleton className="h-6 w-24" />
-                      <div className="mt-3 flex items-center gap-2">
-                        <Skeleton className="h-10 w-10 rounded-full" />
-                        <div className="flex-1">
-                          <Skeleton className="h-4 w-32" />
-                          <Skeleton className="h-3 w-20 mt-2" />
-                        </div>
-                      </div>
-                      <Skeleton className="h-8 w-20 mt-4" />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {!loadingSquad && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  {squadTeams.length > 0 ? (
-                    squadTeams.map((team) => {
-                      const isCaptain = team.role === "featured";
-                      const tier = Number(team.tier ?? 0);
-                      const group = String(team.group ?? "—");
-                      const teamId = String(team.id ?? "—");
-                      const flagUrl = String(team.flagUrl ?? "");
-
-                      return (
-                        <div
-                          key={`${team.role}:${teamId}`}
-                          className={[
-                            "relative p-5 rounded-2xl flex flex-col justify-between min-h-[180px]",
-                            "bg-card/70 border border-border",
-                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)]", // per-card shadow
-                          ].join(" ")}
-                        >
-                          {isCaptain && (
-                            <div className="absolute -top-3 -right-2 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm z-10">
-                              <Crown size={12} className="fill-current" aria-hidden="true" />
-                              CAPTAIN • 2x
-                            </div>
-                          )}
-
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="font-bold text-lg text-foreground tracking-tight truncate">
-                                {team.name}
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground/80">
-                                Team ID:{" "}
-                                <span className="font-mono text-foreground/90">
-                                  {teamId}
-                                </span>
-                              </div>
-                              <div className="mt-1 text-xs text-muted-foreground/80">
-                                Group{" "}
-                                <span className="font-semibold text-foreground/90">
-                                  {group}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="w-12 h-12 rounded-full overflow-hidden border border-border bg-white/5 flex items-center justify-center shadow-inner">
-                                {flagUrl ? (
-                                  <img
-                                    src={flagUrl}
-                                    alt={team.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground/70">
-                                    —
-                                  </span>
-                                )}
-                              </div>
-
-                              <TierPill tier={tier || 4} />
-                            </div>
-                          </div>
-
-                          <div className="mt-5">
-                            <div className="text-xs text-muted-foreground/70 font-semibold uppercase tracking-wider mb-1">
-                              Contribution
-                            </div>
-                            <div className="text-2xl font-mono text-foreground font-medium">
-                              {Number(team.contribution ?? 0)}{" "}
-                              <span className="text-xs text-emerald-300 font-bold">
-                                pts
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="col-span-2 text-center text-muted-foreground/70 py-12 italic border-2 border-dashed border-border rounded-2xl bg-white/5">
-                      No teams drafted yet.
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
-    </main>
-  );
-};
-
-/** ---------- BRACKET (your UI; placeholder match data) ---------- **/
-type Stage = { id: string; name: string };
-type Match = {
-  id: string;
-  t1?: string;
-  t2?: string;
-  s1?: number;
-  s2?: number;
-  status?: string;
-  impact?: string;
-  impactType?: "critical" | "high" | "normal";
-  kickoffTime?: string;
-  updatedAt?: string;
-  isLive?: boolean;
-};
-
-const STAGE_ORDER = ["GROUP", "R32", "R16", "QF", "SF", "FINAL"] as const;
-const STAGE_LABELS: Record<string, string> = {
-  GROUP: "Group Stage",
-  R32: "Round of 32",
-  R16: "Round of 16",
-  QF: "Quarterfinals",
-  SF: "Semifinals",
-  FINAL: "Final",
-};
-
-function stageLabel(stageId: string) {
-  return STAGE_LABELS[stageId] ?? stageId;
-}
-
-function matchStatusLabel(status?: string) {
-  if (status === "LIVE") return "Live";
-  if (status === "FINISHED") return "Final";
-  return "Scheduled";
-}
-
-function isKnownStage(stage: string): stage is (typeof STAGE_ORDER)[number] {
-  return STAGE_ORDER.includes(stage as (typeof STAGE_ORDER)[number]);
-}
-
-const Bracket = ({
-  stages = [],
-  matches = {},
-  isLoading = false,
-  teamNames = {},
-  teamFlags = {},
-  userTeamIds = [],
-  activeStageId,
-  onStageChange,
-  lastUpdated,
-}: {
-  stages: Stage[];
-  matches: Record<string, Match[]>;
-  isLoading: boolean;
-  teamNames?: Record<string, string>;
-  teamFlags?: Record<string, string>;
-  userTeamIds?: string[];
-  activeStageId?: string;
-  onStageChange?: (stageId: string) => void;
-  lastUpdated?: string;
-}) => {
-  const [activeStageIdx, setActiveStageIdx] = useState(0);
-  const [activeTab, setActiveTab] = useState<
-    "live" | "upcoming" | "results"
-  >("live");
-  const [notifyMap, setNotifyMap] = useState<Record<string, boolean>>({});
-
-  const stagesToUse = useMemo<Stage[]>(
-    () => (stages.length > 0 ? stages : [{ id: "EMPTY_STAGE", name: "Match Center" }]),
-    [stages]
-  );
-  const controlledStageIdx = useMemo(() => {
-    if (!activeStageId) return -1;
-    return stagesToUse.findIndex((stage) => stage.id === activeStageId);
-  }, [activeStageId, stagesToUse]);
-  const hasRealStages = stages.length > 0;
-  const userTeamSet = useMemo(
-    () => new Set((userTeamIds ?? []).map((id) => String(id))),
-    [userTeamIds]
-  );
-
-  const stageIndexSource = controlledStageIdx >= 0 ? controlledStageIdx : activeStageIdx;
-  const safeStageIndex = Math.min(
-    stageIndexSource,
-    Math.max(stagesToUse.length - 1, 0)
-  );
-  const activeStage = stagesToUse[safeStageIndex];
-  const currentMatches = activeStage ? matches[activeStage.id] || [] : [];
-  const resolveName = (teamId?: string) =>
-    teamId ? teamNames[teamId] ?? teamId : "TBD";
-  const resolveFlag = (teamId?: string) =>
-    teamId ? teamFlags[teamId] ?? "" : "";
-  const isUserTeam = (teamId?: string) =>
-    teamId ? userTeamSet.has(String(teamId)) : false;
-  const formatKickoff = (kickoff?: string) => {
-    if (!kickoff) return "";
-    const dt = new Date(kickoff);
-    if (Number.isNaN(dt.getTime())) return "";
-    return dt.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const formatUpdated = (value?: string) => {
-    if (!value) return "";
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return "";
-    return dt.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const navigate = (dir: "next" | "prev") => {
-    const lastIdx = stagesToUse.length - 1;
-    const nextIdx =
-      dir === "next"
-        ? Math.min(safeStageIndex + 1, lastIdx)
-        : Math.max(safeStageIndex - 1, 0);
-    if (nextIdx === safeStageIndex) return;
-
-    const nextStage = stagesToUse[nextIdx];
-    if (activeStageId && onStageChange && nextStage) {
-      onStageChange(nextStage.id);
-      return;
-    }
-
-    setActiveStageIdx(nextIdx);
-  };
-
-  useEffect(() => {
-    const stage = stagesToUse[safeStageIndex];
-    if (!stage || !onStageChange) return;
-    if (activeStageId && stage.id === activeStageId) return;
-    onStageChange(stage.id);
-  }, [activeStageId, onStageChange, safeStageIndex, stagesToUse]);
-
-  const normalizeStatus = (status?: string) => (status || "").toUpperCase();
-  const isLiveMatch = (match: Match) =>
-    Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE";
-  const isFinishedMatch = (match: Match) => {
-    const status = normalizeStatus(match.status);
-    return status === "FINISHED" || status === "FINAL" || status === "FT";
-  };
-
-  const liveMatches = currentMatches.filter(isLiveMatch);
-  const finishedMatches = currentMatches.filter(isFinishedMatch);
-  const upcomingMatches = currentMatches.filter(
-    (match) => !isLiveMatch(match) && !isFinishedMatch(match)
-  );
-
-  const liveMatchCount = liveMatches.length;
-  const liveYourTeamCount = liveMatches.filter(
-    (match) => isUserTeam(match.t1) || isUserTeam(match.t2)
-  ).length;
-
-  const toggleNotify = (matchId: string) => {
-    setNotifyMap((prev) => ({ ...prev, [matchId]: !prev[matchId] }));
-  };
-
-  return (
-    <div className="h-full flex flex-col gap-6">
-      {lastUpdated ? (
-        <div className="text-xs text-muted-foreground/70">
-          Last updated: {formatUpdated(lastUpdated)}
-        </div>
-      ) : null}
-
-      {/* Live Points Banner */}
-      {liveYourTeamCount > 0 && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/30 rounded-xl p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-5 h-5 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">Points Gained Live</p>
-                <p className="text-xs text-muted-foreground">From your teams currently playing</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">+12</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="w-10 h-10 rounded-xl bg-destructive/20 flex items-center justify-center">
-              <Tv className="w-5 h-5 text-destructive" />
-            </div>
-            {liveMatchCount > 0 && (
-              <>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full animate-ping" />
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full" />
-              </>
-            )}
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Match Center</h2>
-            <p className="text-xs text-muted-foreground">
-              {hasRealStages
-                ? `${liveMatchCount} match${liveMatchCount === 1 ? "" : "es"} live`
-                : "Feed unavailable"}
-            </p>
-          </div>
-        </div>
-
-        <div className="text-xs text-muted-foreground/70">
-          {activeStage?.name ?? stageLabel(activeStage?.id ?? "")}
-        </div>
-      </div>
-      <div className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 w-fit">
-        v0 layout active
-      </div>
-
-      {liveMatchCount > 0 && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/30 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-5 h-5 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">
-                  {liveYourTeamCount > 0 ? "Teams Live" : "Matches Live"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {liveYourTeamCount > 0
-                    ? "Your teams currently playing"
-                    : "Live matches underway"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">
-                {liveYourTeamCount > 0 ? liveYourTeamCount : liveMatchCount}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between bg-card/70 p-3 rounded-xl border border-border">
-        <button
-          onClick={() => navigate("prev")}
-          disabled={safeStageIndex === 0}
-          className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft size={18} />
-        </button>
-
-        <div className="text-center">
-          <div className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest mb-1">
-            Current Stage
-          </div>
-          <div className="text-sm font-semibold text-foreground">
-            {activeStage?.name ?? "Stage"}
-          </div>
-        </div>
-
-        <button
-          onClick={() => navigate("next")}
-          disabled={safeStageIndex === stagesToUse.length - 1}
-          className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
-      {/* Enhanced Tabs */}
-      <div className="inline-flex bg-muted/50 rounded-lg p-1 border border-border">
-        <button
-          onClick={() => setActiveTab("live")}
-          className={[
-            "flex items-center justify-center gap-2 px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "live"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          <span
-            className={[
-              "w-2 h-2 rounded-full bg-destructive",
-              liveMatchCount > 0 ? "animate-pulse" : "",
-            ].join(" ")}
-          />
-          Live
-        </button>
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          className={[
-            "px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "upcoming"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setActiveTab("results")}
-          className={[
-            "px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "results"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          Results
-        </button>
-      </div>
-
-      {activeTab === "live" && (
-        <div className="space-y-4">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : liveMatches.length > 0 ? (
-            liveMatches.map((match) => {
-              const yourTeam = isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
-
-              return (
-                <div
-                  key={match.id}
-                  className={[
-                    "bg-card border rounded-xl overflow-hidden",
-                    yourTeam ? "border-primary/50" : "border-border",
-                  ].join(" ")}
-                >
-                  <div className="bg-white/5 px-4 py-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                      <span className="text-sm font-medium text-destructive">
-                        LIVE
-                      </span>
-                    </div>
-                    {yourTeam && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your Team Playing
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 text-center">
-                        <div className="w-12 h-12 rounded-full bg-white/5 border border-border flex items-center justify-center mx-auto mb-2 overflow-hidden">
-                          {resolveFlag(match.t1) ? (
-                            <img
-                              src={resolveFlag(match.t1)}
-                              alt={resolveName(match.t1)}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {t1Code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-bold text-foreground">{t1Code}</p>
-                      </div>
-
-                      <div className="px-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-4xl font-bold text-foreground">
-                            {match.s1 !== undefined ? match.s1 : "-"}
-                          </span>
-                          <span className="text-2xl text-muted-foreground">
-                            -
-                          </span>
-                          <span className="text-4xl font-bold text-foreground">
-                            {match.s2 !== undefined ? match.s2 : "-"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 text-center">
-                        <div className="w-12 h-12 rounded-full bg-white/5 border border-border flex items-center justify-center mx-auto mb-2 overflow-hidden">
-                          {resolveFlag(match.t2) ? (
-                            <img
-                              src={resolveFlag(match.t2)}
-                              alt={resolveName(match.t2)}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {t2Code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-bold text-foreground">{t2Code}</p>
-                      </div>
-                    </div>
-
-                    {match.impact ? (
-                      <div className="mt-4 text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 text-primary text-xs font-semibold px-2 py-1">
-                          <TrendingUp size={14} />
-                          {match.impact}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="border-t border-border px-4 py-3">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Match Events
-                    </p>
-                    <div className="text-sm text-muted-foreground">
-                      Live events will appear here.
-                    </div>
-                  </div>
-
-                  {(match.kickoffTime || match.updatedAt) && (
-                    <div className="border-t border-border px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      {match.kickoffTime
-                        ? `Kickoff ${formatKickoff(match.kickoffTime)}`
-                        : `Updated ${formatUpdated(match.updatedAt)}`}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No live matches right now</p>
-              <p className="text-sm mt-1">
-                Live games will appear here when they start
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "upcoming" && (
-        <div className="space-y-3">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : upcomingMatches.length > 0 ? (
-            upcomingMatches.map((match) => {
-              const yourTeam =
-                isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
-              const kickoffLabel = match.kickoffTime
-                ? formatKickoff(match.kickoffTime)
-                : "Time TBD";
-
-              return (
-                <div
-                  key={match.id}
-                  className={[
-                    "bg-card border rounded-xl p-4",
-                    yourTeam ? "border-primary/30" : "border-border",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      {kickoffLabel}
-                    </div>
-                    <button
-                      onClick={() => toggleNotify(match.id)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      {notifyMap[match.id] ? (
-                        <>
-                          <Bell className="w-4 h-4 text-primary fill-primary" />
-                          <span>On</span>
-                        </>
-                      ) : (
-                        <>
-                          <BellOff className="w-4 h-4" />
-                          <span>Notify</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t1) ? (
-                          <img
-                            src={resolveFlag(match.t1)}
-                            alt={resolveName(match.t1)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t1Code}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-bold text-foreground">{t1Code}</span>
-                    </div>
-                    <span className="text-muted-foreground">vs</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-foreground">{t2Code}</span>
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t2) ? (
-                          <img
-                            src={resolveFlag(match.t2)}
-                            alt={resolveName(match.t2)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t2Code}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {yourTeam && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your team playing
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No upcoming matches in this stage</p>
-              <p className="text-sm mt-1">
-                Upcoming fixtures will appear here
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "results" && (
-        <div className="space-y-3">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : finishedMatches.length > 0 ? (
-            finishedMatches.map((match) => {
-              const yourTeam =
-                isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
-
-              return (
-                <div
-                  key={match.id}
-                  className="bg-card border border-border rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-muted-foreground uppercase tracking-widest">
-                      Final
-                    </span>
-                    {yourTeam && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your team played
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t1) ? (
-                          <img
-                            src={resolveFlag(match.t1)}
-                            alt={resolveName(match.t1)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t1Code}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-bold text-foreground">{t1Code}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-2xl font-bold text-foreground">
-                      <span>{match.s1 ?? "-"}</span>
-                      <span className="text-muted-foreground">-</span>
-                      <span>{match.s2 ?? "-"}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-foreground">{t2Code}</span>
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t2) ? (
-                          <img
-                            src={resolveFlag(match.t2)}
-                            alt={resolveName(match.t2)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t2Code}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No completed matches yet</p>
-              <p className="text-sm mt-1">
-                Results will appear here after matches finish
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-/** ---------- TRANSFER MARKET (live callable + live settings) ---------- **/
-type MarketTeam = {
-  id: string;
-  name: string;
-  status?: "active" | "eliminated" | "available";
-  trend?: "up" | "down" | "stable";
-  points?: number;
-};
-
-type TradeResult = {
-  ok: boolean;
-  message?: string;
-};
-
-const TransferMarket = ({
-  squad = [],
-  market = [],
-  userScore = 0,
-  penalty = 15,
-  transferWindowOpen,
-  transferWindowLabel,
-  transfersRemaining = 0,
-  transferBusy = false,
-  transferError = "",
-  transferSuccess = "",
-  onTrade = async () => ({ ok: false, message: "Transfer handler is not configured." }),
-}: {
-  squad: MarketTeam[];
-  market: MarketTeam[];
-  userScore: number;
-  penalty?: number;
-  transferWindowOpen: boolean;
-  transferWindowLabel: string;
-  transfersRemaining?: number;
-  transferBusy?: boolean;
-  transferError?: string;
-  transferSuccess?: string;
-  onTrade?: (p: { drop: MarketTeam; pickup: MarketTeam }) => Promise<TradeResult>;
-}) => {
-  const releaseTeams = squad;
-  const availableTeams = market;
-
-  const [selectedDrop, setSelectedDrop] = useState<MarketTeam | null>(null);
-  const [selectedPickup, setSelectedPickup] = useState<MarketTeam | null>(null);
-  const [search, setSearch] = useState("");
-  const [confirmProgress, setConfirmProgress] = useState(0);
-  const [isConfirmed, setIsConfirmed] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const projectedScore = selectedDrop && selectedPickup ? userScore - penalty : userScore;
-  const intervalRef = useRef<any>(null);
-  const resetConfirmState = () => {
-    setIsConfirmed(false);
-    setConfirmProgress(0);
-  };
-
-  const canExecuteTrade =
-    Boolean(selectedDrop && selectedPickup) &&
-    transferWindowOpen &&
-    transfersRemaining > 0 &&
-    !transferBusy &&
-    !isSubmitting;
-  const tradeButtonDisabled = !canExecuteTrade;
-
-  const startConfirm = () => {
-    if (!selectedDrop || !selectedPickup || !canExecuteTrade || isConfirmed) return;
-
-    const drop = selectedDrop;
-    const pickup = selectedPickup;
-
-    clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      setConfirmProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(intervalRef.current);
-          setIsSubmitting(true);
-
-          void onTrade({ drop, pickup })
-            .then((result) => {
-              if (result?.ok) {
-                setIsConfirmed(true);
-                return;
-              }
-
-              setIsConfirmed(false);
-              setConfirmProgress(0);
-            })
-            .catch(() => {
-              setIsConfirmed(false);
-              setConfirmProgress(0);
-            })
-            .finally(() => {
-              setIsSubmitting(false);
-            });
-
-          return 100;
-        }
-
-        return prev + 4;
-      });
-    }, 20);
-  };
-
-  const stopConfirm = () => {
-    if (isConfirmed || isSubmitting) return;
-    clearInterval(intervalRef.current);
-    setConfirmProgress(0);
-  };
-
-  useEffect(() => {
-    return () => {
-      clearInterval(intervalRef.current);
-    };
-  }, []);
-
-  const filteredAvailable = availableTeams.filter(
-    (t) =>
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.id.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const transferCost = selectedPickup ? penalty : 0;
-
-  return (
-    <div className="h-full flex flex-col pb-24 md:pb-0 relative space-y-6">
-      <div
-        className={[
-          "border rounded-xl p-4",
-          transferWindowOpen
-            ? "bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30"
-            : "bg-destructive/10 border-destructive/30",
-        ].join(" ")}
-      >
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Zap className={`w-5 h-5 ${transferWindowOpen ? "text-amber-500" : "text-destructive"}`} />
-            <div>
-              <p className="font-medium text-foreground">
-                {transferWindowOpen ? "Transfer Window Active" : "Transfer Window Closed"}
-              </p>
-              <p className="text-sm text-muted-foreground">{transferWindowLabel}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {transfersRemaining} transfer{transfersRemaining === 1 ? "" : "s"} remaining
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-2xl font-bold text-foreground">{userScore}</p>
-            <p className="text-xs text-muted-foreground">Current Points</p>
-          </div>
-        </div>
-      </div>
-
-      {transferError && (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {transferError}
-        </div>
-      )}
-      {transferSuccess && (
-        <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {transferSuccess}
-        </div>
-      )}
-
-      <div className="grid md:grid-cols-2 gap-6 flex-1">
-        <div className="bg-card/70 border border-border rounded-2xl overflow-hidden flex flex-col shadow-[0_12px_24px_rgba(0,0,0,0.08)]">
-          <div className="p-5 border-b border-border bg-white/5 flex justify-between items-center">
-            <h3 className="font-bold text-foreground flex items-center gap-2">
-              <Shield size={18} className="text-muted-foreground/70" aria-hidden="true" /> My Squad
-            </h3>
-            <span className="text-xs text-muted-foreground/70 font-bold uppercase tracking-wider">
-              Select to Release
-            </span>
-          </div>
-          <div className="p-3 space-y-3 overflow-y-auto max-h-[450px]">
-            {releaseTeams.length === 0 ? (
-              <div className="text-center p-10 text-muted-foreground/70 italic">
-                No squad teams available.
-              </div>
-            ) : (
-              releaseTeams.map((team) => (
-                <div
-                  key={team.id}
-                  onClick={() => {
-                    setSelectedDrop(team);
-                    resetConfirmState();
-                  }}
-                  className={[
-                    "p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all duration-200",
-                    selectedDrop?.id === team.id
-                      ? "bg-rose-500/15 border-rose-500/30 shadow-md ring-1 ring-rose-500/20 transform scale-[1.02]"
-                      : "bg-card/70 border-border hover:border-border hover:shadow-sm",
-                  ].join(" ")}
-                >
-                  <div>
-                    <div className="font-bold text-foreground">{team.name}</div>
-                    <div className="text-xs text-muted-foreground/80 mt-1 font-medium">
-                      Status:{" "}
-                      <span
-                        className={
-                          team.status === "eliminated" ? "text-destructive" : "text-foreground/90"
-                        }
-                      >
-                        {team.status ?? "active"}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono text-muted-foreground font-medium">
-                      {team.points ?? 0} pts
-                    </div>
-                    {selectedDrop?.id === team.id && (
-                      <div className="text-[10px] text-rose-300 font-bold uppercase mt-1">
-                        Releasing
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="bg-card/70 border border-border rounded-2xl overflow-hidden flex flex-col shadow-[0_12px_24px_rgba(0,0,0,0.08)]">
-          <div className="p-5 border-b border-border bg-white/5 flex justify-between items-center">
-            <h3 className="font-bold text-foreground flex items-center gap-2">
-              <Search size={18} className="text-muted-foreground/70" /> Market
-            </h3>
-            <span className="text-xs text-muted-foreground/70 font-bold uppercase tracking-wider">
-              Select to Buy
-            </span>
-          </div>
-          <div className="p-3">
-            <Input
-              placeholder="Search teams..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="mb-3"
-            />
-          </div>
-          <div className="px-3 pb-3 space-y-3 overflow-y-auto max-h-[400px]">
-            {filteredAvailable.length === 0 ? (
-              <div className="text-center p-10 text-muted-foreground/70 italic">
-                No teams found.
-              </div>
-            ) : (
-              filteredAvailable.map((team) => (
-                <div
-                  key={team.id}
-                  onClick={() => {
-                    setSelectedPickup(team);
-                    resetConfirmState();
-                  }}
-                  className={[
-                    "p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-all duration-200",
-                    selectedPickup?.id === team.id
-                      ? "bg-emerald-500/15 border-emerald-500/30 shadow-md ring-1 ring-emerald-500/20 transform scale-[1.02]"
-                      : "bg-card/70 border-border hover:border-border hover:shadow-sm",
-                  ].join(" ")}
-                >
-                  <div>
-                    <div className="font-bold text-foreground">{team.name}</div>
-                    <div className="text-xs text-muted-foreground/80 mt-1 flex items-center gap-1 font-medium">
-                      Trend:{" "}
-                      <span className="text-foreground/90">{team.trend || "stable"}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono text-muted-foreground/80">
-                      {team.points ?? 0} pts
-                    </div>
-                    {selectedPickup?.id === team.id && (
-                      <div className="text-[10px] text-emerald-300 font-bold uppercase mt-1">
-                        Buying
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="fixed bottom-0 left-0 right-0 md:relative md:mt-8 bg-card/90 backdrop-blur-xl border-t md:border border-border/60 md:rounded-2xl p-6 shadow-[0_-12px_48px_rgba(0,0,0,0.12)] z-30">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center justify-between w-full md:w-auto gap-8 md:gap-12">
-            <div className="text-center">
-              <div className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest mb-1">
-                Current Score
-              </div>
-              <div className="font-mono text-xl text-foreground/90 font-medium">{userScore}</div>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="h-px w-8 bg-white/10 mb-1"></div>
-              <div className="text-xs text-orange-300 font-bold">-{transferCost} pts</div>
-              <div className="h-px w-8 bg-white/10 mt-1"></div>
-            </div>
-            <div className="text-center">
-              <div className="text-[10px] text-muted-foreground/70 font-bold uppercase tracking-widest mb-1">
-                Projected Score
-              </div>
-              <div
-                className={`font-mono text-2xl font-bold ${
-                  projectedScore < 0 ? "text-orange-300" : "text-foreground"
-                }`}
-              >
-                {projectedScore}
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full md:w-auto">
-            {isConfirmed ? (
-              <div className="w-full md:w-64 bg-emerald-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 animate-in fade-in zoom-in duration-300 shadow-lg shadow-emerald-500/20">
-                <CheckCircle2 size={20} /> Trade Confirmed
-              </div>
-            ) : (
-              <button
-                disabled={tradeButtonDisabled}
-                onMouseDown={startConfirm}
-                onMouseUp={stopConfirm}
-                onMouseLeave={stopConfirm}
-                onTouchStart={startConfirm}
-                onTouchEnd={stopConfirm}
-                className={[
-                  "relative w-full md:w-64 py-4 rounded-xl border font-bold text-sm uppercase tracking-wider overflow-hidden transition-all select-none",
-                  tradeButtonDisabled
-                    ? "bg-white/5 text-muted-foreground/70 cursor-not-allowed border-border"
-                    : "bg-emerald-500 text-slate-950 cursor-pointer border-emerald-300/50 hover:bg-emerald-400 shadow-xl shadow-emerald-500/25 hover:shadow-2xl hover:scale-[1.02]",
-                ].join(" ")}
-              >
-                <div
-                  className="absolute left-0 top-0 bottom-0 bg-white/25 transition-all duration-75 ease-linear"
-                  style={{ width: `${confirmProgress}%` }}
-                />
-                <div className="relative z-10 flex items-center justify-center gap-2 text-inherit">
-                  {isSubmitting || transferBusy
-                    ? "Executing..."
-                    : confirmProgress > 0
-                    ? "Hold to Confirm..."
-                    : !transferWindowOpen
-                    ? "Window Closed"
-                    : transfersRemaining <= 0
-                    ? "No Transfers Left"
-                    : "Hold to Trade"}
-                </div>
-              </button>
-            )}
-            <div className="text-center mt-3 text-[10px] text-muted-foreground/70 font-medium hidden md:block">
-              Long press button to execute trade
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 /** ---------- Page ---------- **/
 function DashboardPageContent() {
   const router = useRouter();
@@ -1820,6 +230,7 @@ function DashboardPageContent() {
 
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [authBusy, setAuthBusy] = useState(false);
 
   const [activeTab, setActiveTab] = useState<DashboardTab>(() =>
     parseDashboardTab(tabParam)
@@ -1840,7 +251,7 @@ function DashboardPageContent() {
   >({});
 
   // Team lookup for My Teams strip (same working approach you already used)
-  const [teamsById, setTeamsById] = useState<Record<string, any>>({});
+  const [teamsById, setTeamsById] = useState<Record<string, TeamRecord>>({});
   const [loadingTeams, setLoadingTeams] = useState(false);
 
   // ✅ Leaderboard state (now from Firestore snapshot)
@@ -1864,7 +275,7 @@ function DashboardPageContent() {
   const pendingTeamIdsRef = useRef<Set<string>>(new Set());
   const [selectedStageId, setSelectedStageId] = useState<string>("");
   const [lastMatchUpdate, setLastMatchUpdate] = useState<string>("");
-  const [marketTeamsById, setMarketTeamsById] = useState<Record<string, any>>({});
+  const [marketTeamsById, setMarketTeamsById] = useState<Record<string, TeamRecord>>({});
   const [loadingMarketTeams, setLoadingMarketTeams] = useState(false);
   const [transferNowMs, setTransferNowMs] = useState(() => Date.now());
   const [transferWindowConfig, setTransferWindowConfig] = useState<{
@@ -1881,7 +292,16 @@ function DashboardPageContent() {
   const [transferSuccess, setTransferSuccess] = useState("");
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
-  const department: Department | null = (userDoc as any)?.department ?? null;
+  const userDocData = useMemo<Record<string, unknown>>(
+    () => (isRecord(userDoc) ? userDoc : {}),
+    [userDoc]
+  );
+  const department: Department | null =
+    userDocData.department === "Primary" ||
+    userDocData.department === "Secondary" ||
+    userDocData.department === "Admin"
+      ? userDocData.department
+      : null;
 
   const activeNavId = useMemo(() => {
     if (activeTab === "portfolio") return "portfolio";
@@ -1893,7 +313,7 @@ function DashboardPageContent() {
 
   const navItems = buildMainNavItems({
     signedIn,
-    authBusy: checkingAuth,
+    authBusy: checkingAuth || authBusy,
     onSignIn: handleGoogleSignIn,
     onSignOut: handleSignOut,
     onPortfolio: () => {
@@ -1951,21 +371,28 @@ function DashboardPageContent() {
     setSelectedStageId(bracketStages[0]?.id ?? "");
   }, [signedIn, selectedStageId, bracketStages]);
 
-  const entry = (userDoc as any)?.entry;
-  const portfolio = Array.isArray((userDoc as any)?.portfolio)
-    ? (userDoc as any).portfolio
+  const entry = isRecord(userDocData.entry) ? userDocData.entry : {};
+  const portfolio = Array.isArray(userDocData.portfolio)
+    ? userDocData.portfolio.filter(
+        (item): item is Record<string, unknown> => isRecord(item)
+      )
     : [];
 
   const featuredTeamId =
-    entry?.featuredTeamId ??
-    portfolio.find((p: any) => p.role === "featured")?.teamId ??
+    toTrimmedString(entry.featuredTeamId) ??
+    toTrimmedString(
+      portfolio.find((p) => p.role === "featured")?.teamId
+    ) ??
     null;
 
-  const drawnTeamIds: string[] = Array.isArray(entry?.drawnTeamIds)
+  const drawnTeamIds: string[] = Array.isArray(entry.drawnTeamIds)
     ? entry.drawnTeamIds
+        .map((teamId) => toTrimmedString(teamId))
+        .filter((teamId): teamId is string => Boolean(teamId))
     : portfolio
-        .filter((p: any) => p.role === "drawn")
-        .map((p: any) => p.teamId);
+        .filter((p) => p.role === "drawn")
+        .map((p) => toTrimmedString(p.teamId))
+        .filter((teamId): teamId is string => Boolean(teamId));
 
   const teamIdsToLoad = useMemo(() => {
     const ids = new Set<string>();
@@ -1998,9 +425,9 @@ function DashboardPageContent() {
         const snap = await getDoc(doc(db, "users", u.uid));
         if (snap.exists()) setUserDoc(snap.data() as User);
         else setUserDoc(null);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        setError(`[users] ${e?.message ?? "Failed to load your entry."}`);
+        setError(`[users] ${friendlyErrorMessage(e, "Failed to load your entry.")}`);
       } finally {
         setLoadingUser(false);
       }
@@ -2054,14 +481,16 @@ function DashboardPageContent() {
         );
         const snap = await getDocs(q);
 
-        const map: Record<string, any> = {};
-        snap.forEach((d) => (map[d.id] = { id: d.id, ...d.data() }));
+        const map: Record<string, TeamRecord> = {};
+        snap.forEach((d) => {
+          map[d.id] = { id: d.id, ...(d.data() as Record<string, unknown>) };
+        });
 
         if (!cancelled) setTeamsById(map);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
         if (!cancelled)
-          setError(`[teams] ${e?.message ?? "Failed to load team details."}`);
+          setError(`[teams] ${friendlyErrorMessage(e, "Failed to load team details.")}`);
       } finally {
         if (!cancelled) setLoadingTeams(false);
       }
@@ -2089,17 +518,23 @@ function DashboardPageContent() {
           return;
         }
 
-        const payload = snap.data() as any;
-        const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+        const payload = snap.data() as Record<string, unknown>;
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
 
         const mapped: LBUser[] = rows
-          .map((r: any, idx: number) => ({
-            id: String(r.userId ?? r.id ?? ""),
-            rank: Number(r.rank ?? idx + 1),
-            name: String(r.displayName ?? r.name ?? "Anonymous"),
-            totalScore: Number(r.totalScore ?? 0),
+          .map((r: unknown, idx: number) => {
+            const row = isRecord(r) ? r : {};
+            return {
+            id: String(row.userId ?? row.id ?? ""),
+            rank: Number(row.rank ?? idx + 1),
+            name: String(row.displayName ?? row.name ?? "Anonymous"),
+            totalScore: Number(row.totalScore ?? 0),
+            badgeCount: Number(row.badgeCount ?? 0),
+            department: typeof row.department === "string" ? row.department : null,
+            dept: typeof row.dept === "string" ? row.dept : null,
             teams: [], // drawer is hydrated via getSquadDetails
-          }))
+            };
+          })
           .filter((row: LBUser) => Boolean(row.id));
 
         setLeaderboardData(mapped);
@@ -2153,29 +588,24 @@ function DashboardPageContent() {
           {};
 
         snap.forEach((docSnap) => {
-          const data = docSnap.data() as any;
-          const stage = String(data?.stage ?? "GROUP");
+          const data = docSnap.data() as Record<string, unknown>;
+          const stage = String(data.stage ?? "GROUP");
           const kickoffTime =
-            typeof data?.kickoffTime === "string" ? data.kickoffTime : "";
-          const updatedAt =
-            typeof data?.lastUpdated === "string"
-              ? data.lastUpdated
-              : data?.lastUpdated?.toDate?.()
-              ? data.lastUpdated.toDate().toISOString()
-              : "";
+            typeof data.kickoffTime === "string" ? data.kickoffTime : "";
+          const updatedAt = toIsoString(data.lastUpdated);
 
-          const home = String(data?.homeTeamId ?? "TBD");
-          const away = String(data?.awayTeamId ?? "TBD");
+          const home = String(data.homeTeamId ?? "TBD");
+          const away = String(data.awayTeamId ?? "TBD");
 
           if (home && home !== "TBD") teamIds.add(home);
           if (away && away !== "TBD") teamIds.add(away);
 
           const s1 =
-            typeof data?.homeScore === "number" ? data.homeScore : undefined;
+            typeof data.homeScore === "number" ? data.homeScore : undefined;
           const s2 =
-            typeof data?.awayScore === "number" ? data.awayScore : undefined;
+            typeof data.awayScore === "number" ? data.awayScore : undefined;
 
-          const statusRaw = String(data?.status ?? "SCHEDULED");
+          const statusRaw = String(data.status ?? "SCHEDULED");
           const impact = statusRaw === "LIVE" ? "Match live" : undefined;
           const impactType = statusRaw === "LIVE" ? "high" : undefined;
 
@@ -2307,11 +737,11 @@ function DashboardPageContent() {
           return;
         }
 
-        const data = snap.data() as any;
+        const data = snap.data() as Record<string, unknown>;
         setTransferWindowConfig({
-          enabled: data?.enabled === true,
-          startsAtMs: toMillis(data?.startsAt),
-          endsAtMs: toMillis(data?.endsAt),
+          enabled: data.enabled === true,
+          startsAtMs: toMillis(data.startsAt),
+          endsAtMs: toMillis(data.endsAt),
         });
       },
       (err) => {
@@ -2347,9 +777,12 @@ function DashboardPageContent() {
     const unsub = onSnapshot(
       teamsRef,
       (snap) => {
-        const next: Record<string, any> = {};
+        const next: Record<string, TeamRecord> = {};
         snap.forEach((docSnap) => {
-          next[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+          next[docSnap.id] = {
+            id: docSnap.id,
+            ...(docSnap.data() as Record<string, unknown>),
+          };
         });
         setMarketTeamsById(next);
         setLoadingMarketTeams(false);
@@ -2392,18 +825,25 @@ function DashboardPageContent() {
   }, [drawnTeamIds, featuredTeamId]);
 
   async function handleGoogleSignIn() {
+    if (authBusy) return;
+
     setError("");
     setStatus("");
+    setAuthBusy(true);
     try {
       setStatus("Opening Google sign-in...");
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
+      const mode = await signInWithGoogle(auth);
+      if (mode === "redirect") {
+        setStatus("Redirecting to Google sign-in...");
+        return;
+      }
       setStatus("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       setStatus("");
-      setError(e?.message ?? "Sign-in failed.");
+      setError(friendlyErrorMessage(e, "Sign-in failed."));
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -2414,10 +854,10 @@ function DashboardPageContent() {
       setStatus("Signing out...");
       await signOut(auth);
       setStatus("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       setStatus("");
-      setError(e?.message ?? "Sign-out failed.");
+      setError(friendlyErrorMessage(e, "Sign-out failed."));
     }
   }
 
@@ -2429,10 +869,10 @@ function DashboardPageContent() {
     const fn = httpsCallable(functions, "getSquadDetails");
     const res = await fn({ userId });
 
-    const payload = res.data as any;
+    const payload = isRecord(res.data) ? res.data : {};
 
-    const featuredRaw = payload?.featured ?? null;
-    const drawnRaw = Array.isArray(payload?.drawn) ? payload.drawn : [];
+    const featuredRaw = isRecord(payload.featured) ? payload.featured : null;
+    const drawnRaw = Array.isArray(payload.drawn) ? payload.drawn : [];
 
     const featured: SquadTeamVM | null = featuredRaw
       ? {
@@ -2447,18 +887,21 @@ function DashboardPageContent() {
       : null;
 
     const drawn: SquadTeamVM[] = drawnRaw
-      .map((t: any) => ({
-        id: String(t.id ?? t.teamId ?? ""),
-        name: String(t.name ?? "Team"),
-        group: String(t.group ?? ""),
-        tier: Number(t.tier ?? 4),
-        flagUrl: String(t.flagUrl ?? ""),
+      .map((t: unknown) => {
+        const team = isRecord(t) ? t : {};
+        return {
+        id: String(team.id ?? team.teamId ?? ""),
+        name: String(team.name ?? "Team"),
+        group: String(team.group ?? ""),
+        tier: Number(team.tier ?? 4),
+        flagUrl: String(team.flagUrl ?? ""),
         role: "drawn" as const,
-        contribution: Number(t.contribution ?? 0),
-      }))
+        contribution: Number(team.contribution ?? 0),
+        };
+      })
       .filter((t: SquadTeamVM) => Boolean(t.id));
 
-    const payloadTotalScore = Number(payload?.totalScore);
+    const payloadTotalScore = Number(payload.totalScore);
     const derivedTotalScore =
       Number(featured?.contribution ?? 0) +
       drawn.reduce(
@@ -2467,8 +910,8 @@ function DashboardPageContent() {
       );
 
     return {
-      userId: String(payload?.userId ?? userId),
-      displayName: String(payload?.displayName ?? displayNameFallback),
+      userId: String(payload.userId ?? userId),
+      displayName: String(payload.displayName ?? displayNameFallback),
       totalScore: Number.isFinite(payloadTotalScore)
         ? payloadTotalScore
         : derivedTotalScore,
@@ -2517,18 +960,18 @@ function DashboardPageContent() {
 
   // User's score and rank from leaderboard
   const userStats = useMemo(() => {
-    const fallbackScore = Number((userDoc as any)?.totalScore ?? 0);
+    const fallbackScore = Number(userDocData.totalScore ?? 0);
     if (!uid || !leaderboardData.length) return { score: fallbackScore, rank: null };
     const userEntry = leaderboardData.find((u) => u.id === uid);
     return {
       score: userEntry?.totalScore ?? fallbackScore,
       rank: userEntry?.rank ?? null,
     };
-  }, [uid, leaderboardData, userDoc]);
+  }, [uid, leaderboardData, userDocData]);
 
   const remainingTransfers = Math.max(
     0,
-    Number((userDoc as any)?.remainingTransfers ?? 0)
+    Number(userDocData.remainingTransfers ?? 0)
   );
 
   const transferWindowOpen = useMemo(() => {
@@ -2660,10 +1103,10 @@ function DashboardPageContent() {
         pickupTeamId: pickup.id,
       });
 
-      const payload = res.data as any;
+      const payload = isRecord(res.data) ? res.data : {};
       const nextTransfers = Math.max(
         0,
-        Number(payload?.remainingTransfers ?? remainingTransfers - 1)
+        Number(payload.remainingTransfers ?? remainingTransfers - 1)
       );
 
       const refreshedUserSnap = await getDoc(doc(db, "users", uid));
@@ -2697,7 +1140,9 @@ function DashboardPageContent() {
                   src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
                   alt="GIS Logo"
                   className="w-full h-full object-contain"
-                  onError={(e: any) => (e.currentTarget.style.display = "none")}
+                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                    e.currentTarget.style.display = "none";
+                  }}
                 />
               </div>
               <h1 className="font-bold text-lg tracking-tight">
@@ -2732,331 +1177,33 @@ function DashboardPageContent() {
 
         {/* Portfolio View - Show when on "My Teams" tab */}
         {signedIn && activeTab === "portfolio" && (
-          <div className="mb-6 space-y-6">
-            {/* Points Summary Card */}
-            <div className="bg-gradient-to-br from-primary/20 via-card to-card border border-primary/30 rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Total Points</p>
-                  <p className="text-5xl font-bold text-foreground">{userStats.score.toLocaleString()}</p>
-                </div>
-                <div className="text-right">
-                  {userStats.rank ? (
-                    <p className="text-xs text-muted-foreground mt-1">Rank #{userStats.rank} of {leaderboardData.length}</p>
-                  ) : (
-                    <div className="flex items-center gap-1 text-primary">
-                      <TrendingUp className="w-4 h-4" />
-                      <span className="text-sm font-medium">Live</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Team Status Summary */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
-                <div className="bg-background/50 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-primary">{teamStats.active}</p>
-                  <p className="text-xs text-muted-foreground">Active</p>
-                </div>
-                <div className="bg-background/50 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-destructive">{teamStats.eliminated}</p>
-                  <p className="text-xs text-muted-foreground">Eliminated</p>
-                </div>
-                <div className="bg-background/50 rounded-xl p-3 text-center">
-                  <p className="text-2xl font-bold text-foreground">{teamStats.transfers}</p>
-                  <p className="text-xs text-muted-foreground">Transfers</p>
-                </div>
-              </div>
-            </div>
-
-
-            {/* Teams List */}
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Your Teams</h2>
-
-              {/* Featured Team */}
-              {featuredDisplay && (
-                <div className="bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 hover:ring-2 hover:ring-primary/30">
-                  <button
-                    onClick={() => handleTeamExpand(`featured-${featuredDisplay.id}`, featuredDisplay.id)}
-                    className="w-full p-4 flex items-center gap-4 text-left"
-                  >
-                    <div className="relative">
-                      <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-primary shadow-lg shadow-primary/20">
-                        {featuredDisplay.flagUrl && (
-                          <img src={featuredDisplay.flagUrl} alt={featuredDisplay.name} className="w-full h-full object-cover" />
-                        )}
-                      </div>
-                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center">
-                        <Crown className="w-3 h-3 text-primary-foreground" />
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-foreground text-lg">{featuredDisplay.name}</span>
-                        <Badge variant="secondary" className="text-[10px]">Your Pick</Badge>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <TierPill tier={featuredDisplay.tier} />
-                        <span className="text-xs text-muted-foreground">Group {featuredDisplay.group}</span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-foreground">{calculateTeamPoints(teamsById[featuredDisplay.id])}</p>
-                      <p className="text-xs text-muted-foreground">pts</p>
-                    </div>
-                    <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedTeam === `featured-${featuredDisplay.id}` ? 'rotate-90' : ''}`} />
-                  </button>
-
-                  {/* Expanded Details */}
-                  {expandedTeam === `featured-${featuredDisplay.id}` && (
-                    <div className="px-4 pb-4 border-t border-border/50">
-                      <div className="pt-4 space-y-4">
-                        {/* Recent Form */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-2">Recent Form</p>
-                          {teamMatchData[featuredDisplay.id]?.loading ? (
-                            <div className="flex gap-1">
-                              {[...Array(5)].map((_, i) => (
-                                <div key={i} className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
-                              ))}
-                            </div>
-                          ) : teamMatchData[featuredDisplay.id]?.recentForm?.length > 0 ? (
-                            <div className="flex gap-1">
-                              {teamMatchData[featuredDisplay.id].recentForm.map((result, i) => (
-                                <div
-                                  key={i}
-                                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                    result === 'W' ? 'bg-primary/20 text-primary' :
-                                    result === 'D' ? 'bg-muted text-muted-foreground' :
-                                    'bg-destructive/20 text-destructive'
-                                  }`}
-                                >
-                                  {result}
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No matches yet</p>
-                          )}
-                        </div>
-
-                        {/* Next Match */}
-                        <div className="bg-muted/50 rounded-lg p-3">
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                            <Clock className="w-3 h-3" />
-                            <span>Next Match</span>
-                          </div>
-                          {teamMatchData[featuredDisplay.id]?.loading ? (
-                            <div className="space-y-1">
-                              <div className="h-4 bg-muted rounded animate-pulse w-24" />
-                              <div className="h-3 bg-muted rounded animate-pulse w-32" />
-                            </div>
-                          ) : teamMatchData[featuredDisplay.id]?.nextMatch ? (
-                            <>
-                              <p className="font-medium text-foreground">
-                                vs {teamsById[teamMatchData[featuredDisplay.id].nextMatch!.opponentId]?.name || 'TBD'}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatMatchDate(teamMatchData[featuredDisplay.id].nextMatch!.scheduledAt)}
-                              </p>
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">No upcoming matches</p>
-                          )}
-                        </div>
-
-                        {/* Points Breakdown */}
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-2">Points Breakdown</p>
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">
-                                {teamsById[featuredDisplay.id]?.wins ?? 0}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">Wins</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">
-                                {teamsById[featuredDisplay.id]?.goalsScored ?? 0}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">Goals</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">
-                                {teamsById[featuredDisplay.id]?.cleanSheets ?? 0}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">C.Sheets</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-lg font-bold text-foreground">
-                                {teamsById[featuredDisplay.id]?.draws ?? 0}
-                              </p>
-                              <p className="text-[10px] text-muted-foreground">Draws</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Drawn Teams */}
-              {drawnDisplay.map((team, idx) => {
-                const isEliminated = team.isEliminated === true;
-                const teamPoints = calculateTeamPoints(teamsById[team.id]);
-                const teamKey = `drawn-${team.id}`;
-
-                return (
-                  <div
-                    key={team.id}
-                    className={`bg-card border border-border rounded-xl overflow-hidden transition-all duration-300 ${
-                      isEliminated ? 'opacity-60' : ''
-                    } ${expandedTeam === teamKey ? 'ring-2 ring-primary/30' : ''}`}
-                  >
-                    <button
-                      onClick={() => handleTeamExpand(teamKey, team.id)}
-                      className="w-full p-4 flex items-center gap-4 text-left"
-                    >
-                      <div className="relative w-12 h-12">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border border-border">
-                          {team.flagUrl && (
-                            <img src={team.flagUrl} alt={team.name} className="w-full h-full object-cover" />
-                          )}
-                        </div>
-                        {isEliminated && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-12 h-12 border-2 border-destructive rounded-full flex items-center justify-center bg-background/80">
-                              <span className="text-destructive text-[10px] font-bold">OUT</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <span className="font-bold text-foreground">{team.name}</span>
-                        <div className="flex items-center gap-2 mt-1">
-                          <TierPill tier={team.tier} />
-                          <span className="text-xs text-muted-foreground">Group {team.group}</span>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-foreground">{teamPoints}</p>
-                        <p className="text-xs text-muted-foreground">pts</p>
-                      </div>
-                      <ChevronRight className={`w-5 h-5 text-muted-foreground transition-transform ${expandedTeam === teamKey ? 'rotate-90' : ''}`} />
-                    </button>
-
-                    {/* Expanded Details */}
-                    {expandedTeam === teamKey && !isEliminated && (
-                      <div className="px-4 pb-4 border-t border-border/50">
-                        <div className="pt-4 space-y-4">
-                          {/* Recent Form */}
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-2">Recent Form</p>
-                            {teamMatchData[team.id]?.loading ? (
-                              <div className="flex gap-1">
-                                {[...Array(5)].map((_, i) => (
-                                  <div key={i} className="w-8 h-8 rounded-lg bg-muted animate-pulse" />
-                                ))}
-                              </div>
-                            ) : teamMatchData[team.id]?.recentForm?.length > 0 ? (
-                              <div className="flex gap-1">
-                                {teamMatchData[team.id].recentForm.map((result, i) => (
-                                  <div
-                                    key={i}
-                                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                                      result === 'W' ? 'bg-primary/20 text-primary' :
-                                      result === 'D' ? 'bg-muted text-muted-foreground' :
-                                      'bg-destructive/20 text-destructive'
-                                    }`}
-                                  >
-                                    {result}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No matches yet</p>
-                            )}
-                          </div>
-
-                          {/* Next Match */}
-                          <div className="bg-muted/50 rounded-lg p-3">
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                              <Clock className="w-3 h-3" />
-                              <span>Next Match</span>
-                            </div>
-                            {teamMatchData[team.id]?.loading ? (
-                              <div className="space-y-1">
-                                <div className="h-4 bg-muted rounded animate-pulse w-24" />
-                                <div className="h-3 bg-muted rounded animate-pulse w-32" />
-                              </div>
-                            ) : teamMatchData[team.id]?.nextMatch ? (
-                              <>
-                                <p className="font-medium text-foreground">
-                                  vs {teamsById[teamMatchData[team.id].nextMatch!.opponentId]?.name || 'TBD'}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatMatchDate(teamMatchData[team.id].nextMatch!.scheduledAt)}
-                                </p>
-                              </>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No upcoming matches</p>
-                            )}
-                          </div>
-
-                          {/* Points Breakdown */}
-                          <div>
-                            <p className="text-xs text-muted-foreground mb-2">Points Breakdown</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                              <div className="text-center">
-                                <p className="text-lg font-bold text-foreground">
-                                  {teamsById[team.id]?.wins ?? 0}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">Wins</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-lg font-bold text-foreground">
-                                  {teamsById[team.id]?.goalsScored ?? 0}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">Goals</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-lg font-bold text-foreground">
-                                  {teamsById[team.id]?.cleanSheets ?? 0}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">C.Sheets</p>
-                              </div>
-                              <div className="text-center">
-                                <p className="text-lg font-bold text-foreground">
-                                  {teamsById[team.id]?.draws ?? 0}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground">Draws</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <DashboardPortfolio
+            userStats={userStats}
+            leaderboardCount={leaderboardData.length}
+            teamStats={teamStats}
+            featuredDisplay={featuredDisplay}
+            drawnDisplay={drawnDisplay}
+            expandedTeam={expandedTeam}
+            teamMatchData={teamMatchData}
+            teamsById={teamsById}
+            onTeamExpand={handleTeamExpand}
+            calculateTeamPoints={calculateTeamPoints}
+          />
         )}
 
         {/* Tab content area */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
           {activeTab === "leaderboard" && (
-            <Leaderboard
+            <LeaderboardPanel
               data={leaderboardData}
               isLoading={loadingLeaderboard}
               fetchSquad={fetchSquadDetails}
               currentUserId={uid}
+              modeLabel="v0 layout active"
             />
           )}
           {activeTab === "bracket" && (
-            <Bracket
+            <DashboardBracket
               stages={bracketStages}
               matches={bracketMatches}
               isLoading={loadingMatches}
@@ -3074,7 +1221,7 @@ function DashboardPageContent() {
             />
           )}
           {activeTab === "market" && (
-            <TransferMarket
+            <DashboardTransferMarket
               squad={userSquad}
               market={loadingMarketTeams ? [] : marketData}
               userScore={userScore}

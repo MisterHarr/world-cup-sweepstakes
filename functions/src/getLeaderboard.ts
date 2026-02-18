@@ -11,6 +11,10 @@ type LeaderboardRow = {
   department: "Primary" | "Secondary" | "Admin" | null;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export const getLeaderboard = onCall(
   { region: "asia-southeast1" },
   async (request) => {
@@ -18,7 +22,8 @@ export const getLeaderboard = onCall(
       throw new HttpsError("unauthenticated", "You must be signed in.");
     }
 
-    const rawLimit = (request.data?.limit ?? 200) as number;
+    const payload = isRecord(request.data) ? request.data : {};
+    const rawLimit = Number(payload.limit ?? 200);
     const safeLimit = Math.max(1, Math.min(500, Number(rawLimit) || 200));
 
     try {
@@ -30,16 +35,16 @@ export const getLeaderboard = onCall(
         .get();
 
       const rows: LeaderboardRow[] = snap.docs.map((d) => {
-        const data = d.data() as any;
+        const data = d.data() as Record<string, unknown>;
         const displayName =
-          typeof data?.displayName === "string" && data.displayName.trim()
+          typeof data.displayName === "string" && data.displayName.trim()
             ? data.displayName.trim()
             : "Anonymous";
 
         const department =
-          data?.department === "Primary" ||
-          data?.department === "Secondary" ||
-          data?.department === "Admin"
+          data.department === "Primary" ||
+          data.department === "Secondary" ||
+          data.department === "Admin"
             ? data.department
             : null;
 
@@ -51,11 +56,17 @@ export const getLeaderboard = onCall(
       });
 
       return { ok: true, rows };
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("getLeaderboard failed:", err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : typeof err === "string" && err.trim().length > 0
+            ? err
+            : "Failed to load leaderboard.";
       throw new HttpsError(
         "internal",
-        err?.message ?? "Failed to load leaderboard."
+        message
       );
     }
   }

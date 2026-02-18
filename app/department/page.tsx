@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 type Department = "Primary" | "Secondary" | "Admin";
+const DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
 
 function isAlreadySetError(message: string) {
   const m = (message || "").toLowerCase();
@@ -23,6 +24,27 @@ function isAlreadySetError(message: string) {
     m.includes("already set") ||
     m.includes("cannot be changed")
   );
+}
+
+function friendlyErrorMessage(err: unknown, fallback: string): string {
+  if (!err || typeof err !== "object") return fallback;
+  const raw =
+    typeof (err as { message?: unknown }).message === "string"
+      ? (err as { message: string }).message
+      : "";
+  if (!raw) return fallback;
+  return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function normalizeDepartment(value: unknown): Department | null {
+  return typeof value === "string" &&
+    (DEPARTMENTS as readonly string[]).includes(value)
+    ? (value as Department)
+    : null;
 }
 
 function DepartmentPageContent() {
@@ -59,15 +81,19 @@ function DepartmentPageContent() {
 
       try {
         const snap = await getDoc(doc(db, "users", currentUid));
-        const dept = snap.exists() ? (snap.data() as any)?.department : null;
+        const rawData = snap.exists() ? snap.data() : null;
+        const data = isRecord(rawData) ? rawData : null;
+        const dept = normalizeDepartment(data?.department);
 
         if (!cancelled && dept) {
           router.replace(next);
           return;
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        if (!cancelled) setError(e?.message ?? "Failed to check department.");
+        if (!cancelled) {
+          setError(friendlyErrorMessage(e, "Failed to check department."));
+        }
       } finally {
         if (!cancelled) setCheckingExisting(false);
       }
@@ -93,9 +119,9 @@ function DepartmentPageContent() {
       const setDepartment = httpsCallable(functions, "setDepartment");
       await setDepartment({ department: selected });
       router.replace(next);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      const msg = e?.message ?? "Failed to set department.";
+      const msg = friendlyErrorMessage(e, "Failed to set department.");
 
       if (isAlreadySetError(msg)) {
         router.replace(next);

@@ -13,6 +13,10 @@ type TeamOut = {
   contribution: number;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function asString(x: unknown): string | null {
   return typeof x === "string" && x.trim().length ? x.trim() : null;
 }
@@ -31,13 +35,14 @@ function uniq(arr: string[]): string[] {
  * using the same formula as scoring/dashboard:
  * 3*W + D + GS + CS - RC - 0.5*YC
  */
-function calculateTeamContributionFromDoc(data: any): number {
-  const wins = asNumber(data?.wins);
-  const draws = asNumber(data?.draws);
-  const goalsScored = asNumber(data?.goalsScored);
-  const cleanSheets = asNumber(data?.cleanSheets);
-  const redCards = asNumber(data?.redCards);
-  const yellowCards = asNumber(data?.yellowCards);
+function calculateTeamContributionFromDoc(data: unknown): number {
+  const source = isRecord(data) ? data : {};
+  const wins = asNumber(source.wins);
+  const draws = asNumber(source.draws);
+  const goalsScored = asNumber(source.goalsScored);
+  const cleanSheets = asNumber(source.cleanSheets);
+  const redCards = asNumber(source.redCards);
+  const yellowCards = asNumber(source.yellowCards);
 
   return wins * 3 + draws + goalsScored + cleanSheets - redCards - yellowCards * 0.5;
 }
@@ -50,7 +55,8 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
 
   const db = admin.firestore();
   const callerUid = auth.uid;
-  const requestedUserId = asString(request.data?.userId) ?? callerUid;
+  const payload = isRecord(request.data) ? request.data : {};
+  const requestedUserId = asString(payload.userId) ?? callerUid;
 
   // All authenticated users can view any squad (public visibility for engagement)
   // Privacy settings may be added in future if needed
@@ -69,18 +75,21 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
     };
   }
 
-  const user = userSnap.data() as any;
+  const user = userSnap.data() as Record<string, unknown>;
 
   // Support BOTH schemas:
   // A) user.entry.featuredTeamId + user.entry.drawnTeamIds
   // B) user.portfolio: [{teamId, role:"featured"|"drawn"}]
-  const entryFeaturedId = asString(user?.entry?.featuredTeamId);
-  const entryDrawnIds: string[] = Array.isArray(user?.entry?.drawnTeamIds)
-    ? user.entry.drawnTeamIds.map(asString).filter(Boolean) as string[]
+  const entry = isRecord(user.entry) ? user.entry : {};
+  const entryFeaturedId = asString(entry.featuredTeamId);
+  const entryDrawnIds: string[] = Array.isArray(entry.drawnTeamIds)
+    ? entry.drawnTeamIds
+        .map((teamId: unknown) => asString(teamId))
+        .filter((teamId): teamId is string => Boolean(teamId))
     : [];
 
   const portfolio: Array<{ teamId?: unknown; role?: unknown }> = Array.isArray(
-    user?.portfolio
+    user.portfolio
   )
     ? user.portfolio
     : [];
@@ -92,7 +101,7 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   const portfolioDrawnIds: string[] = portfolio
     .filter((p) => p?.role === "drawn")
     .map((p) => asString(p?.teamId))
-    .filter(Boolean) as string[];
+    .filter((teamId): teamId is string => Boolean(teamId));
 
   const featuredId = entryFeaturedId ?? portfolioFeaturedId ?? null;
   const drawnIds = uniq([...entryDrawnIds, ...portfolioDrawnIds]).slice(0, 5);
@@ -106,7 +115,7 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   const teamsById: Record<string, TeamOut> = {};
   teamSnaps.forEach((snap) => {
     if (!snap.exists) return;
-    const data = snap.data() as any;
+    const data = snap.data() as Record<string, unknown>;
     const id = snap.id;
 
     const isFeatured = id === featuredId;
@@ -115,10 +124,10 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
 
     teamsById[id] = {
       id,
-      name: data?.name,
-      group: data?.group,
-      tier: typeof data?.tier === "number" ? data.tier : Number(data?.tier ?? 0),
-      flagUrl: data?.flagUrl,
+      name: asString(data.name) ?? undefined,
+      group: asString(data.group) ?? undefined,
+      tier: asNumber(data.tier),
+      flagUrl: asString(data.flagUrl) ?? undefined,
       contribution: baseContribution * multiplier,
     };
   });
@@ -129,8 +138,8 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   if (unresolved.length) {
     const allTeamsSnap = await db.collection("teams").get();
     for (const d of allTeamsSnap.docs) {
-      const data = d.data() as any;
-      const internalId = asString(data?.id);
+      const data = d.data() as Record<string, unknown>;
+      const internalId = asString(data.id);
       if (internalId && unresolved.includes(internalId)) {
         const isFeatured = internalId === featuredId;
         const multiplier = isFeatured ? 2 : 1;
@@ -138,13 +147,10 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
 
         teamsById[internalId] = {
           id: internalId,
-          name: data?.name,
-          group: data?.group,
-          tier:
-            typeof data?.tier === "number"
-              ? data.tier
-              : Number(data?.tier ?? 0),
-          flagUrl: data?.flagUrl,
+          name: asString(data.name) ?? undefined,
+          group: asString(data.group) ?? undefined,
+          tier: asNumber(data.tier),
+          flagUrl: asString(data.flagUrl) ?? undefined,
           contribution: baseContribution * multiplier,
         };
       }
@@ -152,9 +158,9 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   }
 
   const displayName =
-    asString(user?.displayName) ??
-    asString(user?.name) ??
-    asString(user?.email) ??
+    asString(user.displayName) ??
+    asString(user.name) ??
+    asString(user.email) ??
     "Anonymous";
 
   const featured = featuredId
@@ -165,9 +171,9 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
   const derivedTotalScore =
     asNumber(featured?.contribution) +
     drawn.reduce((sum, team) => sum + asNumber(team?.contribution), 0) -
-    asNumber(user?.transferPenaltyPoints);
+    asNumber(user.transferPenaltyPoints);
 
-  const totalScore = asNumber(user?.totalScore, derivedTotalScore);
+  const totalScore = asNumber(user.totalScore, derivedTotalScore);
 
   return {
     ok: true,

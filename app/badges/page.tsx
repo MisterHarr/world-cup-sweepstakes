@@ -11,25 +11,40 @@ import {
   Flame,
   Trophy as TrophyIcon,
   Clock,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppShellV0 } from "@/components/app-shell-v0";
 import { auth } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
 import {
+  type User as FirebaseUser,
   onAuthStateChanged,
-  GoogleAuthProvider,
-  signInWithPopup,
   signOut,
 } from "firebase/auth";
 import { cn } from "@/lib/utils";
 
+type BadgeRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
+type BadgeAchievement = {
+  id: string;
+  title: string;
+  desc: string;
+  icon: LucideIcon;
+  rarity: BadgeRarity;
+  unlocked: boolean;
+  unlockedAt?: string;
+  progress?: number;
+  total?: number;
+};
+
 // Badges will be fetched from Firestore when implemented
 // For now, show empty state until tournament starts
-const achievements: any[] = [];
+const achievements: BadgeAchievement[] = [];
 
-const rarityColors: Record<string, string> = {
+const rarityColors: Record<BadgeRarity, string> = {
   common: "from-zinc-500 to-zinc-400",
   uncommon: "from-green-500 to-emerald-400",
   rare: "from-blue-500 to-cyan-400",
@@ -37,7 +52,7 @@ const rarityColors: Record<string, string> = {
   legendary: "from-amber-500 to-yellow-400",
 };
 
-const rarityBorders: Record<string, string> = {
+const rarityBorders: Record<BadgeRarity, string> = {
   common: "border-zinc-500/30",
   uncommon: "border-green-500/30",
   rare: "border-blue-500/30",
@@ -45,7 +60,7 @@ const rarityBorders: Record<string, string> = {
   legendary: "border-amber-500/30 shadow-lg shadow-amber-500/20",
 };
 
-const rarityText: Record<string, string> = {
+const rarityText: Record<BadgeRarity, string> = {
   common: "text-zinc-400",
   uncommon: "text-green-400",
   rare: "text-cyan-400",
@@ -54,7 +69,7 @@ const rarityText: Record<string, string> = {
 };
 
 export default function BadgesPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
 
@@ -67,15 +82,16 @@ export default function BadgesPage() {
   }, []);
 
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
-  const progressPercent = Math.round((unlockedCount / achievements.length) * 100);
+  const progressPercent =
+    achievements.length > 0
+      ? Math.round((unlockedCount / achievements.length) * 100)
+      : 0;
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
     setAuthBusy(true);
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
+      await signInWithGoogle(auth);
     } catch (err) {
       console.error("Sign-in failed:", err);
     } finally {
@@ -121,7 +137,9 @@ export default function BadgesPage() {
                   src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
                   alt="GIS Logo"
                   className="w-full h-full object-contain"
-                  onError={(e: any) => (e.currentTarget.style.display = "none")}
+                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                    e.currentTarget.style.display = "none";
+                  }}
                 />
               </div>
               <h1 className="font-bold text-lg tracking-tight">
@@ -183,7 +201,16 @@ export default function BadgesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.map((achievement) => {
               const Icon = achievement.icon;
-              const hasProgress = typeof achievement.progress === "number";
+              const progressValue =
+                typeof achievement.progress === "number"
+                  ? achievement.progress
+                  : null;
+              const totalValue =
+                typeof achievement.total === "number" ? achievement.total : null;
+              const hasProgress =
+                progressValue !== null &&
+                totalValue !== null &&
+                totalValue > 0;
 
               return (
                 <div
@@ -241,11 +268,11 @@ export default function BadgesPage() {
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">Progress</span>
                             <span className={cn("font-medium", rarityText[achievement.rarity])}>
-                              {achievement.progress}/{achievement.total}
+                              {progressValue}/{totalValue}
                             </span>
                           </div>
                           <Progress
-                            value={(achievement.progress! / achievement.total!) * 100}
+                            value={((progressValue ?? 0) / (totalValue ?? 1)) * 100}
                             className="h-2"
                           />
                         </div>

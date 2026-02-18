@@ -17,6 +17,10 @@ const MINIMUM_COST = 5; // Floor for any transfer
 type PortfolioRole = "featured" | "drawn";
 type PortfolioItem = { teamId: string; role: PortfolioRole };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
@@ -56,8 +60,8 @@ function asTimestampMs(value: unknown): number | null {
   return null;
 }
 
-function isTransferWindowOpen(config: any, nowMs: number): boolean {
-  if (!config || config.enabled !== true) return false;
+function isTransferWindowOpen(config: unknown, nowMs: number): boolean {
+  if (!isRecord(config) || config.enabled !== true) return false;
 
   const startsAt = asTimestampMs(config.startsAt);
   const endsAt = asTimestampMs(config.endsAt);
@@ -93,14 +97,15 @@ function calculateTransferCost(dropTier: number, pickupTier: number): number {
   return Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
 }
 
-function getSquadFromUser(userData: any): {
+function getSquadFromUser(userData: unknown): {
   featuredTeamId: string | null;
   drawnTeamIds: string[];
 } {
+  const source = isRecord(userData) ? userData : {};
   const portfolio: Array<{ teamId?: unknown; role?: unknown }> = Array.isArray(
-    userData?.portfolio
+    source.portfolio
   )
-    ? userData.portfolio
+    ? source.portfolio
     : [];
 
   const portfolioFeaturedTeamId = asString(
@@ -111,9 +116,10 @@ function getSquadFromUser(userData: any): {
     .map((item) => asString(item?.teamId))
     .filter(Boolean) as string[];
 
-  const entryFeaturedTeamId = asString(userData?.entry?.featuredTeamId);
-  const entryDrawnTeamIds = Array.isArray(userData?.entry?.drawnTeamIds)
-    ? userData.entry.drawnTeamIds
+  const entry = isRecord(source.entry) ? source.entry : {};
+  const entryFeaturedTeamId = asString(entry.featuredTeamId);
+  const entryDrawnTeamIds = Array.isArray(entry.drawnTeamIds)
+    ? entry.drawnTeamIds
         .map((teamId: unknown) => asString(teamId))
         .filter(Boolean) as string[]
     : [];
@@ -130,8 +136,9 @@ function getSquadFromUser(userData: any): {
 export const executeTransfer = onCall({ region: REGION }, async (request) => {
   const auth = requireAuth(request);
   const uid = auth.uid;
-  const dropTeamId = asString(request.data?.dropTeamId);
-  const pickupTeamId = asString(request.data?.pickupTeamId);
+  const payload = isRecord(request.data) ? request.data : {};
+  const dropTeamId = asString(payload.dropTeamId);
+  const pickupTeamId = asString(payload.pickupTeamId);
 
   if (!dropTeamId || !pickupTeamId) {
     throw new HttpsError(
@@ -179,10 +186,12 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
     }
 
     // Get team tiers for cost calculation
-    const dropTeamData = dropTeamSnap.data() as any;
-    const pickupTeamData = pickupTeamSnap.data() as any;
-    const dropTier = typeof dropTeamData?.tier === "number" ? dropTeamData.tier : 3;
+    const dropTeamData = dropTeamSnap.data() as Record<string, unknown>;
+    const pickupTeamData = pickupTeamSnap.data() as Record<string, unknown>;
+    const dropTier = typeof dropTeamData.tier === "number" ? dropTeamData.tier : 3;
     const pickupTier = typeof pickupTeamData?.tier === "number" ? pickupTeamData.tier : 3;
+    const dropTeamName = asString(dropTeamData.name) ?? dropTeamId;
+    const pickupTeamName = asString(pickupTeamData.name) ?? pickupTeamId;
 
     // Calculate transfer cost based on tier difference
     const transferCost = calculateTransferCost(dropTier, pickupTier);
@@ -198,7 +207,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       );
     }
 
-    const userData = userSnap.data() as any;
+    const userData = userSnap.data() as Record<string, unknown>;
     const { featuredTeamId, drawnTeamIds } = getSquadFromUser(userData);
 
     if (!featuredTeamId || drawnTeamIds.length === 0) {
@@ -232,7 +241,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
     }
 
     const remainingTransfersBefore = asNonNegativeInteger(
-      userData?.remainingTransfers
+      userData.remainingTransfers
     );
     if (remainingTransfersBefore <= 0) {
       throw new HttpsError(
@@ -257,8 +266,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
     ];
 
     const remainingTransfersAfter = remainingTransfersBefore - 1;
-    const existingEntry =
-      userData?.entry && typeof userData.entry === "object" ? userData.entry : {};
+    const existingEntry = isRecord(userData.entry) ? userData.entry : {};
 
     tx.set(
       userRef,
@@ -279,6 +287,8 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       uid,
       dropTeamId,
       pickupTeamId,
+      dropTeamName,
+      pickupTeamName,
       dropTier,
       pickupTier,
       remainingTransfersBefore,
@@ -286,6 +296,7 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
       scoringPenaltyApplied: true,
       scoringPenaltyPoints: transferCost,
       scoringPenaltyVersion: TRANSFER_SCORING_VERSION,
+      createdAtMs: nowMs,
       createdAt: FieldValue.serverTimestamp(),
       source: "executeTransfer",
     });

@@ -11,13 +11,24 @@ const ALLOWED = ["Primary", "Secondary", "Admin"] as const;
 
 type Dept = (typeof ALLOWED)[number];
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function asDept(value: unknown): Dept | null {
+  return value === "Primary" || value === "Secondary" || value === "Admin"
+    ? value
+    : null;
+}
+
 export const setDepartment = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const department = (request.data?.department ?? null) as Dept | null;
+  const payload = isRecord(request.data) ? request.data : {};
+  const department = asDept(payload.department);
   if (!department || !ALLOWED.includes(department)) {
     throw new HttpsError(
       "invalid-argument",
@@ -29,9 +40,10 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
 
   const userRef = admin.firestore().doc(`users/${uid}`);
   const snap = await userRef.get();
-  const existingDept = (snap.exists ? (snap.data() as any)?.department : null) as
-    | Dept
-    | null;
+  const existing = snap.exists
+    ? (snap.data() as Record<string, unknown>)
+    : {};
+  const existingDept = asDept(existing.department);
 
   // If already set, only admin can change it
   if (existingDept && !isAdmin) {

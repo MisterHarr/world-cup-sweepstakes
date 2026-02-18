@@ -6,15 +6,50 @@ import { Sparkles, Trophy } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
 import { ensureUserDoc } from "@/lib/userBootstrap";
+import { signInWithGoogle } from "@/lib/googleAuth";
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
+
+function friendlyErrorMessage(err: unknown, fallback: string): string {
+  if (!err || typeof err !== "object") return fallback;
+  const raw =
+    typeof (err as { message?: unknown }).message === "string"
+      ? (err as { message: string }).message
+      : "";
+  if (!raw) return fallback;
+  return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasConfirmedEntry(data: Record<string, unknown> | null): boolean {
+  if (!data) return false;
+
+  const entry = isRecord(data.entry) ? data.entry : {};
+  if (Boolean(entry.confirmedAt)) return true;
+
+  const portfolio = Array.isArray(data.portfolio)
+    ? data.portfolio.filter((item): item is Record<string, unknown> =>
+        isRecord(item)
+      )
+    : [];
+  const featuredCount = portfolio.filter(
+    (team) =>
+      team.role === "featured" &&
+      typeof team.teamId === "string" &&
+      team.teamId.trim().length > 0
+  ).length;
+  const drawnCount = portfolio.filter((team) => team.role === "drawn").length;
+
+  return featuredCount >= 1 && drawnCount >= 5;
+}
 
 export function AuthLandingPage() {
   const router = useRouter();
@@ -25,6 +60,7 @@ export function AuthLandingPage() {
 
   const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [authBusy, setAuthBusy] = useState(false);
 
   const [continuing, setContinuing] = useState(false);
 
@@ -54,19 +90,26 @@ export function AuthLandingPage() {
   }, []);
 
   async function handleGoogleSignIn() {
+    if (authBusy) return;
+
     setError("");
     setStatus("");
+    setAuthBusy(true);
 
     try {
       setStatus("Opening Google sign-in...");
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: "select_account" });
-      await signInWithPopup(auth, provider);
+      const mode = await signInWithGoogle(auth);
+      if (mode === "redirect") {
+        setStatus("Redirecting to Google sign-in...");
+        return;
+      }
       setStatus("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       setStatus("");
-      setError(e?.message ?? "Sign-in failed.");
+      setError(friendlyErrorMessage(e, "Sign-in failed."));
+    } finally {
+      setAuthBusy(false);
     }
   }
 
@@ -78,10 +121,10 @@ export function AuthLandingPage() {
       setStatus("Signing out...");
       await signOut(auth);
       setStatus("");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
       setStatus("");
-      setError(e?.message ?? "Sign-out failed.");
+      setError(friendlyErrorMessage(e, "Sign-out failed."));
     }
   }
 
@@ -96,16 +139,15 @@ export function AuthLandingPage() {
     try {
       const userRef = doc(db, "users", uid);
       const snap = await getDoc(userRef);
-      const data = snap.exists() ? (snap.data() as any) : null;
-      const dept = data?.department ?? null;
-
-      const confirmed =
-        Boolean(data?.entry?.confirmedAt) ||
-        Boolean(
-          (data?.portfolio?.find?.((p: any) => p?.role === "featured")?.teamId) &&
-            ((data?.portfolio?.filter?.((p: any) => p?.role === "drawn")?.length ??
-              0) >= 5)
-        );
+      const rawData = snap.exists() ? snap.data() : null;
+      const data = isRecord(rawData) ? rawData : null;
+      const dept =
+        data?.department === "Primary" ||
+        data?.department === "Secondary" ||
+        data?.department === "Admin"
+          ? data.department
+          : null;
+      const confirmed = hasConfirmedEntry(data);
 
       const nextPath = confirmed ? "/dashboard" : "/featured-team";
 
@@ -115,9 +157,9 @@ export function AuthLandingPage() {
       }
 
       router.push(nextPath);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setError(e?.message ?? "Failed to load your profile.");
+      setError(friendlyErrorMessage(e, "Failed to load your profile."));
       setStatus("");
       setContinuing(false);
     }
@@ -186,11 +228,11 @@ export function AuthLandingPage() {
             {!signedIn ? (
               <Button
                 onClick={handleGoogleSignIn}
-                disabled={checking}
+                disabled={checking || authBusy}
                 className="w-full h-12"
                 size="lg"
               >
-                {checking ? "Checking..." : "Sign in with Google"}
+                {checking ? "Checking..." : authBusy ? "Please wait..." : "Sign in with Google"}
               </Button>
             ) : (
               <>

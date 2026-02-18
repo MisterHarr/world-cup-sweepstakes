@@ -1,6 +1,6 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2026-02-17
+**Last Updated:** 2026-02-18
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
@@ -14,6 +14,7 @@
 - ✅ **Recent Form Display** - Fixed field name mismatch (`kickoffTime` vs `scheduledAt`)
 - ✅ **Firestore Indexes** - Deployed composite indexes for match queries
 - ✅ **Squad Details Placeholder Cleanup** - Replaced placeholder scores with real callable-driven totals/contributions
+- ✅ **Admin Transfer Window Toggle** - Added `/admin/fixtures` controls for opening/closing `settings/transferWindow` without console scripts
 
 ### Core Features
 - ✅ Google Authentication with Firebase
@@ -73,6 +74,29 @@ Imagine going to a sports app to check your fantasy team's score, but it just sa
 **Benefit:** Catch errors during development instead of in production
 **Files:** `/app/admin/fixtures/FixturesPageContent.tsx` (11 instances), others
 
+**Progress (2026-02-17):**
+- ✅ Removed unsafe `any` usage from `/app/admin/fixtures/FixturesPageContent.tsx`
+- ✅ Removed unsafe `any` usage from `/app/admin/users/page.tsx`
+- ✅ Removed unsafe `any` usage from `/app/admin/seed-teams/page.tsx`
+- ✅ Hardened `/functions/src/index.ts` admin callables (`adminListUsers`, `adminAssignTeamsToUser`) with typed parsing/guards
+- ✅ Hardened `/functions/src/index.ts` non-admin featured team callables (`assignDrawnTeams`, `confirmFeaturedTeam`) with typed parsing/guards
+- ✅ Hardened `/functions/src/ingest.ts` provider/config normalization paths (removed unsafe `any` usage)
+- ✅ Hardened `/functions/src/scoring.ts` (badge parsing, portfolio parsing, batch update typing, request payload guards)
+- ✅ Hardened `/functions/src/transfers.ts` (transfer-window guards, squad parsing, request/team/user typing)
+- ✅ Hardened `/functions/src/getSquadDetails.ts` (safe parsing for user/entry/portfolio/team docs)
+- ✅ Hardened `/functions/src/admin.ts`, `/functions/src/setDepartment.ts`, and `/functions/src/getLeaderboard.ts` (request/doc parsing and error typing)
+- ✅ `functions/src` backend now free of unsafe `any` usage
+- ✅ Hardened `/app/dashboard/page.tsx` auth/user/callable parsing and removed remaining unsafe `any` usage
+- ✅ Hardened `/app/leaderboard/page.tsx` auth/profile/callable/leaderboard payload parsing and removed remaining unsafe `any` usage
+- ✅ Hardened `/components/AuthLandingPage.tsx` profile bootstrap parsing and auth error handling (removed remaining unsafe `any` usage)
+- ✅ Hardened `/app/featured-team/page.tsx` auth/profile/team/callable parsing and removed remaining unsafe `any` usage
+- ✅ Hardened `/app/department/page.tsx` auth/profile gating and set-department error handling (removed remaining unsafe `any` usage)
+- ✅ Hardened `/components/leaderboard/LeaderboardPanel.tsx` drawer error handling (removed remaining unsafe `any` usage)
+- ✅ Hardened `/app/badges/page.tsx` achievements/auth state typing and image error handling (removed remaining unsafe `any` usage)
+- ✅ Hardened `/lib/retryUtils.ts` shared retry code-path error-code parsing (removed remaining unsafe `any` usage)
+- ✅ Hardened `/lib/badgeDefinitions.ts` badge unlock criteria typing (removed remaining unsafe `any` usage)
+- ✅ Remaining scope for `as any` hardening across `app/`, `components/`, and `lib/`: cleared
+
 **Simple Explanation:**
 TypeScript is like having a spell-checker for code. When we use `as any`, we're telling TypeScript "trust me, I know what I'm doing" - but we might be wrong! It's like turning off autocorrect and hoping you didn't make typos.
 
@@ -90,6 +114,14 @@ TypeScript is like having a spell-checker for code. When we use `as any`, we're 
 **Why:** Maintainability and performance
 **Benefit:** Easier to fix bugs, add features, and onboard new developers
 **Files:** `app/dashboard/page.tsx` (currently 3,100 lines!)
+
+**Progress (2026-02-18):**
+- ✅ Extracted embedded leaderboard UI from `/app/dashboard/page.tsx` to shared `/components/leaderboard/LeaderboardPanel.tsx` usage
+- ✅ Added `modeLabel` prop in `/components/leaderboard/LeaderboardPanel.tsx` so dashboard and standalone pages can share component with context-specific labeling
+- ✅ Extracted Match Center/Bracket section from `/app/dashboard/page.tsx` to `/components/dashboard/DashboardBracket.tsx` (with shared stage helpers and types)
+- ✅ Extracted Transfer Market section from `/app/dashboard/page.tsx` to `/components/dashboard/DashboardTransferMarket.tsx` (with shared transfer types)
+- ✅ Extracted Portfolio section from `/app/dashboard/page.tsx` to `/components/dashboard/DashboardPortfolio.tsx` (with shared team-card expansion and match/form display logic)
+- ✅ Remaining 2.2 scope: cleared (dashboard tab sections now componentized)
 
 **Simple Explanation:**
 Imagine a kitchen where every single tool, ingredient, and recipe is in ONE giant drawer. Finding anything would be a nightmare! The dashboard is like that - all the code for My Teams, Leaderboard, Match Center, and Transfers is in one massive file.
@@ -114,10 +146,17 @@ Instead of one 3,100-line file, split into:
 
 ### Priority 3: Feature Additions
 
-#### 3.1 Transfer History / Audit Log
+#### 3.1 Transfer History / Audit Log ✅ Completed (2026-02-18)
 **Why:** User transparency and engagement
 **Benefit:** Users can see their past transfers and decisions
-**Files:** Create `/app/transfers/page.tsx`, add Firestore `transfers` collection
+**Files:** Create `/app/transfer-history/page.tsx`, expose transfer audit callable from functions
+
+**Progress (2026-02-18):**
+- ✅ Added `/app/transfer-history/page.tsx` with auth-gated transfer history UI and summary metrics
+- ✅ Added callable `/functions/src/getTransferHistory.ts` (returns current user’s transfer audit rows with team names)
+- ✅ Enhanced `/functions/src/transfers.ts` audit writes with `dropTeamName`, `pickupTeamName`, and `createdAtMs` for stable ordering
+- ✅ Added direct link from Transfer Market panel to `/transfer-history` and mapped `/transfers` to `/dashboard?tab=market` for route consistency
+- ✅ Verified builds pass (`npm run build` at root and `/functions`)
 
 **Simple Explanation:**
 Imagine if your bank never showed you a transaction history - you'd have no idea what you spent money on! The app lets users make transfers (swapping teams), but they can't see what they've done before.
@@ -132,10 +171,12 @@ Imagine if your bank never showed you a transaction history - you'd have no idea
 
 ---
 
-#### 3.2 Remove Debug Console Logging
+#### 3.2 Remove Debug Console Logging ✅ Completed (2026-02-18)
 **Why:** Performance and security
 **Benefit:** Smaller bundle size, no sensitive data in browser console
 **Files:** 20+ locations across codebase
+
+**Status:** Completed via production bundle console stripping in `/next.config.ts` (`compiler.removeConsole` enabled for production builds)
 
 **Simple Explanation:**
 `console.error()` is like leaving construction notes all over a finished house. Great for builders (developers), confusing for residents (users). These debug messages also make the app slightly slower and could leak private information.
@@ -152,10 +193,16 @@ Imagine if your bank never showed you a transaction history - you'd have no idea
 
 ### Priority 4: Performance Optimization
 
-#### 4.1 Code Splitting for Dashboard
+#### 4.1 Code Splitting for Dashboard ✅ Completed (2026-02-18)
 **Why:** Faster initial page load
 **Benefit:** Users see content quicker
 **Files:** `app/dashboard/page.tsx`
+
+**Progress (2026-02-18):**
+- ✅ Added tab-level `next/dynamic` lazy loading in `/app/dashboard/page.tsx` for `Portfolio`, `Leaderboard`, `Bracket`, and `Transfer Market` views
+- ✅ Added tab-panel loading skeleton fallback for deferred chunks
+- ✅ Moved shared bracket stage/status helpers and types to `/lib/bracketUtils.ts` so dashboard can use bracket logic without eagerly importing the full bracket UI module
+- ✅ Verified builds pass (`npm run build` at root and `/functions`)
 
 **Simple Explanation:**
 When you visit the dashboard, the browser downloads ALL the code for My Teams, Leaderboard, Match Center, and Transfers - even if you only look at one tab! It's like downloading an entire encyclopedia when you only want to read one article.
@@ -178,9 +225,9 @@ When you visit the dashboard, the browser downloads ALL the code for My Teams, L
 | **Complete Squad Details (Completed)** | Done | Medium | Done | Professional appearance |
 | **Improve Type Safety** | Medium | High | Medium | Fewer bugs |
 | **Refactor Dashboard** | Medium | High | High | Easier maintenance |
-| **Transfer History** | Medium | Medium | Medium | User transparency |
-| **Remove Debug Logs** | Low | Low | Low | Performance, privacy |
-| **Code Splitting** | Low | Medium | Medium | Faster loading |
+| **Transfer History (Completed)** | Done | Medium | Done | User transparency |
+| **Remove Debug Logs (Completed)** | Done | Low | Done | Performance, privacy |
+| **Code Splitting (Completed)** | Done | Medium | Done | Faster loading |
 
 ---
 
@@ -190,15 +237,15 @@ We recommend tackling these in order:
 
 ### Week 1: Quick Wins
 1. **Complete Squad Details** ✅ - Immediate visual improvement
-2. **Remove Debug Logs** (1-2 hours) - Easy cleanup
+2. **Remove Debug Logs** ✅ - Easy cleanup
 
 ### Week 2: User Features
 3. **Standalone Leaderboard** ✅ - Better UX
-4. **Transfer History** (5-6 hours) - New feature
+4. **Transfer History** ✅ - New feature
 
 ### Week 3-4: Code Quality
 5. **Improve Type Safety** (4-5 hours) - Safer codebase
-6. **Code Splitting** (3-4 hours) - Performance
+6. **Code Splitting** ✅ - Performance
 
 ### Month 2+: Major Refactoring
 7. **Refactor Dashboard** (8-10 hours) - Long-term maintainability

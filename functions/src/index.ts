@@ -21,42 +21,55 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function hasAssignedTeams(user: any): boolean {
-  const portfolio = Array.isArray(user?.portfolio) ? user.portfolio : [];
-  const hasFeaturedInPortfolio = portfolio.some((item: any) => {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function hasAssignedTeams(user: unknown): boolean {
+  const source = isRecord(user) ? user : {};
+  const portfolio = Array.isArray(source.portfolio) ? source.portfolio : [];
+  const hasFeaturedInPortfolio = portfolio.some((item) => {
+    if (!isRecord(item)) return false;
     return (
-      item?.role === "featured" &&
-      typeof item?.teamId === "string" &&
+      item.role === "featured" &&
+      typeof item.teamId === "string" &&
       item.teamId.trim().length > 0
     );
   });
 
-  const hasFeaturedInEntry =
-    typeof user?.entry?.featuredTeamId === "string" &&
-    user.entry.featuredTeamId.trim().length > 0;
+  const entry = isRecord(source.entry) ? source.entry : null;
+  const featuredTeamId =
+    entry && typeof entry.featuredTeamId === "string"
+      ? entry.featuredTeamId
+      : "";
+  const hasFeaturedInEntry = featuredTeamId.trim().length > 0;
 
   return hasFeaturedInPortfolio || hasFeaturedInEntry;
 }
 
-function getAssignedTeamCount(user: any): number {
+function getAssignedTeamCount(user: unknown): number {
+  const source = isRecord(user) ? user : {};
   const ids = new Set<string>();
 
-  const portfolio = Array.isArray(user?.portfolio) ? user.portfolio : [];
-  portfolio.forEach((item: any) => {
-    if (typeof item?.teamId === "string" && item.teamId.trim().length > 0) {
+  const portfolio = Array.isArray(source.portfolio) ? source.portfolio : [];
+  portfolio.forEach((item) => {
+    if (!isRecord(item)) return;
+    if (typeof item.teamId === "string" && item.teamId.trim().length > 0) {
       ids.add(item.teamId.trim());
     }
   });
 
+  const entry = isRecord(source.entry) ? source.entry : null;
   if (
-    typeof user?.entry?.featuredTeamId === "string" &&
-    user.entry.featuredTeamId.trim().length > 0
+    entry &&
+    typeof entry.featuredTeamId === "string" &&
+    entry.featuredTeamId.trim().length > 0
   ) {
-    ids.add(user.entry.featuredTeamId.trim());
+    ids.add(entry.featuredTeamId.trim());
   }
 
-  if (Array.isArray(user?.entry?.drawnTeamIds)) {
-    user.entry.drawnTeamIds.forEach((rawId: unknown) => {
+  if (entry && Array.isArray(entry.drawnTeamIds)) {
+    entry.drawnTeamIds.forEach((rawId: unknown) => {
       if (typeof rawId === "string" && rawId.trim().length > 0) {
         ids.add(rawId.trim());
       }
@@ -65,6 +78,153 @@ function getAssignedTeamCount(user: any): number {
 
   return ids.size;
 }
+
+function asTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function asNonNegativeNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+type PortfolioItem = { teamId: string; role: "featured" | "drawn" };
+
+type TeamSeedRow = {
+  id: string;
+  name: string;
+  group: string;
+  tier: number;
+  flagUrl: string;
+};
+
+function readPortfolio(value: unknown): PortfolioItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item): PortfolioItem | null => {
+      if (!isRecord(item)) return null;
+      const teamId = asTrimmedString(item.teamId);
+      const role =
+        item.role === "featured" || item.role === "drawn" ? item.role : null;
+      if (!teamId || !role) return null;
+      return { teamId, role };
+    })
+    .filter((item): item is PortfolioItem => item !== null);
+}
+
+function readTeamSeedRow(value: unknown, fallbackId: string): TeamSeedRow | null {
+  if (!isRecord(value)) return null;
+  const id = asTrimmedString(value.id) ?? fallbackId;
+  if (!id) return null;
+
+  const name = asTrimmedString(value.name) ?? id;
+  const group = asTrimmedString(value.group) ?? "";
+  const tier =
+    typeof value.tier === "number" && Number.isFinite(value.tier)
+      ? Math.floor(value.tier)
+      : 4;
+  const flagUrl = asTrimmedString(value.flagUrl) ?? "";
+
+  return {
+    id,
+    name,
+    group,
+    tier,
+    flagUrl,
+  };
+}
+
+function hasErrorCode(value: unknown): value is { code: unknown } {
+  return isRecord(value) && "code" in value;
+}
+
+function buildUserBootstrapPatch(params: {
+  uid: string;
+  existing: Record<string, unknown>;
+  authToken: Record<string, unknown>;
+  overrides?: Record<string, unknown>;
+  includeCreatedAtIfMissing?: boolean;
+}) {
+  const { uid, existing, authToken, overrides = {}, includeCreatedAtIfMissing } =
+    params;
+
+  const displayName =
+    asTrimmedString(overrides.displayName) ??
+    asTrimmedString(existing.displayName) ??
+    asTrimmedString(authToken.name) ??
+    "Anonymous";
+
+  const email =
+    asTrimmedString(overrides.email) ??
+    asTrimmedString(existing.email) ??
+    asTrimmedString(authToken.email) ??
+    "";
+
+  const photoURL =
+    asTrimmedString(overrides.photoURL) ??
+    asTrimmedString(existing.photoURL) ??
+    asTrimmedString(authToken.picture) ??
+    null;
+
+  const patch: Record<string, unknown> = {
+    uid,
+    displayName,
+    email,
+    photoURL,
+    portfolio: Array.isArray(existing.portfolio) ? existing.portfolio : [],
+    totalScore: asNonNegativeNumber(existing.totalScore) ?? 0,
+    remainingTransfers: asNonNegativeNumber(existing.remainingTransfers) ?? 2,
+    transferPenaltyPoints: asNonNegativeNumber(existing.transferPenaltyPoints) ?? 0,
+    isAdmin:
+      typeof existing.isAdmin === "boolean"
+        ? existing.isAdmin
+        : authToken.admin === true,
+    hasSeenReveal:
+      typeof existing.hasSeenReveal === "boolean" ? existing.hasSeenReveal : false,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (includeCreatedAtIfMissing && !existing.createdAt) {
+    patch.createdAt = FieldValue.serverTimestamp();
+  }
+
+  return patch;
+}
+
+export const ensureUserProfile = onCall({ region: REGION }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  const userRef = db.collection("users").doc(uid);
+  const snap = await userRef.get();
+  const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+  const authToken = (request.auth?.token ?? {}) as Record<string, unknown>;
+  const overrides =
+    request.data && typeof request.data === "object"
+      ? (request.data as Record<string, unknown>)
+      : {};
+
+  const patch = buildUserBootstrapPatch({
+    uid,
+    existing,
+    authToken,
+    overrides,
+    includeCreatedAtIfMissing: true,
+  });
+
+  await userRef.set(patch, { merge: true });
+
+  return {
+    ok: true,
+    created: !snap.exists,
+  };
+});
 
 /* ======================================================
    FEATURED TEAM + DRAW LOGIC (unchanged)
@@ -80,9 +240,8 @@ export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("failed-precondition", "User profile missing.");
   }
 
-  const user = userSnap.data() as any;
-  const portfolio: Array<{ teamId: string; role: "featured" | "drawn" }> =
-    user.portfolio ?? [];
+  const user = userSnap.data() as Record<string, unknown>;
+  const portfolio = readPortfolio(user.portfolio);
 
   const featured = portfolio.find((p) => p.role === "featured");
   if (!featured?.teamId) {
@@ -97,10 +256,10 @@ export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
   const teamsSnap = await db.collection("teams").get();
   const allTeamIds = teamsSnap.docs
     .map((d) => {
-      const data = d.data() as any;
-      return data.id ?? d.id;
+      const data = d.data() as Record<string, unknown>;
+      return asTrimmedString(data.id) ?? d.id;
     })
-    .filter((x) => typeof x === "string" && x.length > 0) as string[];
+    .filter((x): x is string => typeof x === "string" && x.length > 0);
 
   const exclude = new Set<string>([
     featured.teamId,
@@ -137,7 +296,8 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const teamId = request.data?.teamId;
+  const requestData = isRecord(request.data) ? request.data : {};
+  const teamId = requestData.teamId;
   if (typeof teamId !== "string" || teamId.trim().length === 0) {
     throw new HttpsError("invalid-argument", "teamId must be provided.");
   }
@@ -145,16 +305,12 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
   const userRef = db.collection("users").doc(uid);
 
   const teamsSnap = await db.collection("teams").get();
-  const allTeams = teamsSnap.docs.map((d) => {
-    const data = d.data() as any;
-    return {
-      id: data.id ?? d.id,
-      name: data.name,
-      group: data.group,
-      tier: data.tier,
-      flagUrl: data.flagUrl,
-    };
-  });
+  const allTeams = teamsSnap.docs
+    .map((d): TeamSeedRow | null => {
+      const data = d.data() as Record<string, unknown>;
+      return readTeamSeedRow(data, d.id);
+    })
+    .filter((team): team is TeamSeedRow => team !== null);
 
   const featuredTeam = allTeams.find((t) => t.id === teamId);
   if (!featuredTeam) {
@@ -190,27 +346,25 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
   try {
     const result = await db.runTransaction(async (tx) => {
       const snap = await tx.get(userRef);
+      const user = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+      const existingEntry = isRecord(user.entry) ? user.entry : null;
 
-      if (!snap.exists) {
-        tx.set(
-          userRef,
-          { createdAt: FieldValue.serverTimestamp() },
-          { merge: true }
-        );
-      }
-
-      const user = (snap.exists ? (snap.data() as any) : {}) as any;
-
-      if (user.entry?.confirmedAt) {
+      if (existingEntry?.confirmedAt) {
         throw new HttpsError("failed-precondition", "Entry already confirmed.");
       }
 
-      const portfolio = Array.isArray(user.portfolio) ? user.portfolio : [];
-      if (portfolio.some((p: any) => p.role === "featured")) {
+      const portfolio = readPortfolio(user.portfolio);
+      if (portfolio.some((p) => p.role === "featured")) {
         throw new HttpsError("failed-precondition", "Featured team already set.");
       }
 
       const now = FieldValue.serverTimestamp();
+      const bootstrapPatch = buildUserBootstrapPatch({
+        uid,
+        existing: user,
+        authToken: (request.auth?.token ?? {}) as Record<string, unknown>,
+        includeCreatedAtIfMissing: true,
+      });
 
       const nextPortfolio = [
         { teamId: featuredTeam.id, role: "featured" as const },
@@ -230,6 +384,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
       tx.set(
         userRef,
         {
+          ...bootstrapPatch,
           entry,
           portfolio: nextPortfolio,
           updatedAt: now,
@@ -248,8 +403,8 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
       featured: result.featured,
       drawn: result.drawn,
     };
-  } catch (err: any) {
-    if (err?.code) throw err;
+  } catch (err: unknown) {
+    if (hasErrorCode(err)) throw err;
     console.error("confirmFeaturedTeam failed:", err);
     throw new HttpsError("internal", "Failed to confirm featured team.");
   }
@@ -280,7 +435,9 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
 
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
-  const existingDept = snap.exists ? (snap.data() as any)?.department : null;
+  const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+  const existingDept =
+    typeof existing.department === "string" ? existing.department : null;
 
   if (existingDept && !isAdmin) {
     throw new HttpsError(
@@ -289,8 +446,16 @@ export const setDepartment = onCall({ region: REGION }, async (request) => {
     );
   }
 
+  const bootstrapPatch = buildUserBootstrapPatch({
+    uid,
+    existing,
+    authToken: (request.auth?.token ?? {}) as Record<string, unknown>,
+    includeCreatedAtIfMissing: true,
+  });
+
   await userRef.set(
     {
+      ...bootstrapPatch,
       department,
       updatedAt: FieldValue.serverTimestamp(),
     },
@@ -323,14 +488,14 @@ export const adminListUsers = onCall({ region: REGION }, async (request) => {
     const usersSnap = await db.collection("users").orderBy("email").get();
 
     const users = usersSnap.docs.map((doc) => {
-      const data = doc.data();
+      const data = doc.data() as Record<string, unknown>;
       const hasTeams = hasAssignedTeams(data);
       const teamCount = getAssignedTeamCount(data);
 
       return {
         uid: doc.id,
-        displayName: data.displayName || "Unknown",
-        email: data.email || "",
+        displayName: asTrimmedString(data.displayName) ?? "Unknown",
+        email: asTrimmedString(data.email) ?? "",
         hasTeams,
         teamCount,
       };
@@ -340,7 +505,7 @@ export const adminListUsers = onCall({ region: REGION }, async (request) => {
       ok: true,
       users,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("adminListUsers error:", err);
     throw new HttpsError("internal", "Failed to list users.");
   }
@@ -352,7 +517,8 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
     throw new HttpsError("permission-denied", "Admin access required.");
   }
 
-  const targetUidRaw = request.data?.userId;
+  const requestData = isRecord(request.data) ? request.data : {};
+  const targetUidRaw = requestData.userId;
   if (typeof targetUidRaw !== "string" || targetUidRaw.trim().length === 0) {
     throw new HttpsError("invalid-argument", "userId must be provided.");
   }
@@ -365,7 +531,7 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
     throw new HttpsError("not-found", "User not found.");
   }
 
-  const user = userSnap.data() as any;
+  const user = userSnap.data() as Record<string, unknown>;
   const hasTeams = hasAssignedTeams(user);
   if (hasTeams) {
     return { ok: true, message: "User already has teams assigned.", skipped: true };
@@ -373,16 +539,29 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
 
   // Get all teams
   const teamsSnap = await db.collection("teams").get();
-  const allTeams = teamsSnap.docs.map((d) => {
-    const data = d.data() as any;
-    return {
-      id: data.id ?? d.id,
-      name: data.name,
-      group: data.group,
-      tier: data.tier,
-      flagUrl: data.flagUrl,
-    };
-  });
+  type TeamPoolRow = {
+    id: string;
+    name: string;
+    tier: number;
+  };
+  const allTeams = teamsSnap.docs
+    .map((d): TeamPoolRow | null => {
+      const data = d.data() as Record<string, unknown>;
+      const id = asTrimmedString(data.id) ?? d.id;
+      const name = asTrimmedString(data.name);
+      const tierRaw = data.tier;
+      const tier =
+        typeof tierRaw === "number" && Number.isFinite(tierRaw)
+          ? Math.floor(tierRaw)
+          : null;
+      if (!id || !name || tier === null || tier < 1 || tier > 4) return null;
+      return {
+        id,
+        name,
+        tier,
+      };
+    })
+    .filter((team): team is TeamPoolRow => team !== null);
 
   if (allTeams.length < 6) {
     throw new HttpsError("failed-precondition", "Not enough teams in database.");
@@ -447,6 +626,7 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
 export { setAdminClaim } from "./admin";
 export { getLeaderboard } from "./getLeaderboard";
 export { getSquadDetails } from "./getSquadDetails";
+export { getTransferHistory } from "./getTransferHistory";
 export { executeTransfer } from "./transfers";
 export { adminUpsertMatch, recomputeScores } from "./scoring";
 export {
