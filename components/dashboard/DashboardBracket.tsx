@@ -124,17 +124,13 @@ const DashboardBracket = ({
   );
 
   const liveMatchCount = liveMatches.length;
-  const totalLiveMatchCount = useMemo(
-    () =>
-      Object.values(matches).reduce((sum, stageMatches) => {
-        const rows = Array.isArray(stageMatches) ? stageMatches : [];
-        const live = rows.filter(
-          (match) => Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE"
-        ).length;
-        return sum + live;
-      }, 0),
-    [matches]
-  );
+  const totalLiveMatchCount = Object.values(matches).reduce((sum, stageMatches) => {
+    const rows = Array.isArray(stageMatches) ? stageMatches : [];
+    const live = rows.filter(
+      (match) => Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE"
+    ).length;
+    return sum + live;
+  }, 0);
   const liveYourTeamCount = liveMatches.filter(
     (match) => isUserTeam(match.t1) || isUserTeam(match.t2)
   ).length;

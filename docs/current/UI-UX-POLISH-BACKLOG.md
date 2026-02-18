@@ -25,15 +25,15 @@
 ## Seed Findings (Automated Pre-Pass)
 
 **Run Date:** 2026-02-18  
-**Commands:** `npm run build` (pass), `npm run lint` (fail)
+**Commands:** `npm run build` (pass), `npm run lint` (pass after fixes)
 
 | ID | Priority | Surface | Finding | Proposed Fix | Status |
 |---|---|---|---|---|---|
 | QA-001 | P1 | `components/OfflineIndicator.tsx` | Lint error: synchronous `setState` inside effect (`react-hooks/set-state-in-effect`) | Initialize online state lazily and keep effect only for subscriptions/events | Done |
 | QA-002 | P1 | `components/dashboard/DashboardPortfolio.tsx` | Lint error: synchronous `setState` in effect for previous rank tracking | Replace with derived state/memo + guarded localStorage sync pattern | Done |
 | QA-003 | P1 | `components/dashboard/DashboardTransferMarket.tsx` | Lint error: synchronous `setState` in effect during transfer execution | Refactor transfer-confirm flow to avoid direct state writes at effect start | Done |
-| QA-004 | P2 | `components/dashboard/DashboardBracket.tsx` | Lint error: manual memoization preservation warning on `matches` dependency | Normalize/clone dependency input or simplify memoization path | Todo |
-| QA-005 | P2 | Tooling / repo hygiene | `npm run lint` scans reference UX docs folder and returns unrelated errors | Add lint ignore for `docs/sweepstakes-game-ux (1)` (reference-only artifacts) | Todo |
+| QA-004 | P2 | `components/dashboard/DashboardBracket.tsx` | Lint error: manual memoization preservation warning on `matches` dependency | Normalize/clone dependency input or simplify memoization path | Done |
+| QA-005 | P2 | Tooling / repo hygiene | `npm run lint` scans reference UX docs folder and returns unrelated errors | Add lint ignore for `docs/sweepstakes-game-ux (1)` (reference-only artifacts) | Done |
 
 ## Intake From Manual QA
 

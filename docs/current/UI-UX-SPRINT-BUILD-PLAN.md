@@ -53,7 +53,7 @@
 ## Current Step
 
 - **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, Sprint 4 Step 3, and Sprint 4 Step 4
-- **Next:** Execute manual QA checklist at `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`, then address remaining `P2` backlog items (`QA-004`, `QA-005`) from `/docs/current/UI-UX-POLISH-BACKLOG.md`.
+- **Next:** Execute manual QA checklist at `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md` and log any new findings into `/docs/current/UI-UX-POLISH-BACKLOG.md`.
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -131,5 +131,9 @@
 - **Post-Sprint P1 Hardening Outcomes:**
   - Cleared `QA-001`, `QA-002`, and `QA-003` by removing synchronous set-state-in-effect patterns in offline status, portfolio rank tracking, and transfer execution flow.
   - Verified fixes with targeted lint on affected files and a passing production build.
+- **Post-Sprint P2 Hardening Outcomes:**
+  - Cleared `QA-004` by removing unstable manual memoization around `matches` in `/components/dashboard/DashboardBracket.tsx`.
+  - Cleared `QA-005` by excluding `/docs/sweepstakes-game-ux (1)` from lint scope as reference-only material.
+  - Verified lint now runs without errors and production build remains green.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.
