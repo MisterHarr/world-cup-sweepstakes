@@ -58,27 +58,32 @@ function tierLabel(tier: number) {
 
 function tierPillClass(tier: number) {
   if (tier === 1) {
-    return "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/40 shadow-sm shadow-yellow-500/20";
+    return "bg-gradient-to-br from-amber-400/20 to-yellow-500/10 text-amber-100 border-amber-400/45 shadow-[0_8px_18px_rgba(251,191,36,0.28)]";
   }
   if (tier === 2) {
-    return "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-100 border-slate-400/40 shadow-sm shadow-slate-400/20";
+    return "bg-gradient-to-br from-slate-300/20 to-zinc-300/10 text-slate-100 border-slate-300/45 shadow-[0_8px_18px_rgba(203,213,225,0.18)]";
   }
   if (tier === 3) {
-    return "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-200 border-orange-600/40 shadow-sm shadow-orange-600/20";
+    return "bg-gradient-to-br from-orange-500/18 to-amber-600/12 text-orange-100 border-orange-500/45 shadow-[0_8px_18px_rgba(249,115,22,0.20)]";
   }
-  return "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-200 border-rose-800/40 shadow-sm shadow-rose-900/20";
+  return "bg-gradient-to-br from-zinc-500/18 to-zinc-700/14 text-zinc-100 border-zinc-400/35 shadow-[0_8px_18px_rgba(113,113,122,0.20)]";
 }
 
 function TierPill({ tier }: { tier: number }) {
   return (
-    <span
+    <div
       className={[
-        "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
+        "inline-flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-center min-w-[88px]",
         tierPillClass(tier),
       ].join(" ")}
     >
-      Tier {tier} - {tierLabel(tier)}
-    </span>
+      <span className="text-[10px] font-black leading-none tracking-[0.08em] uppercase">
+        Tier {tier}
+      </span>
+      <span className="text-[11px] font-semibold leading-tight mt-0.5">
+        {tierLabel(tier)}
+      </span>
+    </div>
   );
 }
 
@@ -189,33 +194,7 @@ export default function LeaderboardPanel({
 
   return (
     <main className="relative min-h-[500px] max-w-full overflow-x-hidden">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 sm:px-1">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-primary" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Leaderboard</h1>
-            <p className="text-xs text-muted-foreground">
-              {sorted.length} Participants
-            </p>
-          </div>
-        </div>
-        <div className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-200">
-          {modeLabel}
-        </div>
-        <div
-          className="text-emerald-300 text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          LIVE
-        </div>
-      </div>
+      <span className="sr-only">{modeLabel}</span>
 
       {isLoading ? (
         <div
@@ -566,7 +545,6 @@ export default function LeaderboardPanel({
                     squadTeams.map((team) => {
                       const isCaptain = team.role === "featured";
                       const tier = Number(team.tier ?? 0);
-                      const group = String(team.group ?? "-");
                       const teamId = String(team.id ?? "-");
                       const flagUrl = String(team.flagUrl ?? "");
 
@@ -574,9 +552,9 @@ export default function LeaderboardPanel({
                         <div
                           key={`${team.role}:${teamId}`}
                           className={[
-                            "relative p-3 sm:p-5 rounded-2xl flex flex-col justify-between min-h-[132px] sm:min-h-[180px]",
-                            "bg-card border border-border",
-                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)]",
+                            "relative p-3 sm:p-4 rounded-2xl flex flex-col gap-3 min-h-[140px] sm:min-h-[186px]",
+                            "bg-card border border-white/10",
+                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)] transition-colors",
                           ].join(" ")}
                         >
                           {isCaptain && (
@@ -587,26 +565,8 @@ export default function LeaderboardPanel({
                           )}
 
                           <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="font-bold text-sm sm:text-lg text-foreground tracking-tight truncate">
-                                {team.name}
-                              </div>
-                              <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground/80">
-                                Team ID{" "}
-                                <span className="font-mono text-foreground/90">
-                                  {teamId}
-                                </span>
-                              </div>
-                              <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground/80">
-                                Group{" "}
-                                <span className="font-semibold text-foreground/90">
-                                  {group}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-border bg-white/5 flex items-center justify-center shadow-inner">
+                            <div className="min-w-0 flex items-center gap-3">
+                              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-white/15 bg-black/20 flex items-center justify-center">
                                 {flagUrl ? (
                                   <img
                                     src={flagUrl}
@@ -620,15 +580,26 @@ export default function LeaderboardPanel({
                                 )}
                               </div>
 
+                              <div className="min-w-0">
+                                <div className="font-black text-sm sm:text-lg text-foreground tracking-tight truncate">
+                                  {team.name}
+                                </div>
+                                <div className="mt-1 inline-flex rounded-md border border-white/15 bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono text-foreground/90">
+                                  {teamId}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2">
                               <TierPill tier={tier || 4} />
                             </div>
                           </div>
 
-                          <div className="mt-3 sm:mt-5">
+                          <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3">
                             <div className="text-[10px] sm:text-xs text-muted-foreground/70 font-semibold uppercase tracking-wider mb-1">
                               Contribution
                             </div>
-                            <div className="text-lg sm:text-2xl font-mono text-foreground font-medium">
+                            <div className="text-lg sm:text-2xl font-mono text-foreground font-medium leading-none">
                               {Number(team.contribution ?? 0)}{" "}
                               <span className="text-[10px] sm:text-xs text-emerald-300 font-bold">
                                 pts

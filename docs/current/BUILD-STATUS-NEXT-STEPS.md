@@ -27,6 +27,7 @@
 - ✅ **Sprint 2 Step 6 Confirmation Modal Simplification** - Streamlined featured confirmation modal content and CTA with stronger featured-team + 2x points emphasis
 - ✅ **Sprint 3 Step 1 Reveal Emphasis Refresh** - Updated `/reveal` with stronger featured-team 2x signaling, larger card content hierarchy, and cleaner reduced-copy layout
 - ✅ **Sprint 3 Step 2 Dashboard Portfolio Overhaul** - Rebuilt `/dashboard` portfolio tab with nested summary containers, rank trend indicator, and cleaner expandable team data panels
+- ✅ **Sprint 3 Step 3 Leaderboard Cleanup + Squad Tray Redesign** - Removed redundant leaderboard meta strip and redesigned squad drawer cards for cleaner hierarchy and premium readability
 
 ### Core Features
 - ✅ Google Authentication with Firebase
