@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, and Sprint 2 Step 4
-- **Next:** Sprint 2, Step 5 (featured-team selection UI overhaul)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, and Sprint 2 Step 5
+- **Next:** Sprint 2, Step 6 (featured confirmation modal simplification)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -78,5 +78,10 @@
   - Simplified `/department` UI to three large centered options (`Primary`, `Secondary`, `Ops/Admin`).
   - Removed secondary helper copy and path/debug-style footer text from department selection.
   - Increased confirmation CTA emphasis while preserving one-time department write behavior.
+- **Sprint 2 Step 5 Outcomes:**
+  - Reworked featured-team cards to a compact horizontal layout (flag/name left, group+tier right).
+  - Upgraded tier badge styling to a more premium tile treatment.
+  - Expanded group filters to use full available groups (including A-L coverage, no hard slice).
+  - Increased headline hierarchy and double-points emphasis on `/featured-team`.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

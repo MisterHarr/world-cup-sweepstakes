@@ -12,7 +12,6 @@ import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/fires
 import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +91,18 @@ function readEntryConfirmedAt(value: unknown): boolean {
   return Boolean(value.confirmedAt);
 }
 
+function compareGroups(a: string, b: string): number {
+  const upperA = a.toUpperCase();
+  const upperB = b.toUpperCase();
+  const singleLetterA = /^[A-L]$/.test(upperA);
+  const singleLetterB = /^[A-L]$/.test(upperB);
+
+  if (singleLetterA && singleLetterB) return upperA.localeCompare(upperB);
+  if (singleLetterA) return -1;
+  if (singleLetterB) return 1;
+  return upperA.localeCompare(upperB);
+}
+
 function parseConfirmFeaturedTeamPayload(payload: unknown): ConfirmFeaturedTeamResponse {
   if (!isRecord(payload)) return { ok: false };
 
@@ -128,37 +139,38 @@ function TierBadge({ tier }: { tier: number }) {
   const configs = {
     1: { 
       label: "Elite", 
-      class: "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 border-yellow-500/40 shadow-sm shadow-yellow-500/20" 
+      class: "bg-gradient-to-br from-amber-400/20 to-yellow-500/10 text-amber-100 border-amber-400/45 shadow-[0_8px_18px_rgba(251,191,36,0.28)]"
     },
     2: { 
       label: "Strong", 
-      class: "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-200 border-slate-400/40 shadow-sm shadow-slate-400/20" 
+      class: "bg-gradient-to-br from-slate-300/20 to-zinc-300/10 text-slate-100 border-slate-300/45 shadow-[0_8px_18px_rgba(203,213,225,0.18)]"
     },
     3: { 
       label: "Competitive", 
-      class: "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-300 border-orange-600/40 shadow-sm shadow-orange-600/20" 
+      class: "bg-gradient-to-br from-orange-500/18 to-amber-600/12 text-orange-100 border-orange-500/45 shadow-[0_8px_18px_rgba(249,115,22,0.20)]"
     },
     4: { 
       label: "Underdog", 
-      class: "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-300 border-rose-800/40 shadow-sm shadow-rose-900/20" 
+      class: "bg-gradient-to-br from-zinc-500/18 to-zinc-700/14 text-zinc-100 border-zinc-400/35 shadow-[0_8px_18px_rgba(113,113,122,0.20)]"
     },
   };
 
   const config = configs[tier as keyof typeof configs] || configs[4];
 
-  const icons = {
-    1: "👑",
-    2: "⚡",
-    3: "🔥",
-    4: "💪",
-  };
-
-  const icon = icons[tier as keyof typeof icons] || icons[4];
-
   return (
-    <Badge variant="outline" className={`text-[10px] font-bold ${config.class}`}>
-      {icon} Tier {tier} • {config.label}
-    </Badge>
+    <div
+      className={[
+        "inline-flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-center min-w-[88px]",
+        config.class,
+      ].join(" ")}
+    >
+      <span className="text-[10px] font-black leading-none tracking-[0.08em] uppercase">
+        Tier {tier}
+      </span>
+      <span className="text-[11px] font-semibold leading-tight mt-0.5">
+        {config.label}
+      </span>
+    </div>
   );
 }
 
@@ -303,7 +315,10 @@ export default function FeaturedTeamPage() {
     });
   }, [teams, search, filterGroup]);
 
-  const groups = useMemo(() => [...new Set(teams.map((t) => t.group))].sort(), [teams]);
+  const groups = useMemo(
+    () => [...new Set(teams.map((t) => t.group))].sort(compareGroups),
+    [teams]
+  );
 
   const gridLocked = checkingProfile || confirmed || isSubmitting || successOpen;
 
@@ -379,16 +394,16 @@ export default function FeaturedTeamPage() {
       <div className="min-h-[calc(100vh-73px)] pb-32 bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50">
         <div className="container mx-auto px-4 py-6">
           {/* Page Title */}
-          <div className="mb-6 text-center">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/30 to-primary/10 border-2 border-primary/40 mb-4 shadow-lg shadow-primary/20">
-              <Trophy className="w-10 h-10 text-primary drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-            </div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
+          <div className="mb-7 text-center max-w-3xl mx-auto">
+            <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-2">
               Select Your Featured Team
             </h2>
-            <p className="text-muted-foreground text-sm max-w-md mx-auto">
-              Choose one team to be the star of your squad. It will earn{" "}
-              <span className="font-semibold text-primary">double points</span>.
+            <p className="text-muted-foreground text-base sm:text-lg">
+              Choose one team to be the star of your squad.
+            </p>
+            <p className="mt-3 text-sm sm:text-base font-semibold text-primary">
+              Featured team earns <span className="font-black">2x points</span> while active.
+              Choose wisely.
             </p>
           </div>
 
@@ -412,36 +427,36 @@ export default function FeaturedTeamPage() {
           )}
 
           {/* Search and Filter */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6 max-w-4xl mx-auto">
-            <div className="relative flex-1">
+          <div className="mb-6 max-w-5xl mx-auto rounded-2xl border border-white/10 bg-black/20 backdrop-blur-md p-4 sm:p-5">
+            <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search teams..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-11"
                 disabled={gridLocked}
               />
             </div>
-            <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant={filterGroup === null ? "default" : "outline"}
                 size="sm"
                 onClick={() => setFilterGroup(null)}
                 disabled={gridLocked}
-                className="shrink-0"
+                className="h-9"
               >
                 <Filter className="w-4 h-4 mr-1" />
                 All
               </Button>
-              {groups.slice(0, 6).map((group) => (
+              {groups.map((group) => (
                 <Button
                   key={group}
                   variant={filterGroup === group ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFilterGroup(filterGroup === group ? null : group)}
                   disabled={gridLocked}
-                  className="shrink-0"
+                  className="h-9"
                 >
                   {group}
                 </Button>
@@ -451,7 +466,7 @@ export default function FeaturedTeamPage() {
 
           {/* Team Grid */}
           <div
-            className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 max-w-5xl mx-auto ${
+            className={`grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 max-w-5xl mx-auto ${
               gridLocked ? "pointer-events-none opacity-70" : ""
             }`}
           >
@@ -469,48 +484,57 @@ export default function FeaturedTeamPage() {
                     setError("");
                   }}
                   className={`
-                    relative p-4 rounded-xl border flex flex-col items-center text-center cursor-pointer transition-all duration-200 group
+                    relative p-4 rounded-2xl border cursor-pointer transition-all duration-200
                     ${
                       isSelected
-                        ? "bg-gradient-to-br from-primary/25 via-primary/15 to-primary/5 border-2 border-primary shadow-xl shadow-primary/30 transform scale-105 z-10"
-                        : "bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-primary/20 shadow-md hover:shadow-xl hover:border-primary/50 hover:-translate-y-1 hover:from-primary/15 hover:via-primary/8"
+                        ? "bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5 border-primary shadow-xl shadow-primary/25"
+                        : "bg-black/25 border-white/10 hover:border-primary/50 hover:bg-black/30"
                     }
                   `}
                 >
                   {isSelected && (
-                    <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-primary text-primary-foreground text-[9px] font-bold px-2 py-0.5 rounded-full shadow-md z-20 flex items-center gap-1 whitespace-nowrap">
+                    <div className="absolute -top-2 right-3 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-20 flex items-center gap-1 whitespace-nowrap">
                       <CheckCircle2 className="w-3 h-3" /> SELECTED
                     </div>
                   )}
 
-                  <div
-                    className={`
-                      w-16 h-16 rounded-full flex items-center justify-center mb-3 shadow-md border overflow-hidden bg-background/50
-                      ${
-                        isSelected
-                          ? "border-primary ring-4 ring-primary/30 shadow-lg shadow-primary/20"
-                          : "border-primary/30"
-                      }
-                    `}
-                  >
-                    {team.flagUrl ? (
-                      <img
-                        src={team.flagUrl}
-                        alt={team.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : null}
-                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <div
+                        className={[
+                          "w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden border bg-black/30 flex items-center justify-center",
+                          isSelected ? "border-primary shadow-lg shadow-primary/20" : "border-white/20",
+                        ].join(" ")}
+                      >
+                        {team.flagUrl ? (
+                          <img
+                            src={team.flagUrl}
+                            alt={team.name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">N/A</span>
+                        )}
+                      </div>
 
-                  <h4 className="font-bold text-foreground text-base mb-1 leading-tight line-clamp-1">
-                    {team.name}
-                  </h4>
-                  <div className="text-xs text-muted-foreground font-medium mb-2">
-                    Group {team.group}
-                  </div>
+                      <div className="min-w-0 text-left">
+                        <h4 className="font-bold text-foreground text-base sm:text-lg leading-tight truncate">
+                          {team.name}
+                        </h4>
+                        <div className="text-xs text-muted-foreground font-medium mt-1">
+                          {team.id}
+                        </div>
+                      </div>
+                    </div>
 
-                  <TierBadge tier={team.tier} />
+                    <div className="shrink-0 flex flex-col items-end gap-2">
+                      <div className="rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[11px] font-semibold text-foreground">
+                        Group {team.group}
+                      </div>
+                      <TierBadge tier={team.tier} />
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -518,7 +542,7 @@ export default function FeaturedTeamPage() {
 
           {filteredTeams.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              No teams found matching your search.
+              No teams found for this search or group.
             </div>
           )}
         </div>
@@ -556,6 +580,11 @@ export default function FeaturedTeamPage() {
                 >
                   {selectedTeam ? selectedTeam.name : "No team selected"}
                 </div>
+                {selectedTeam ? (
+                  <div className="text-[10px] text-primary font-semibold mt-0.5">
+                    Featured team earns 2x points
+                  </div>
+                ) : null}
               </div>
             </div>
 

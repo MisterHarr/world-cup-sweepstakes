@@ -23,6 +23,7 @@
 - ✅ **Sprint 2 Step 1 Onboarding Simplification** - Reduced landing/auth screen to essential branding + action flow with cleaner welcome state typography
 - ✅ **Sprint 2 Step 2 Auth Expansion** - Added landing support for email/password account creation and sign-in while retaining Google auth
 - ✅ **Sprint 2 Step 4 Department Simplification** - Reworked `/department` into large centered department choices with minimal copy and stronger confirm CTA
+- ✅ **Sprint 2 Step 5 Featured Team UI Overhaul** - Updated `/featured-team` cards to compact horizontal composition, premium tier tiles, and full group filtering coverage
 
 ### Core Features
 - ✅ Google Authentication with Firebase
