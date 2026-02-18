@@ -7,6 +7,7 @@
 **Related Active Plan:** `/docs/current/UI-UX-SPRINT-BUILD-PLAN.md`
 **Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
+**Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
 **Immediate Focus:** Run the manual cross-device checklist and log any new UX findings for prioritization.
 

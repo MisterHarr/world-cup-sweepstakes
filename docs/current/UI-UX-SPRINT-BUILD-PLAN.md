@@ -53,7 +53,7 @@
 ## Current Step
 
 - **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, Sprint 4 Step 3, and Sprint 4 Step 4
-- **Next:** Execute manual QA checklist at `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md` and log any new findings into `/docs/current/UI-UX-POLISH-BACKLOG.md`.
+- **Next:** Execute manual QA checklist at `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md` using `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`, then log any new findings into `/docs/current/UI-UX-POLISH-BACKLOG.md`.
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
