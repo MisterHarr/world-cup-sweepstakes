@@ -53,7 +53,7 @@
 ## Current Step
 
 - **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, Sprint 4 Step 3, and Sprint 4 Step 4
-- **Next:** UI/UX sprint sequence complete; run manual cross-device QA and open a targeted polish backlog from findings.
+- **Next:** Execute manual QA checklist at `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md` and triage issues in `/docs/current/UI-UX-POLISH-BACKLOG.md`.
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -125,5 +125,8 @@
   - Applied global typography polish (stronger heading/body hierarchy and tracking consistency) without network-dependent font fetches.
   - Improved mobile signed-in identity visibility across shared headers by showing concise mobile name labels and fuller desktop labels.
   - Tightened transfer-market mobile row layout for clearer trend/points/action readability on narrow screens.
+- **Post-Sprint Control Artifacts:**
+  - Manual QA checklist: `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`.
+  - Polish backlog and priority queue: `/docs/current/UI-UX-POLISH-BACKLOG.md`.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

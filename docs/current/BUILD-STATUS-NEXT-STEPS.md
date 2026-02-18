@@ -6,6 +6,8 @@
 
 **Related Active Plan:** `/docs/current/UI-UX-SPRINT-BUILD-PLAN.md`
 **Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
+**Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
+**UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
 
 ---
 
