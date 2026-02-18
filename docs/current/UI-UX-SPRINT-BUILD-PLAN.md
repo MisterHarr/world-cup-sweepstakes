@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, and Sprint 3 Step 5
-- **Next:** Sprint 4, Step 1 (premium badge visual system and rarity glows)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, and Sprint 4 Step 1
+- **Next:** Sprint 4, Step 2 (badge rarity filter tabs)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -109,5 +109,9 @@
   - Migrated Transfer tab to a Light-Luxury-inspired structure in dark theme: two-step selection flow + sticky transfer summary panel.
   - Reworked market list into denser table-like rows with clearer selection affordances and trend/points scanability.
   - Preserved hold-to-confirm transfer execution, window/open-state gating, and transfer-history access while modernizing layout.
+- **Sprint 4 Step 1 Outcomes:**
+  - Introduced premium rarity visual tokens for the badges surface (color gradients, elevated borders, and rarity-specific glow shadows).
+  - Upgraded the badge page header, progress panel, and rarity legend with stronger hierarchy and luxury-style card treatment.
+  - Refreshed badge cards and empty-state presentation to align with the new premium visual system while keeping existing unlock logic unchanged.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

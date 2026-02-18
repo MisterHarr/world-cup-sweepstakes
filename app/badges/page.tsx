@@ -4,13 +4,8 @@ import { useState, useEffect } from "react";
 import {
   Lock,
   CheckCircle2,
-  Star,
-  Zap,
-  Shield,
-  Target,
-  Flame,
+  Sparkles,
   Trophy as TrophyIcon,
-  Clock,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -41,31 +36,45 @@ type BadgeAchievement = {
   total?: number;
 };
 
-// Badges will be fetched from Firestore when implemented
-// For now, show empty state until tournament starts
 const achievements: BadgeAchievement[] = [];
+
+const rarityOrder: BadgeRarity[] = [
+  "common",
+  "uncommon",
+  "rare",
+  "epic",
+  "legendary",
+];
 
 const rarityColors: Record<BadgeRarity, string> = {
   common: "from-zinc-500 to-zinc-400",
-  uncommon: "from-green-500 to-emerald-400",
-  rare: "from-blue-500 to-cyan-400",
-  epic: "from-purple-500 to-violet-400",
-  legendary: "from-amber-500 to-yellow-400",
+  uncommon: "from-emerald-500 to-lime-400",
+  rare: "from-sky-500 to-cyan-400",
+  epic: "from-fuchsia-500 to-pink-400",
+  legendary: "from-amber-500 to-yellow-300",
 };
 
 const rarityBorders: Record<BadgeRarity, string> = {
-  common: "border-zinc-500/30",
-  uncommon: "border-green-500/30",
-  rare: "border-blue-500/30",
-  epic: "border-purple-500/30",
-  legendary: "border-amber-500/30 shadow-lg shadow-amber-500/20",
+  common: "border-zinc-400/35",
+  uncommon: "border-emerald-400/35",
+  rare: "border-sky-400/35",
+  epic: "border-fuchsia-400/35",
+  legendary: "border-amber-400/45",
+};
+
+const rarityGlow: Record<BadgeRarity, string> = {
+  common: "shadow-[0_12px_28px_rgba(148,163,184,0.16)]",
+  uncommon: "shadow-[0_14px_30px_rgba(16,185,129,0.2)]",
+  rare: "shadow-[0_14px_30px_rgba(14,165,233,0.24)]",
+  epic: "shadow-[0_14px_30px_rgba(217,70,239,0.24)]",
+  legendary: "shadow-[0_16px_34px_rgba(245,158,11,0.28)]",
 };
 
 const rarityText: Record<BadgeRarity, string> = {
   common: "text-zinc-400",
-  uncommon: "text-green-400",
-  rare: "text-cyan-400",
-  epic: "text-violet-400",
+  uncommon: "text-emerald-300",
+  rare: "text-sky-300",
+  epic: "text-fuchsia-300",
   legendary: "text-amber-400",
 };
 
@@ -158,36 +167,54 @@ export default function BadgesPage() {
         <div className="container mx-auto px-4 py-6 max-w-6xl">
 
           {/* Header */}
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
-              <h1 className="text-xl font-bold text-foreground">Badges</h1>
-              <p className="text-sm text-muted-foreground">
+              <h1 className="text-2xl font-bold text-foreground">Badge Vault</h1>
+              <p className="text-sm text-muted-foreground mt-1">
                 {unlockedCount}/{achievements.length} unlocked
               </p>
             </div>
-            <Badge variant="outline" className="bg-zinc-800/70 border-border text-foreground">
+            <Badge
+              variant="outline"
+              className="w-fit rounded-full border-white/15 bg-zinc-900/70 px-3 py-1 text-xs text-foreground"
+            >
               {progressPercent}% complete
             </Badge>
           </div>
 
           {/* Progress Overview */}
-          <div className="bg-gradient-to-br from-primary/25 to-zinc-800/60 backdrop-blur-sm border border-primary/40 rounded-xl p-6 mb-6 shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-semibold text-foreground">Achievement Progress</span>
-              <span className="text-2xl font-bold text-primary">{progressPercent}%</span>
+          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/90 via-zinc-900/75 to-zinc-950/75 p-6 mb-6 shadow-[0_18px_42px_rgba(0,0,0,0.35)]">
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_52%),radial-gradient(circle_at_bottom_left,rgba(56,189,248,0.16),transparent_52%)]" />
+            <div className="relative">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-foreground">Achievement Progress</span>
+                <span className="text-2xl font-bold text-primary">{progressPercent}%</span>
+              </div>
+              <Progress value={progressPercent} className="h-3" />
             </div>
-            <Progress value={progressPercent} className="h-3" />
           </div>
 
           {/* Rarity Legend */}
-          <div className="flex gap-2 overflow-x-auto pb-4 mb-6">
-            {Object.entries(rarityColors).map(([rarity, colors]) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            {rarityOrder.map((rarity) => (
               <div
                 key={rarity}
-                className="flex items-center gap-2 bg-zinc-800/70 backdrop-blur-sm border border-border/60 rounded-lg px-3 py-1.5 shrink-0 shadow-sm"
+                className={cn(
+                  "relative overflow-hidden rounded-xl border bg-zinc-900/65 backdrop-blur-sm px-3 py-2",
+                  rarityBorders[rarity],
+                  rarityGlow[rarity],
+                )}
               >
-                <div className={cn("w-3 h-3 rounded-full bg-gradient-to-r", colors)} />
-                <span className="text-xs text-muted-foreground capitalize">{rarity}</span>
+                <div
+                  className={cn(
+                    "pointer-events-none absolute inset-0 opacity-30",
+                    "bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.28),transparent_58%)]",
+                  )}
+                />
+                <div className="relative flex items-center gap-2">
+                  <div className={cn("w-3 h-3 rounded-full bg-gradient-to-r", rarityColors[rarity])} />
+                  <span className={cn("text-xs font-semibold capitalize", rarityText[rarity])}>{rarity}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -212,13 +239,20 @@ export default function BadgesPage() {
                 <div
                   key={achievement.id}
                   className={cn(
-                    "bg-zinc-800/60 backdrop-blur-sm border rounded-xl p-5 transition-all duration-300 shadow-md",
+                    "relative overflow-hidden border rounded-xl p-5 transition-all duration-300 bg-zinc-900/65 backdrop-blur-sm",
                     rarityBorders[achievement.rarity],
+                    rarityGlow[achievement.rarity],
                     achievement.unlocked
-                      ? "hover:shadow-lg hover:-translate-y-0.5"
+                      ? "hover:shadow-xl hover:-translate-y-0.5"
                       : "opacity-75",
                   )}
                 >
+                  <div
+                    className={cn(
+                      "pointer-events-none absolute inset-0 opacity-20",
+                      achievement.unlocked ? "bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_60%)]" : "",
+                    )}
+                  />
                   <div className="flex items-start gap-4">
                     {/* Icon */}
                     <div
@@ -287,16 +321,20 @@ export default function BadgesPage() {
               })}
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-xl p-12 text-center">
+            <div className="relative overflow-hidden border border-white/10 rounded-2xl p-12 text-center bg-gradient-to-br from-zinc-900/90 via-zinc-900/75 to-zinc-950/70 shadow-[0_18px_42px_rgba(0,0,0,0.35)]">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.2),transparent_52%),radial-gradient(circle_at_bottom_left,rgba(217,70,239,0.16),transparent_52%)]" />
               <div className="max-w-md mx-auto">
-                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
-                  <TrophyIcon className="w-8 h-8 text-muted-foreground" />
+                <div className="w-16 h-16 rounded-full border border-white/15 bg-zinc-800/70 flex items-center justify-center mx-auto mb-4 shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+                  <TrophyIcon className="w-8 h-8 text-amber-300" />
                 </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">No Badges Yet</h3>
+                <h3 className="text-xl font-bold text-foreground mb-2">Badge Vault Ready</h3>
                 <p className="text-sm text-muted-foreground">
-                  Badges will be awarded during the tournament based on your team's performance and achievements.
-                  Check back when the World Cup begins!
+                  Your achievement catalog is active. Badge unlocks will light up here with rarity glows as progress is recorded.
                 </p>
+                <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-800/70 px-3 py-1 text-xs text-muted-foreground">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  Premium rarity tiers enabled
+                </div>
               </div>
             </div>
           )}
