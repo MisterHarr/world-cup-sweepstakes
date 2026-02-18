@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, and Sprint 3 Step 3
-- **Next:** Sprint 3, Step 4 (bracket tab text/layout cleanup)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, and Sprint 3 Step 4
+- **Next:** Sprint 3, Step 5 (transfer tab layout migration to Light-Luxury structure)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -101,5 +101,9 @@
   - Kept podium-first hierarchy while cleaning visual noise in the list and tab area.
   - Redesigned squad drawer cards with larger flags, premium tier tiles, simplified ID display, and nested contribution container.
   - Removed group/label clutter inside squad tray cards to improve scanability.
+- **Sprint 3 Step 4 Outcomes:**
+  - Removed bracket-tab debug/meta clutter (`Last updated`, `v0 layout active`, and `Current Stage` label chrome).
+  - Re-centered and scaled the `Match Center` header and live match signal for stronger hierarchy.
+  - Kept match-live counts and stage navigation dynamic while reducing visual noise in the bracket header.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.
