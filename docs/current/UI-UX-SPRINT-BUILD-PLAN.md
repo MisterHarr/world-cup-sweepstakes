@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, and Step 3
-- **Next:** Sprint 2, Step 1 (landing page simplification + typography upgrade)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, and Sprint 2 Step 1
+- **Next:** Sprint 2, Step 2 (sign-up options expansion: Google + email/password)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -66,3 +66,7 @@
   - Leaderboard department filtering hardened with normalized department parsing and callable-backed department fallback mapping.
   - Team draw randomization hardened to enforce unique team IDs in assignment paths.
   - Match Center stage/status parsing normalized for resilient live/stage signal behavior.
+- **Sprint 2 Step 1 Outcomes:**
+  - Landing/auth surface simplified to core content only (brand, logo, primary action).
+  - Signed-in state simplified to `Welcome [name]!` plus only `Continue` and `Sign Out`.
+  - Headline typography tightened for clearer hierarchy and cleaner first impression.
