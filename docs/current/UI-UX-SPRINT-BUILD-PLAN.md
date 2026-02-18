@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, and Sprint 2 Step 5
-- **Next:** Sprint 2, Step 6 (featured confirmation modal simplification)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, and Sprint 2 Step 6
+- **Next:** Sprint 3, Step 1 (reveal page emphasis and featured 2x clarity)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -83,5 +83,9 @@
   - Upgraded tier badge styling to a more premium tile treatment.
   - Expanded group filters to use full available groups (including A-L coverage, no hard slice).
   - Increased headline hierarchy and double-points emphasis on `/featured-team`.
+- **Sprint 2 Step 6 Outcomes:**
+  - Simplified featured confirmation modal copy and hierarchy for faster comprehension.
+  - Removed decorative icon and mystery-teams filler copy.
+  - Increased emphasis on featured team identity and 2x points note with a cleaner reveal CTA.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

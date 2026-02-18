@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Filter, CheckCircle2, Crown, Loader2, Sparkles, Trophy } from "lucide-react";
+import { Search, Filter, CheckCircle2, Loader2, Trophy } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
 import { httpsCallable } from "firebase/functions";
@@ -615,28 +615,21 @@ export default function FeaturedTeamPage() {
         <Dialog open={successOpen} onOpenChange={setSuccessOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                </div>
+              <DialogTitle className="text-center text-3xl sm:text-4xl font-black tracking-tight">
                 You&apos;re In!
               </DialogTitle>
-              <DialogDescription>
-                Your featured team is confirmed and five additional teams are ready to reveal.
+              <DialogDescription className="text-center text-base sm:text-lg text-muted-foreground">
+                Featured team confirmed. Five teams are ready.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Your featured team is locked and 5 additional teams have been randomly drawn for you!
-              </p>
-
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1 mb-2">
-                  <Crown className="w-3 h-3" /> Your Featured Team
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/12 to-primary/5 p-5 text-center shadow-[0_16px_36px_rgba(16,185,129,0.18)]">
+                <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-3">
+                  Your Featured Team
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-full overflow-hidden border border-primary/20 bg-background">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border border-primary/30 bg-background">
                     {confirmResult?.featured?.flagUrl ? (
                       <img
                         src={confirmResult.featured.flagUrl}
@@ -645,23 +638,21 @@ export default function FeaturedTeamPage() {
                       />
                     ) : null}
                   </div>
-                  <div className="text-base font-bold text-foreground">
+                  <div className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
                     {confirmResult?.featured?.name ?? "—"}
+                  </div>
+                  <div className="text-xs sm:text-sm font-semibold text-primary">
+                    Earns 2x points while active
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border bg-muted/30 p-4 text-center">
-                <div className="text-sm text-muted-foreground mb-1">
-                  🎲 5 mystery teams await!
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Click below to reveal them one by one
-                </div>
-              </div>
-
-              <Button onClick={closeSuccessAndGoReveal} className="w-full" size="lg">
-                Reveal Your Teams →
+              <Button
+                onClick={closeSuccessAndGoReveal}
+                className="w-full h-14 text-base sm:text-lg font-black tracking-wide"
+                size="lg"
+              >
+                Reveal Teams
               </Button>
             </div>
           </DialogContent>
