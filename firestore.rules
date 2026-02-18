@@ -19,14 +19,33 @@ service cloud.firestore {
           "portfolio",
           "totalScore",
           "remainingTransfers",
+          "transferPenaltyPoints",
           "isAdmin",
+          "hasSeenReveal",
           "createdAt",
           "updatedAt"
         ])
         && request.resource.data.uid == uid
-        && request.resource.data.totalScore == 0
-        && request.resource.data.remainingTransfers == 2
-        && request.resource.data.isAdmin == false
+        && (
+          !request.resource.data.keys().hasAny(["totalScore"])
+          || request.resource.data.totalScore == 0
+        )
+        && (
+          !request.resource.data.keys().hasAny(["remainingTransfers"])
+          || request.resource.data.remainingTransfers == 2
+        )
+        && (
+          !request.resource.data.keys().hasAny(["transferPenaltyPoints"])
+          || request.resource.data.transferPenaltyPoints == 0
+        )
+        && (
+          !request.resource.data.keys().hasAny(["isAdmin"])
+          || request.resource.data.isAdmin == false
+        )
+        && (
+          !request.resource.data.keys().hasAny(["hasSeenReveal"])
+          || request.resource.data.hasSeenReveal == false
+        )
         && (
           !request.resource.data.keys().hasAny(["portfolio"])
           || request.resource.data.portfolio.size() == 0
@@ -42,8 +61,13 @@ service cloud.firestore {
           "displayName",
           "email",
           "photoURL",
+          "hasSeenReveal",
           "updatedAt"
-        ]);
+        ])
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(["hasSeenReveal"])
+          || request.resource.data.hasSeenReveal == true
+        );
     }
 
     // Teams: signed-in users can read teams

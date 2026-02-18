@@ -65,6 +65,20 @@ Manual fallback:
    - `✅ Automation disabled (...)`
 4. Record final leaderboard timestamp from `Leaderboard Status`.
 
+## 5.1) Transfer Window Control (Admin UI)
+
+Use `/admin/fixtures` -> `Transfer Window`.
+
+Open for dev testing:
+1. Tick `Enable transfer window`.
+2. Leave `Starts at` / `Ends at` blank for immediate open-ended testing, or set optional bounds.
+3. Click `Save Transfer Window`.
+4. Verify dashboard shows `Transfer Window Active`.
+
+Close after testing:
+1. Click `Close Window Now` (or untick `Enable transfer window` and save).
+2. Verify dashboard shows `Transfer Window Closed`.
+
 ## 6) Incident Playbook
 
 If scores/leaderboard stop updating:

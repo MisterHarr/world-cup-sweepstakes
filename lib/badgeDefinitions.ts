@@ -20,7 +20,7 @@ export interface Badge {
   pointsAwarded: number;
   unlockCriteria: {
     type: string;
-    condition: any;
+    condition: Record<string, unknown>;
   };
   version: string;
 }

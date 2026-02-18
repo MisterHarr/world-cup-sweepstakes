@@ -24,6 +24,10 @@ type MatchInput = {
   awayYellowCards?: unknown;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
@@ -80,7 +84,9 @@ export const adminUpsertMatch = onCall({ region: REGION }, async (request) => {
   const db = admin.firestore();
   const ref = db.collection("matches").doc(matchId);
   const existingSnap = await ref.get();
-  const existing = existingSnap.exists ? (existingSnap.data() as any) : {};
+  const existing = existingSnap.exists
+    ? (existingSnap.data() as Record<string, unknown>)
+    : {};
 
   const homeTeamId = asString(input.homeTeamId) ?? asString(existing.homeTeamId);
   const awayTeamId = asString(input.awayTeamId) ?? asString(existing.awayTeamId);
@@ -180,6 +186,69 @@ function calcTeamPoints(stats: TeamStats): number {
   );
 }
 
+function hasBadgeEntry(value: unknown): boolean {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (!isRecord(value)) return false;
+  return typeof value.badgeId === "string" && value.badgeId.trim().length > 0;
+}
+
+function readBadgeCount(userData: unknown): number {
+  const source = isRecord(userData) ? userData : {};
+
+  if (Array.isArray(source.earnedBadges)) {
+    return source.earnedBadges.filter((entry: unknown) => hasBadgeEntry(entry))
+      .length;
+  }
+
+  if (Array.isArray(source.badges)) {
+    return source.badges.filter((entry: unknown) => hasBadgeEntry(entry)).length;
+  }
+
+  if (isRecord(source.badges)) {
+    return Object.values(source.badges).filter((value: unknown) => {
+      if (value === true) return true;
+      if (!isRecord(value)) return false;
+      if (value.unlocked === true) return true;
+      return isRecord(value.unlockedAt);
+    }).length;
+  }
+
+  return 0;
+}
+
+type BatchUpdate = {
+  ref: FirebaseFirestore.DocumentReference;
+  data: Record<string, unknown>;
+};
+
+type LeaderboardRow = {
+  userId: string;
+  displayName: string;
+  totalScore: number;
+  badgeCount: number;
+  rank: number;
+  department: string | null;
+};
+
+type PortfolioItem = {
+  teamId: string;
+  role: "featured" | "drawn";
+};
+
+function readPortfolio(value: unknown): PortfolioItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry: unknown): PortfolioItem | null => {
+      if (!isRecord(entry)) return null;
+      const teamId = asString(entry.teamId);
+      const role =
+        entry.role === "featured" || entry.role === "drawn" ? entry.role : null;
+      if (!teamId || !role) return null;
+      return { teamId, role };
+    })
+    .filter((entry): entry is PortfolioItem => entry !== null);
+}
+
 type RecomputeOptions = {
   includeLive: boolean;
   scoringVersion: string;
@@ -200,14 +269,14 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
     : ["FINISHED"];
 
   matchesSnap.docs.forEach((docSnap) => {
-    const data = docSnap.data() as any;
-    const status = asStatus(data?.status);
+    const data = docSnap.data() as Record<string, unknown>;
+    const status = asStatus(data.status);
     if (!status || !eligibleStatuses.includes(status)) return;
 
-    const homeTeamId = asString(data?.homeTeamId);
-    const awayTeamId = asString(data?.awayTeamId);
-    const homeScore = asNumberOrNull(data?.homeScore);
-    const awayScore = asNumberOrNull(data?.awayScore);
+    const homeTeamId = asString(data.homeTeamId);
+    const awayTeamId = asString(data.awayTeamId);
+    const homeScore = asNumberOrNull(data.homeScore);
+    const awayScore = asNumberOrNull(data.awayScore);
 
     if (!homeTeamId || !awayTeamId) return;
     if (homeScore === null || awayScore === null) return;
@@ -237,10 +306,10 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
     if (awayScore === 0) home.cleanSheets += 1;
     if (homeScore === 0) away.cleanSheets += 1;
 
-    const homeRedCards = asNonNegativeNumber(data?.homeRedCards) ?? 0;
-    const homeYellowCards = asNonNegativeNumber(data?.homeYellowCards) ?? 0;
-    const awayRedCards = asNonNegativeNumber(data?.awayRedCards) ?? 0;
-    const awayYellowCards = asNonNegativeNumber(data?.awayYellowCards) ?? 0;
+    const homeRedCards = asNonNegativeNumber(data.homeRedCards) ?? 0;
+    const homeYellowCards = asNonNegativeNumber(data.homeYellowCards) ?? 0;
+    const awayRedCards = asNonNegativeNumber(data.awayRedCards) ?? 0;
+    const awayYellowCards = asNonNegativeNumber(data.awayYellowCards) ?? 0;
 
     home.redCards += homeRedCards;
     home.yellowCards += homeYellowCards;
@@ -251,9 +320,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
   const teamsSnap = await db.collection("teams").get();
   const teamPointsById: Record<string, number> = {};
 
-  const commitBatches = async (
-    updates: Array<{ ref: FirebaseFirestore.DocumentReference; data: any }>
-  ) => {
+  const commitBatches = async (updates: BatchUpdate[]) => {
     const maxBatch = 450;
     let batch = db.batch();
     let writes = 0;
@@ -273,10 +340,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
     }
   };
 
-  const teamUpdates: Array<{
-    ref: FirebaseFirestore.DocumentReference;
-    data: any;
-  }> = [];
+  const teamUpdates: BatchUpdate[] = [];
 
   teamsSnap.docs.forEach((teamDoc) => {
     const teamId = teamDoc.id;
@@ -286,11 +350,11 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     teamUpdates.push({
       ref: teamDoc.ref,
-    data: {
-      ...stats,
-      lastUpdated: FieldValue.serverTimestamp(),
-    },
-  });
+      data: {
+        ...stats,
+        lastUpdated: FieldValue.serverTimestamp(),
+      },
+    });
   });
 
   await commitBatches(teamUpdates);
@@ -300,12 +364,12 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
   const transferPenaltyByUserId: Record<string, number> = {};
 
   transferEventsSnap.docs.forEach((transferEventDoc) => {
-    const data = transferEventDoc.data() as any;
-    const uid = asString(data?.uid);
+    const data = transferEventDoc.data() as Record<string, unknown>;
+    const uid = asString(data.uid);
     if (!uid) return;
 
     const scoringPenaltyPoints =
-      asNumberOrNull(data?.scoringPenaltyPoints) ??
+      asNumberOrNull(data.scoringPenaltyPoints) ??
       DEFAULT_TRANSFER_PENALTY_POINTS;
     const penaltyPoints = Number.isFinite(scoringPenaltyPoints)
       ? scoringPenaltyPoints
@@ -315,54 +379,43 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       (transferPenaltyByUserId[uid] ?? 0) + penaltyPoints;
   });
 
-  const userUpdates: Array<{
-    ref: FirebaseFirestore.DocumentReference;
-    data: any;
-  }> = [];
+  const userUpdates: BatchUpdate[] = [];
 
-  const rows: Array<{
-    userId: string;
-    displayName: string;
-    totalScore: number;
-    rank: number;
-    department: string | null;
-  }> = [];
+  const rows: LeaderboardRow[] = [];
 
   usersSnap.docs.forEach((userDoc) => {
-    const data = userDoc.data() as any;
+    const data = userDoc.data() as Record<string, unknown>;
 
     const displayName =
-      asString(data?.displayName) ??
-      asString(data?.name) ??
-      asString(data?.email) ??
+      asString(data.displayName) ??
+      asString(data.name) ??
+      asString(data.email) ??
       "Anonymous";
 
     const department =
-      data?.department === "Primary" ||
-      data?.department === "Secondary" ||
-      data?.department === "Admin"
+      data.department === "Primary" ||
+      data.department === "Secondary" ||
+      data.department === "Admin"
         ? data.department
         : null;
 
     let featuredId: string | null = null;
     let drawnIds: string[] = [];
 
-    if (Array.isArray(data?.portfolio)) {
-      data.portfolio.forEach((item: any) => {
-        const teamId = asString(item?.teamId);
-        if (!teamId) return;
-        if (item?.role === "featured") featuredId = teamId;
-        if (item?.role === "drawn") drawnIds.push(teamId);
-      });
-    }
+    const portfolio = readPortfolio(data.portfolio);
+    portfolio.forEach((item) => {
+      if (item.role === "featured") featuredId = item.teamId;
+      if (item.role === "drawn") drawnIds.push(item.teamId);
+    });
 
-    if (!featuredId && data?.entry?.featuredTeamId) {
-      featuredId = asString(data.entry.featuredTeamId);
+    const entry = isRecord(data.entry) ? data.entry : null;
+    if (!featuredId && entry && entry.featuredTeamId) {
+      featuredId = asString(entry.featuredTeamId);
     }
-    if (drawnIds.length === 0 && Array.isArray(data?.entry?.drawnTeamIds)) {
-      drawnIds = data.entry.drawnTeamIds
+    if (drawnIds.length === 0 && entry && Array.isArray(entry.drawnTeamIds)) {
+      drawnIds = entry.drawnTeamIds
         .map((id: unknown) => asString(id))
-        .filter(Boolean) as string[];
+        .filter((id): id is string => Boolean(id));
     }
 
     const featuredPoints = featuredId ? teamPointsById[featuredId] ?? 0 : 0;
@@ -371,6 +424,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       0
     );
     const transferPenaltyPoints = transferPenaltyByUserId[userDoc.id] ?? 0;
+    const badgeCount = readBadgeCount(data);
 
     const totalScore = featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
 
@@ -378,6 +432,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       userId: userDoc.id,
       displayName,
       totalScore,
+      badgeCount,
       rank: 0,
       department,
     });
@@ -429,8 +484,12 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 export const recomputeScores = onCall({ region: REGION }, async (request) => {
   requireAdmin(request);
 
-  const includeLive = request.data?.includeLive !== false;
-  const scoringVersion = String(request.data?.scoringVersion ?? "v1");
+  const payload =
+    request.data && typeof request.data === "object"
+      ? (request.data as Record<string, unknown>)
+      : {};
+  const includeLive = payload.includeLive !== false;
+  const scoringVersion = asString(payload.scoringVersion) ?? "v1";
   const initiatedBy = request.auth?.uid ?? "unknown";
 
   return recomputeScoresCore({ includeLive, scoringVersion, initiatedBy });

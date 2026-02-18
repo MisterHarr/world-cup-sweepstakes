@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { Search, Filter, CheckCircle2, Crown, Loader2, Sparkles, Trophy } from "lucide-react";
 
 import { auth, db, functions } from "@/lib/firebase";
-import type { Team } from "@/types";
 import { httpsCallable } from "firebase/functions";
 
 import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
@@ -14,7 +13,13 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type UITeam = {
   id: string;
@@ -26,9 +31,98 @@ type UITeam = {
 
 type ConfirmFeaturedTeamResponse = {
   ok: boolean;
-  featured?: Team;
-  drawn?: Team[];
+  featured?: ConfirmFeaturedTeam;
+  drawn?: ConfirmFeaturedTeam[];
 };
+
+type ConfirmFeaturedTeam = {
+  id: string;
+  name: string;
+  group: string;
+  tier: number;
+  flagUrl: string;
+};
+
+type AppUser = {
+  displayName: string | null;
+  email?: string | null;
+} | null;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function friendlyErrorMessage(err: unknown, fallback: string): string {
+  if (!err || typeof err !== "object") return fallback;
+  const raw =
+    typeof (err as { message?: unknown }).message === "string"
+      ? (err as { message: string }).message
+      : "";
+  if (!raw) return fallback;
+  return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
+}
+
+const DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
+type Department = (typeof DEPARTMENTS)[number];
+
+type PortfolioItem = {
+  role?: string;
+  teamId?: string;
+};
+
+function normalizeDepartment(value: unknown): Department | null {
+  return typeof value === "string" &&
+    (DEPARTMENTS as readonly string[]).includes(value)
+    ? (value as Department)
+    : null;
+}
+
+function readPortfolioItems(value: unknown): PortfolioItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => isRecord(item))
+    .map((item) => ({
+      role: typeof item.role === "string" ? item.role : undefined,
+      teamId: typeof item.teamId === "string" ? item.teamId : undefined,
+    }));
+}
+
+function readEntryConfirmedAt(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return Boolean(value.confirmedAt);
+}
+
+function parseConfirmFeaturedTeamPayload(payload: unknown): ConfirmFeaturedTeamResponse {
+  if (!isRecord(payload)) return { ok: false };
+
+  const parseTeam = (value: unknown): ConfirmFeaturedTeam | null => {
+    if (!isRecord(value)) return null;
+    const id = typeof value.id === "string" ? value.id : "";
+    if (!id) return null;
+    return {
+      id,
+      name: typeof value.name === "string" ? value.name : id,
+      group: typeof value.group === "string" ? value.group : "?",
+      tier:
+        typeof value.tier === "number"
+          ? value.tier
+          : Number(value.tier ?? 4),
+      flagUrl: typeof value.flagUrl === "string" ? value.flagUrl : "",
+    };
+  };
+
+  const featured = parseTeam(payload.featured);
+  const drawnRaw = Array.isArray(payload.drawn) ? payload.drawn : [];
+  const drawn = drawnRaw
+    .map((team) => parseTeam(team))
+    .filter((team): team is ConfirmFeaturedTeam => team !== null);
+
+  return {
+    ok: payload.ok === true,
+    featured: featured ?? undefined,
+    drawn,
+  };
+}
 
 function TierBadge({ tier }: { tier: number }) {
   const configs = {
@@ -72,7 +166,7 @@ export default function FeaturedTeamPage() {
   const router = useRouter();
 
   const [uid, setUid] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AppUser>(null);
   const [displayName, setDisplayName] = useState<string>("");
   const [checking, setChecking] = useState(true);
 
@@ -99,7 +193,14 @@ export default function FeaturedTeamPage() {
     const unsub = auth.onAuthStateChanged(async (u) => {
       setUid(u?.uid ?? null);
       setDisplayName(u?.displayName ?? "");
-      setUser(u);
+      setUser(
+        u
+          ? {
+              displayName: u.displayName ?? null,
+              email: u.email ?? null,
+            }
+          : null
+      );
       setChecking(false);
 
       if (!u) {
@@ -112,22 +213,25 @@ export default function FeaturedTeamPage() {
 
       try {
         const snap = await getDoc(doc(db, "users", u.uid));
-        const data = snap.data() as any;
+        const rawData = snap.exists() ? snap.data() : null;
+        const data = isRecord(rawData) ? rawData : null;
 
-        const dept = data?.department ?? null;
+        const dept = normalizeDepartment(data?.department);
         if (!dept) {
           router.replace("/department?next=/featured-team");
           return;
         }
 
-        const existingFeatured = data?.portfolio?.find((p: any) => p.role === "featured")?.teamId;
+        const portfolio = readPortfolioItems(data?.portfolio);
+        const existingFeatured =
+          portfolio.find((p) => p.role === "featured")?.teamId ?? null;
         if (existingFeatured) setSelectedTeamId(existingFeatured);
 
         const isLocked =
-          Boolean(data?.entry?.confirmedAt) ||
+          readEntryConfirmedAt(data?.entry) ||
           Boolean(
             existingFeatured &&
-              ((data?.portfolio?.filter((p: any) => p.role === "drawn")?.length ?? 0) >= 5)
+              (portfolio.filter((p) => p.role === "drawn").length >= 5)
           );
 
         if (isLocked) {
@@ -137,14 +241,14 @@ export default function FeaturedTeamPage() {
           if (!didAutoForward) {
             setDidAutoForward(true);
             // If user hasn't seen reveal yet, show them the reveal screen
-            const hasSeenReveal = data?.hasSeenReveal ?? false;
+            const hasSeenReveal = data?.hasSeenReveal === true;
             router.replace(hasSeenReveal ? "/dashboard" : "/reveal");
             return;
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        setError(e?.message ?? "Failed to load your profile.");
+        setError(friendlyErrorMessage(e, "Failed to load your profile."));
       } finally {
         setCheckingProfile(false);
       }
@@ -156,25 +260,31 @@ export default function FeaturedTeamPage() {
   // Load teams
   useEffect(() => {
     (async () => {
-      const q = query(collection(db, "teams"), orderBy("group"), orderBy("name"));
-      const snap = await getDocs(q);
+      try {
+        const q = query(collection(db, "teams"), orderBy("group"), orderBy("name"));
+        const snap = await getDocs(q);
 
-      const list: UITeam[] = snap.docs
-        .map((d) => {
-          const t = d.data() as any;
-          const id = (t.id ?? d.id) as string;
+        const list: UITeam[] = snap.docs
+          .map((d) => {
+            const raw = d.data();
+            const t = isRecord(raw) ? raw : {};
+            const id = typeof t.id === "string" ? t.id : d.id;
 
-          return {
-            id,
-            name: String(t.name ?? "Unknown Team"),
-            group: String(t.group ?? "?"),
-            tier: Number(t.tier ?? 4),
-            flagUrl: String(t.flagUrl ?? ""),
-          };
-        })
-        .filter((t) => typeof t.id === "string" && t.id.length > 0);
+            return {
+              id,
+              name: typeof t.name === "string" ? t.name : "Unknown Team",
+              group: typeof t.group === "string" ? t.group : "?",
+              tier: typeof t.tier === "number" ? t.tier : Number(t.tier ?? 4),
+              flagUrl: typeof t.flagUrl === "string" ? t.flagUrl : "",
+            };
+          })
+          .filter((t) => typeof t.id === "string" && t.id.length > 0);
 
-      setTeams(list);
+        setTeams(list);
+      } catch (e: unknown) {
+        console.error(e);
+        setError(friendlyErrorMessage(e, "Failed to load teams."));
+      }
     })();
   }, []);
 
@@ -219,17 +329,17 @@ export default function FeaturedTeamPage() {
       const confirmFn = httpsCallable(functions, "confirmFeaturedTeam");
       const res = await confirmFn({ teamId: selectedTeamId });
 
-      const data = res.data as ConfirmFeaturedTeamResponse;
+      const data = parseConfirmFeaturedTeamPayload(res.data);
 
       setConfirmResult(data);
       setSuccessOpen(true);
 
-      const refreshed = await getDoc(doc(db, "users", uid));
+      await getDoc(doc(db, "users", uid));
       setConfirmed(true);
       setStatus("✅ Featured Team confirmed + 5 teams drawn!");
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setError(e?.message ?? "Failed to confirm featured team.");
+      setError(friendlyErrorMessage(e, "Failed to confirm featured team."));
       setStatus("");
     } finally {
       setIsSubmitting(false);
@@ -482,6 +592,9 @@ export default function FeaturedTeamPage() {
                 </div>
                 You&apos;re In!
               </DialogTitle>
+              <DialogDescription>
+                Your featured team is confirmed and five additional teams are ready to reveal.
+              </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">

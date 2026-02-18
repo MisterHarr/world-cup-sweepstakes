@@ -3,6 +3,10 @@ import * as admin from "firebase-admin";
 import { requireAdmin } from "./auth";
 const REGION = "asia-southeast1";
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 // Prevent double init during hot reloads
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -19,8 +23,11 @@ if (!admin.apps.length) {
 export const setAdminClaim = onCall({ region: REGION }, async (request) => {
   requireAdmin(request);
 
-  const targetUid = String((request.data as any)?.uid ?? "");
-  const makeAdmin = Boolean((request.data as any)?.admin ?? true);
+  const payload = isRecord(request.data) ? request.data : {};
+  const targetUid =
+    typeof payload.uid === "string" ? payload.uid.trim() : String(payload.uid ?? "");
+  const makeAdmin =
+    payload.admin === undefined ? true : Boolean(payload.admin);
 
   if (!targetUid) {
     throw new HttpsError("invalid-argument", "Missing target uid.");

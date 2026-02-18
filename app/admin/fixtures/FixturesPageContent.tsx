@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { auth, functions } from "@/lib/firebase";
 import { getIdTokenResult } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export default function FixtureIngestPage() {
@@ -36,6 +36,14 @@ export default function FixtureIngestPage() {
     recentRuns?: LiveOpsRun[];
   };
 
+  type TransferWindowState = {
+    enabled: boolean;
+    startsAtIso: string;
+    endsAtIso: string;
+    updatedBy?: string;
+    updatedAt?: string;
+  };
+
   const DEFAULT_LIVE_OPS: LiveOpsState = {
     enabled: false,
     provider: "fixture",
@@ -43,6 +51,12 @@ export default function FixtureIngestPage() {
     fixtureCutoffIso: "",
     consecutiveFailures: 0,
     recentRuns: [],
+  };
+
+  const DEFAULT_TRANSFER_WINDOW: TransferWindowState = {
+    enabled: false,
+    startsAtIso: "",
+    endsAtIso: "",
   };
 
   type IngestAlertLevel = "healthy" | "warning" | "critical";
@@ -56,10 +70,108 @@ export default function FixtureIngestPage() {
   const SCHEDULER_INTERVAL_MINUTES = 10;
   const STALE_AFTER_MINUTES = SCHEDULER_INTERVAL_MINUTES * 3;
 
+  type FirestoreTimestampLike = {
+    toDate: () => Date;
+  };
+
+  type FixtureSelectionPayload = {
+    maxMatches?: number;
+    cutoffIso?: string;
+  };
+
+  type FixtureIngestPayload = FixtureSelectionPayload & {
+    dryRun?: boolean;
+  };
+
+  type IngestResult = {
+    matches?: number;
+    updated?: number;
+  };
+
+  type ResetPreviewResult = {
+    willDelete?: number;
+    willIngest?: number;
+  };
+
+  type ResetResult = {
+    deletedFixtureMatches?: number;
+    matches?: number;
+    updated?: number;
+  };
+
+  type RecomputeResult = {
+    users?: number;
+    matches?: number;
+  };
+
+  type SetLiveOpsSettingsPayload = {
+    enabled: boolean;
+    provider: LiveOpsProvider;
+    fixtureMaxMatches: number;
+    fixtureCutoffIso: string | null;
+  };
+
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+  }
+
+  function isTimestampLike(value: unknown): value is FirestoreTimestampLike {
+    return isRecord(value) && typeof value.toDate === "function";
+  }
+
   function toMillisOrNull(value?: string): number | null {
     if (!value || typeof value !== "string") return null;
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function toIsoOrEmpty(value: unknown): string {
+    if (!isTimestampLike(value)) return "";
+    const date = value.toDate();
+    return date instanceof Date && !Number.isNaN(date.getTime())
+      ? date.toISOString()
+      : "";
+  }
+
+  function toIsoOrString(value: unknown): string {
+    const iso = toIsoOrEmpty(value);
+    if (iso) return iso;
+    if (typeof value === "string") {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) {
+        return new Date(parsed).toISOString();
+      }
+    }
+    return "";
+  }
+
+  function toLocalDateTimeInput(iso: string): string {
+    if (!iso) return "";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return [
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      `${pad(date.getHours())}:${pad(date.getMinutes())}`,
+    ].join("T");
+  }
+
+  function fromLocalDateTimeInput(value: string): Date | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function asErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) return error.message;
+    if (typeof error === "string" && error.trim().length > 0) return error;
+    return String(error);
+  }
+
+  function asNonNegativeInt(value: unknown): number {
+    if (typeof value !== "number" || !Number.isFinite(value)) return 0;
+    return Math.max(0, Math.floor(value));
   }
 
   function buildIngestAlert(state: LiveOpsState): IngestAlert {
@@ -149,13 +261,19 @@ export default function FixtureIngestPage() {
     useState<LiveOpsProvider>("fixture");
   const [liveOpsMaxInput, setLiveOpsMaxInput] = useState("");
   const [liveOpsCutoffInput, setLiveOpsCutoffInput] = useState("");
+  const [transferWindow, setTransferWindow] = useState<TransferWindowState>(
+    DEFAULT_TRANSFER_WINDOW
+  );
+  const [transferWindowEnabledInput, setTransferWindowEnabledInput] =
+    useState(false);
+  const [transferWindowStartsInput, setTransferWindowStartsInput] =
+    useState("");
+  const [transferWindowEndsInput, setTransferWindowEndsInput] = useState("");
+  const [transferWindowStatus, setTransferWindowStatus] = useState("");
+  const [savingTransferWindow, setSavingTransferWindow] = useState(false);
   const [checking, setChecking] = useState(true);
 
   const ingestAlert = buildIngestAlert(liveOps);
-
-  function toIsoOrEmpty(value: any): string {
-    return value?.toDate?.() instanceof Date ? value.toDate().toISOString() : "";
-  }
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (user) => {
@@ -195,16 +313,15 @@ export default function FixtureIngestPage() {
         return;
       }
 
-      const data = snap.data() as any;
-      const updated =
-        data?.lastUpdated?.toDate?.() instanceof Date
-          ? data.lastUpdated.toDate().toISOString()
-          : "";
+      const data = snap.data() as Record<string, unknown>;
+      const updated = toIsoOrEmpty(data.lastUpdated);
 
       setLeaderboardStatus({
         lastUpdated: updated,
-        scoringVersion: data?.scoringVersion,
-        includeLive: data?.includeLive,
+        scoringVersion:
+          typeof data.scoringVersion === "string" ? data.scoringVersion : undefined,
+        includeLive:
+          typeof data.includeLive === "boolean" ? data.includeLive : undefined,
       });
     });
 
@@ -232,67 +349,58 @@ export default function FixtureIngestPage() {
         return;
       }
 
-      const data = snap.data() as any;
+      const data = snap.data() as Record<string, unknown>;
       const provider =
-        data?.provider === "stub" ||
-        data?.provider === "fixture" ||
-        data?.provider === "provider"
-          ? (data.provider as LiveOpsProvider)
+        data.provider === "stub" ||
+        data.provider === "fixture" ||
+        data.provider === "provider"
+          ? data.provider
           : "fixture";
       const maxMatches =
-        typeof data?.fixtureMaxMatches === "number" && data.fixtureMaxMatches > 0
+        typeof data.fixtureMaxMatches === "number" && data.fixtureMaxMatches > 0
           ? Math.floor(data.fixtureMaxMatches)
           : 0;
       const cutoffIso =
-        typeof data?.fixtureCutoffIso === "string" ? data.fixtureCutoffIso : "";
-      const updated = toIsoOrEmpty(data?.updatedAt);
-      const lastSuccessAt = toIsoOrEmpty(data?.lastSuccessAt);
-      const lastErrorAt = toIsoOrEmpty(data?.lastErrorAt);
+        typeof data.fixtureCutoffIso === "string" ? data.fixtureCutoffIso : "";
+      const updated = toIsoOrEmpty(data.updatedAt);
+      const lastSuccessAt = toIsoOrEmpty(data.lastSuccessAt);
+      const lastErrorAt = toIsoOrEmpty(data.lastErrorAt);
       const lastErrorMessage =
-        typeof data?.lastErrorMessage === "string" ? data.lastErrorMessage : "";
+        typeof data.lastErrorMessage === "string" ? data.lastErrorMessage : "";
       const lastRunAt =
-        toIsoOrEmpty(data?.lastRunAt) ||
-        (typeof data?.lastRunAtIso === "string" ? data.lastRunAtIso : "");
+        toIsoOrEmpty(data.lastRunAt) ||
+        (typeof data.lastRunAtIso === "string" ? data.lastRunAtIso : "");
       const lastRunStatus =
-        data?.lastRunStatus === "success" || data?.lastRunStatus === "error"
+        data.lastRunStatus === "success" || data.lastRunStatus === "error"
           ? data.lastRunStatus
           : undefined;
       const lastRunProvider =
-        data?.lastRunProvider === "stub" ||
-        data?.lastRunProvider === "fixture" ||
-        data?.lastRunProvider === "provider"
-          ? (data.lastRunProvider as LiveOpsProvider)
+        data.lastRunProvider === "stub" ||
+        data.lastRunProvider === "fixture" ||
+        data.lastRunProvider === "provider"
+          ? data.lastRunProvider
           : undefined;
-      const lastRunMatches =
-        typeof data?.lastRunMatches === "number" && Number.isFinite(data.lastRunMatches)
-          ? Math.max(0, Math.floor(data.lastRunMatches))
-          : 0;
-      const lastRunUpdated =
-        typeof data?.lastRunUpdated === "number" && Number.isFinite(data.lastRunUpdated)
-          ? Math.max(0, Math.floor(data.lastRunUpdated))
-          : 0;
-      const consecutiveFailures =
-        typeof data?.consecutiveFailures === "number" &&
-        Number.isFinite(data.consecutiveFailures)
-          ? Math.max(0, Math.floor(data.consecutiveFailures))
-          : 0;
+      const lastRunMatches = asNonNegativeInt(data.lastRunMatches);
+      const lastRunUpdated = asNonNegativeInt(data.lastRunUpdated);
+      const consecutiveFailures = asNonNegativeInt(data.consecutiveFailures);
 
-      const recentRuns: LiveOpsRun[] = Array.isArray(data?.recentRuns)
+      const recentRuns: LiveOpsRun[] = Array.isArray(data.recentRuns)
         ? data.recentRuns
-            .map((run: any): LiveOpsRun | null => {
+            .map((run: unknown): LiveOpsRun | null => {
+              if (!isRecord(run)) return null;
               const at =
-                typeof run?.at === "string" && run.at.trim().length > 0
+                typeof run.at === "string" && run.at.trim().length > 0
                   ? run.at
                   : "";
               const status =
-                run?.status === "success" || run?.status === "error"
-                  ? (run.status as "success" | "error")
+                run.status === "success" || run.status === "error"
+                  ? run.status
                   : null;
               const provider =
-                run?.provider === "stub" ||
-                run?.provider === "fixture" ||
-                run?.provider === "provider"
-                  ? (run.provider as LiveOpsProvider)
+                run.provider === "stub" ||
+                run.provider === "fixture" ||
+                run.provider === "provider"
+                  ? run.provider
                   : null;
               if (!at || !status || !provider) return null;
 
@@ -300,30 +408,24 @@ export default function FixtureIngestPage() {
                 at,
                 status,
                 provider,
-                matches:
-                  typeof run?.matches === "number" && Number.isFinite(run.matches)
-                    ? Math.max(0, Math.floor(run.matches))
-                    : 0,
-                updated:
-                  typeof run?.updated === "number" && Number.isFinite(run.updated)
-                    ? Math.max(0, Math.floor(run.updated))
-                    : 0,
+                matches: asNonNegativeInt(run.matches),
+                updated: asNonNegativeInt(run.updated),
                 errorMessage:
-                  typeof run?.errorMessage === "string"
+                  typeof run.errorMessage === "string"
                     ? run.errorMessage
                     : undefined,
               };
             })
-            .filter(Boolean)
-            .slice(0, 12) as LiveOpsRun[]
+            .filter((run): run is LiveOpsRun => run !== null)
+            .slice(0, 12)
         : [];
 
       const nextState: LiveOpsState = {
-        enabled: data?.enabled === true,
+        enabled: data.enabled === true,
         provider,
         fixtureMaxMatches: maxMatches,
         fixtureCutoffIso: cutoffIso,
-        updatedBy: typeof data?.updatedBy === "string" ? data.updatedBy : "",
+        updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
         updatedAt: updated,
         lastSuccessAt,
         lastErrorAt,
@@ -344,6 +446,45 @@ export default function FixtureIngestPage() {
         nextState.fixtureMaxMatches > 0 ? String(nextState.fixtureMaxMatches) : ""
       );
       setLiveOpsCutoffInput(nextState.fixtureCutoffIso);
+    });
+
+    return () => unsub();
+  }, [uid, isAdmin]);
+
+  useEffect(() => {
+    if (!uid || !isAdmin) {
+      setTransferWindow(DEFAULT_TRANSFER_WINDOW);
+      setTransferWindowEnabledInput(false);
+      setTransferWindowStartsInput("");
+      setTransferWindowEndsInput("");
+      return;
+    }
+
+    const ref = doc(db, "settings", "transferWindow");
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) {
+        setTransferWindow(DEFAULT_TRANSFER_WINDOW);
+        setTransferWindowEnabledInput(false);
+        setTransferWindowStartsInput("");
+        setTransferWindowEndsInput("");
+        return;
+      }
+
+      const data = snap.data() as Record<string, unknown>;
+      const startsAtIso = toIsoOrString(data.startsAt);
+      const endsAtIso = toIsoOrString(data.endsAt);
+      const nextState: TransferWindowState = {
+        enabled: data.enabled === true,
+        startsAtIso,
+        endsAtIso,
+        updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
+        updatedAt: toIsoOrString(data.updatedAt),
+      };
+
+      setTransferWindow(nextState);
+      setTransferWindowEnabledInput(nextState.enabled);
+      setTransferWindowStartsInput(toLocalDateTimeInput(nextState.startsAtIso));
+      setTransferWindowEndsInput(toLocalDateTimeInput(nextState.endsAtIso));
     });
 
     return () => unsub();
@@ -393,17 +534,20 @@ export default function FixtureIngestPage() {
     setStatus("Running fixture ingest...");
 
     try {
-      const fn = httpsCallable(functions, "adminIngestFixture");
+      const fn = httpsCallable<FixtureIngestPayload, IngestResult>(
+        functions,
+        "adminIngestFixture"
+      );
       const res = await fn(payload);
-      const data = res.data as any;
+      const data = res.data;
 
       setStatus(
         `✅ Ingested ${data?.matches ?? 0} matches, updated ${data?.updated ?? 0}. ` +
           `Leaderboard recomputed.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setStatus(`❌ ${err?.message ?? String(err)}`);
+      setStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setRunning(false);
     }
@@ -425,7 +569,10 @@ export default function FixtureIngestPage() {
 
     setPreviewing(true);
     try {
-      const fn = httpsCallable(functions, "adminIngestFixture");
+      const fn = httpsCallable<FixtureIngestPayload, IngestResult>(
+        functions,
+        "adminIngestFixture"
+      );
       const { payload } = getFixtureSelection();
       const dryRunPayload: {
         maxMatches?: number;
@@ -442,12 +589,12 @@ export default function FixtureIngestPage() {
       }
 
       const res = await fn(dryRunPayload);
-      const data = res.data as any;
+      const data = res.data;
 
       setPreview(`Preview: ${data?.matches ?? 0} matches selected.`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setPreview(`❌ ${err?.message ?? String(err)}`);
+      setPreview(`❌ ${asErrorMessage(err)}`);
     } finally {
       setPreviewing(false);
     }
@@ -468,7 +615,10 @@ export default function FixtureIngestPage() {
 
     setResetPreviewing(true);
     try {
-      const fn = httpsCallable(functions, "adminResetFixtureIngest");
+      const fn = httpsCallable<FixtureIngestPayload, ResetPreviewResult>(
+        functions,
+        "adminResetFixtureIngest"
+      );
       const { payload } = getFixtureSelection();
       const dryRunPayload: {
         maxMatches?: number;
@@ -486,13 +636,13 @@ export default function FixtureIngestPage() {
       }
 
       const res = await fn(dryRunPayload);
-      const data = res.data as any;
+      const data = res.data;
       setResetPreview(
         `Reset preview: delete ${data?.willDelete ?? 0} fixture matches, then ingest ${data?.willIngest ?? 0} matches.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setResetPreview(`❌ ${err?.message ?? String(err)}`);
+      setResetPreview(`❌ ${asErrorMessage(err)}`);
     } finally {
       setResetPreviewing(false);
     }
@@ -530,15 +680,18 @@ export default function FixtureIngestPage() {
     setResetStatus("Resetting fixture matches and ingesting selection...");
 
     try {
-      const fn = httpsCallable(functions, "adminResetFixtureIngest");
+      const fn = httpsCallable<FixtureIngestPayload, ResetResult>(
+        functions,
+        "adminResetFixtureIngest"
+      );
       const res = await fn(payload);
-      const data = res.data as any;
+      const data = res.data;
       setResetStatus(
         `✅ Reset deleted ${data?.deletedFixtureMatches ?? 0} fixture matches, ingested ${data?.matches ?? 0}, updated ${data?.updated ?? 0}. Leaderboard recomputed.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setResetStatus(`❌ ${err?.message ?? String(err)}`);
+      setResetStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setResetRunning(false);
     }
@@ -554,15 +707,18 @@ export default function FixtureIngestPage() {
 
     setPreTournamentPreviewing(true);
     try {
-      const fn = httpsCallable(functions, "adminIngestPreTournament");
+      const fn = httpsCallable<{ dryRun?: boolean }, IngestResult>(
+        functions,
+        "adminIngestPreTournament"
+      );
       const res = await fn({ dryRun: true });
-      const data = res.data as any;
+      const data = res.data;
       setPreTournamentPreview(
         `Preview: ${data?.matches ?? 0} pre-tournament matches available.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setPreTournamentPreview(`❌ ${err?.message ?? String(err)}`);
+      setPreTournamentPreview(`❌ ${asErrorMessage(err)}`);
     } finally {
       setPreTournamentPreviewing(false);
     }
@@ -590,16 +746,19 @@ export default function FixtureIngestPage() {
     setPreTournamentStatus("Importing pre-tournament matches...");
 
     try {
-      const fn = httpsCallable(functions, "adminIngestPreTournament");
+      const fn = httpsCallable<{ dryRun?: boolean }, IngestResult>(
+        functions,
+        "adminIngestPreTournament"
+      );
       const res = await fn({});
-      const data = res.data as any;
+      const data = res.data;
       setPreTournamentStatus(
         `✅ Imported ${data?.matches ?? 0} pre-tournament matches, ` +
           `updated ${data?.updated ?? 0}. Leaderboard recomputed.`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setPreTournamentStatus(`❌ ${err?.message ?? String(err)}`);
+      setPreTournamentStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setPreTournamentRunning(false);
     }
@@ -620,15 +779,18 @@ export default function FixtureIngestPage() {
     setRecomputeStatus("Recomputing leaderboard...");
 
     try {
-      const fn = httpsCallable(functions, "recomputeScores");
+      const fn = httpsCallable<
+        { includeLive: boolean; scoringVersion: string },
+        RecomputeResult
+      >(functions, "recomputeScores");
       const res = await fn({ includeLive: true, scoringVersion: "v1" });
-      const data = res.data as any;
+      const data = res.data;
       setRecomputeStatus(
         `✅ Recomputed for ${data?.users ?? 0} users (${data?.matches ?? 0} matches).`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setRecomputeStatus(`❌ ${err?.message ?? String(err)}`);
+      setRecomputeStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setRecomputing(false);
     }
@@ -658,7 +820,10 @@ export default function FixtureIngestPage() {
     setLiveOpsStatus("Saving automation settings...");
 
     try {
-      const fn = httpsCallable(functions, "setLiveOpsSettings");
+      const fn = httpsCallable<SetLiveOpsSettingsPayload, unknown>(
+        functions,
+        "setLiveOpsSettings"
+      );
       await fn({
         enabled: liveOpsEnabledInput,
         provider: liveOpsProviderInput,
@@ -668,12 +833,95 @@ export default function FixtureIngestPage() {
       setLiveOpsStatus(
         `✅ Automation ${liveOpsEnabledInput ? "enabled" : "disabled"} (${liveOpsProviderInput}).`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setLiveOpsStatus(`❌ ${err?.message ?? String(err)}`);
+      setLiveOpsStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setSavingLiveOps(false);
     }
+  }
+
+  async function saveTransferWindow(options?: {
+    enabled?: boolean;
+    startsInput?: string;
+    endsInput?: string;
+  }) {
+    setTransferWindowStatus("");
+    if (!uid) {
+      setTransferWindowStatus("❌ Not signed in.");
+      return;
+    }
+    if (!isAdmin) {
+      setTransferWindowStatus("❌ Admin access required.");
+      return;
+    }
+
+    const enabledValue = options?.enabled ?? transferWindowEnabledInput;
+    const startsInputValue = options?.startsInput ?? transferWindowStartsInput;
+    const endsInputValue = options?.endsInput ?? transferWindowEndsInput;
+    const startsAt = fromLocalDateTimeInput(startsInputValue);
+    const endsAt = fromLocalDateTimeInput(endsInputValue);
+
+    if (startsInputValue.trim() && !startsAt) {
+      setTransferWindowStatus("❌ Invalid start time.");
+      return;
+    }
+    if (endsInputValue.trim() && !endsAt) {
+      setTransferWindowStatus("❌ Invalid end time.");
+      return;
+    }
+    if (startsAt && endsAt && endsAt.getTime() < startsAt.getTime()) {
+      setTransferWindowStatus("❌ End time must be after start time.");
+      return;
+    }
+
+    setSavingTransferWindow(true);
+    setTransferWindowStatus("Saving transfer window...");
+
+    try {
+      await setDoc(
+        doc(db, "settings", "transferWindow"),
+        {
+          enabled: enabledValue,
+          startsAt: startsAt ?? null,
+          endsAt: endsAt ?? null,
+          updatedAt: serverTimestamp(),
+          updatedBy: uid,
+        },
+        { merge: true }
+      );
+
+      setTransferWindowStatus(
+        `✅ Transfer window ${enabledValue ? "enabled" : "disabled"}.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setTransferWindowStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setSavingTransferWindow(false);
+    }
+  }
+
+  async function closeTransferWindowNow() {
+    setTransferWindowEnabledInput(false);
+    setTransferWindowStartsInput("");
+    setTransferWindowEndsInput("");
+    await saveTransferWindow({
+      enabled: false,
+      startsInput: "",
+      endsInput: "",
+    });
+  }
+
+  async function openTransferWindowNow() {
+    setTransferWindowEnabledInput(true);
+    setTransferWindowStartsInput("");
+    setTransferWindowEndsInput("");
+    await saveTransferWindow({
+      enabled: true,
+      startsInput: "",
+      endsInput: "",
+    });
   }
 
   return (
@@ -901,6 +1149,95 @@ export default function FixtureIngestPage() {
                       </div>
                     </div>
                   ) : null}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-slate-100">
+                      Transfer Window
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      Enable for transfer testing without console scripts.
+                    </div>
+                  </div>
+                  <div
+                    className={`text-xs font-semibold px-2 py-1 rounded-full border ${
+                      transferWindow.enabled
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
+                        : "border-slate-700/70 bg-slate-900/70 text-slate-300"
+                    }`}
+                  >
+                    {transferWindow.enabled ? "OPEN" : "CLOSED"}
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-2 text-sm text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={transferWindowEnabledInput}
+                    onChange={(e) => setTransferWindowEnabledInput(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Enable transfer window
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-sm text-slate-300">
+                    Starts at (optional)
+                    <input
+                      type="datetime-local"
+                      value={transferWindowStartsInput}
+                      onChange={(e) => setTransferWindowStartsInput(e.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+
+                  <label className="block text-sm text-slate-300">
+                    Ends at (optional)
+                    <input
+                      type="datetime-local"
+                      value={transferWindowEndsInput}
+                      onChange={(e) => setTransferWindowEndsInput(e.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  <button
+                    onClick={() => void openTransferWindowNow()}
+                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
+                  >
+                    Open Window Now
+                  </button>
+                  <button
+                    onClick={() => void saveTransferWindow()}
+                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
+                  >
+                    {savingTransferWindow ? "Saving..." : "Save Transfer Window"}
+                  </button>
+                  <button
+                    onClick={() => void closeTransferWindowNow()}
+                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
+                  >
+                    Close Window Now
+                  </button>
+                </div>
+
+                {transferWindowStatus ? (
+                  <div className="text-sm text-slate-300">{transferWindowStatus}</div>
+                ) : null}
+
+                <div className="text-xs text-slate-400">
+                  Last update: {transferWindow.updatedAt || "—"}{" "}
+                  {transferWindow.updatedBy
+                    ? `• by ${transferWindow.updatedBy}`
+                    : ""}
                 </div>
               </div>
 

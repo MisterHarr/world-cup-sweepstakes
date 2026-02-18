@@ -19,6 +19,12 @@ const DEFAULT_OPTIONS: Required<RetryOptions> = {
   shouldRetry: () => true,
 };
 
+function getErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== "object") return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
+}
+
 /**
  * Delays execution for specified milliseconds
  */
@@ -80,6 +86,11 @@ export async function retryWithBackoff<T>(
  * Check if error is a network error that should be retried
  */
 export function isNetworkError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  if (code === "unavailable" || code === "deadline-exceeded") {
+    return true;
+  }
+
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
     return (
@@ -88,12 +99,7 @@ export function isNetworkError(error: unknown): boolean {
       message.includes("timeout") ||
       message.includes("offline") ||
       message.includes("unavailable") ||
-      // Firestore errors
-      message.includes("unavailable") ||
-      message.includes("deadline-exceeded") ||
-      // Firebase errors
-      (error as any).code === "unavailable" ||
-      (error as any).code === "deadline-exceeded"
+      message.includes("deadline-exceeded")
     );
   }
   return false;
@@ -134,18 +140,16 @@ export async function retryCloudFunction<T>(
       if (isNetworkError(error)) return true;
 
       // Don't retry on auth or validation errors
-      if (error && typeof error === "object") {
-        const code = (error as any).code;
-        if (
-          code === "unauthenticated" ||
-          code === "permission-denied" ||
-          code === "invalid-argument" ||
-          code === "failed-precondition" ||
-          code === "not-found" ||
-          code === "resource-exhausted"
-        ) {
-          return false;
-        }
+      const code = getErrorCode(error);
+      if (
+        code === "unauthenticated" ||
+        code === "permission-denied" ||
+        code === "invalid-argument" ||
+        code === "failed-precondition" ||
+        code === "not-found" ||
+        code === "resource-exhausted"
+      ) {
+        return false;
       }
 
       return true;

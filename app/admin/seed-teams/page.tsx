@@ -8,7 +8,20 @@ import {
   doc,
   setDoc,
   serverTimestamp,
+  type WithFieldValue,
 } from "firebase/firestore";
+import type { Team } from "@/types";
+
+type TeamSeedDocument = Team & {
+  teamId: string;
+  updatedAt: unknown;
+};
+
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim().length > 0) return error;
+  return String(error);
+}
 
 export default function SeedTeamsPage() {
   const [uid, setUid] = useState<string | null>(null);
@@ -51,21 +64,22 @@ export default function SeedTeamsPage() {
       if (!isAdmin) throw new Error("Admin access required.");
 
       for (const team of TEAMS_SEED) {
+        const payload: WithFieldValue<TeamSeedDocument> = {
+          ...team,
+          teamId: team.id, // redundancy helps queries
+          updatedAt: serverTimestamp(),
+        };
         await setDoc(
           doc(db, "teams", team.id),
-          {
-            ...team,
-            teamId: team.id, // redundancy helps queries
-            updatedAt: serverTimestamp(),
-          } as any,
+          payload,
           { merge: true }
         );
       }
 
       setStatus(`✅ Successfully seeded ${teamCount} teams.`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setStatus(`❌ ${err.message ?? String(err)}`);
+      setStatus(`❌ ${asErrorMessage(err)}`);
     }
   }
 

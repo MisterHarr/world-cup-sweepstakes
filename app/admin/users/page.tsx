@@ -13,6 +13,54 @@ type UserData = {
   teamCount: number;
 };
 
+type AdminListUsersResponse = {
+  ok?: boolean;
+  users?: unknown;
+};
+
+type AdminAssignTeamsResponse = {
+  ok?: boolean;
+  message?: string;
+  skipped?: boolean;
+  featured?: string;
+  drawn?: unknown;
+};
+
+type AssignTeamsPayload = {
+  userId: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string" && error.trim().length > 0) return error;
+  return String(error);
+}
+
+function toUserData(value: unknown): UserData | null {
+  if (!isRecord(value)) return null;
+
+  const uid = typeof value.uid === "string" ? value.uid : "";
+  if (!uid) return null;
+
+  return {
+    uid,
+    displayName:
+      typeof value.displayName === "string" && value.displayName.trim().length > 0
+        ? value.displayName
+        : "Unknown",
+    email: typeof value.email === "string" ? value.email : "",
+    hasTeams: value.hasTeams === true,
+    teamCount:
+      typeof value.teamCount === "number" && Number.isFinite(value.teamCount)
+        ? Math.max(0, Math.floor(value.teamCount))
+        : 0,
+  };
+}
+
 export default function AdminUsersPage() {
   const [uid, setUid] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -52,19 +100,26 @@ export default function AdminUsersPage() {
     setLoading(true);
     setStatus("Loading users...");
     try {
-      const fn = httpsCallable(functions, "adminListUsers");
+      const fn = httpsCallable<Record<string, never>, AdminListUsersResponse>(
+        functions,
+        "adminListUsers"
+      );
       const res = await fn({});
-      const data = res.data as any;
+      const data = res.data;
 
-      if (!data.ok || !Array.isArray(data.users)) {
+      if (data.ok !== true || !Array.isArray(data.users)) {
         throw new Error("Invalid response from server");
       }
 
-      setUsers(data.users);
-      setStatus(`✅ Loaded ${data.users.length} users.`);
-    } catch (err: any) {
+      const parsedUsers = data.users
+        .map((entry) => toUserData(entry))
+        .filter((entry): entry is UserData => entry !== null);
+
+      setUsers(parsedUsers);
+      setStatus(`✅ Loaded ${parsedUsers.length} users.`);
+    } catch (err: unknown) {
       console.error(err);
-      setStatus(`❌ ${err.message ?? String(err)}`);
+      setStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }
@@ -79,23 +134,29 @@ export default function AdminUsersPage() {
     setStatus(`Assigning teams to user ${userId}...`);
 
     try {
-      const fn = httpsCallable(functions, "adminAssignTeamsToUser");
+      const fn = httpsCallable<AssignTeamsPayload, AdminAssignTeamsResponse>(
+        functions,
+        "adminAssignTeamsToUser"
+      );
       const res = await fn({ userId });
-      const data = res.data as any;
+      const data = res.data;
 
       if (data.skipped) {
-        setStatus(`ℹ️ ${data.message}`);
+        setStatus(`ℹ️ ${data.message ?? "User already has teams assigned."}`);
       } else {
+        const drawnTeams = Array.isArray(data.drawn)
+          ? data.drawn.filter((item): item is string => typeof item === "string")
+          : [];
         setStatus(
-          `✅ ${data.message}\nFeatured: ${data.featured}\nDrawn: ${data.drawn.join(", ")}`
+          `✅ ${data.message ?? "Teams assigned."}\nFeatured: ${data.featured ?? "-"}\nDrawn: ${drawnTeams.join(", ")}`
         );
       }
 
       // Reload users to reflect changes
       await loadUsers();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setStatus(`❌ ${err?.message ?? String(err)}`);
+      setStatus(`❌ ${asErrorMessage(err)}`);
     } finally {
       setProcessing(null);
     }
@@ -120,14 +181,17 @@ export default function AdminUsersPage() {
     setStatus(`Assigning teams to ${usersWithoutTeams.length} users...`);
     let successCount = 0;
     let errorCount = 0;
+    const fn = httpsCallable<AssignTeamsPayload, AdminAssignTeamsResponse>(
+      functions,
+      "adminAssignTeamsToUser"
+    );
 
     for (const user of usersWithoutTeams) {
       setProcessing(user.uid);
       try {
-        const fn = httpsCallable(functions, "adminAssignTeamsToUser");
         await fn({ userId: user.uid });
         successCount++;
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`Failed for ${user.email}:`, err);
         errorCount++;
       }

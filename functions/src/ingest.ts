@@ -57,6 +57,10 @@ let teamLookupCache:
   | { expiresAt: number; lookup: Record<string, string> }
   | null = null;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
@@ -169,12 +173,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function normalizeLiveOpsConfig(raw: any): LiveOpsConfig {
+function normalizeLiveOpsConfig(raw: unknown): LiveOpsConfig {
+  const config = isRecord(raw) ? raw : {};
   return {
-    enabled: raw?.enabled === true,
-    provider: asProvider(raw?.provider) ?? DEFAULT_LIVE_OPS.provider,
-    fixtureMaxMatches: asNonNegativeInteger(raw?.fixtureMaxMatches),
-    fixtureCutoffIso: asIsoOrNull(raw?.fixtureCutoffIso),
+    enabled: config.enabled === true,
+    provider: asProvider(config.provider) ?? DEFAULT_LIVE_OPS.provider,
+    fixtureMaxMatches: asNonNegativeInteger(config.fixtureMaxMatches),
+    fixtureCutoffIso: asIsoOrNull(config.fixtureCutoffIso),
   };
 }
 
@@ -203,13 +208,13 @@ async function buildTeamLookup(): Promise<Record<string, string>> {
   const lookup: Record<string, string> = {};
 
   snap.docs.forEach((docSnap) => {
-    const data = docSnap.data() as any;
+    const data = docSnap.data() as Record<string, unknown>;
     const teamId =
-      toUpperToken(data?.id) ?? toUpperToken(docSnap.id);
+      toUpperToken(data.id) ?? toUpperToken(docSnap.id);
     if (!teamId) return;
 
     addAlias(lookup, teamId, teamId);
-    addAlias(lookup, normalizeNameToken(data?.name), teamId);
+    addAlias(lookup, normalizeNameToken(data.name), teamId);
   });
 
   Object.entries(TEAM_NAME_ALIASES).forEach(([alias, teamId]) => {
@@ -234,13 +239,14 @@ async function getTeamLookup(): Promise<Record<string, string>> {
 }
 
 function mapProviderTeamId(
-  rawTeam: any,
+  rawTeam: unknown,
   teamLookup: Record<string, string>
 ): string | null {
+  const team = isRecord(rawTeam) ? rawTeam : {};
   const codeCandidates = [
-    toUpperToken(rawTeam?.tla),
-    toUpperToken(rawTeam?.shortName),
-    toUpperToken(rawTeam?.name),
+    toUpperToken(team.tla),
+    toUpperToken(team.shortName),
+    toUpperToken(team.name),
   ].filter((value): value is string => Boolean(value));
 
   for (const candidate of codeCandidates) {
@@ -249,8 +255,8 @@ function mapProviderTeamId(
   }
 
   const nameCandidates = [
-    normalizeNameToken(rawTeam?.name),
-    normalizeNameToken(rawTeam?.shortName),
+    normalizeNameToken(team.name),
+    normalizeNameToken(team.shortName),
   ].filter((value): value is string => Boolean(value));
 
   for (const candidate of nameCandidates) {
@@ -261,13 +267,14 @@ function mapProviderTeamId(
   return null;
 }
 
-function toProviderMatch(raw: any): ProviderMatch | null {
-  const matchId = asString(raw?.matchId);
-  const homeTeamId = asString(raw?.homeTeamId);
-  const awayTeamId = asString(raw?.awayTeamId);
-  const status = asStatus(raw?.status);
-  const stage = asStage(raw?.stage);
-  const kickoffTime = asString(raw?.kickoffTime) ?? null;
+function toProviderMatch(raw: unknown): ProviderMatch | null {
+  const source = isRecord(raw) ? raw : {};
+  const matchId = asString(source.matchId);
+  const homeTeamId = asString(source.homeTeamId);
+  const awayTeamId = asString(source.awayTeamId);
+  const status = asStatus(source.status);
+  const stage = asStage(source.stage);
+  const kickoffTime = asString(source.kickoffTime) ?? null;
 
   if (!matchId || !homeTeamId || !awayTeamId || !status || !stage) {
     return null;
@@ -277,27 +284,33 @@ function toProviderMatch(raw: any): ProviderMatch | null {
     matchId,
     homeTeamId,
     awayTeamId,
-    homeScore: asNumberOrNull(raw?.homeScore),
-    awayScore: asNumberOrNull(raw?.awayScore),
+    homeScore: asNumberOrNull(source.homeScore),
+    awayScore: asNumberOrNull(source.awayScore),
     status,
     stage,
     kickoffTime,
-    homeRedCards: asNonNegativeNumber(raw?.homeRedCards),
-    homeYellowCards: asNonNegativeNumber(raw?.homeYellowCards),
-    awayRedCards: asNonNegativeNumber(raw?.awayRedCards),
-    awayYellowCards: asNonNegativeNumber(raw?.awayYellowCards),
+    homeRedCards: asNonNegativeNumber(source.homeRedCards),
+    homeYellowCards: asNonNegativeNumber(source.homeYellowCards),
+    awayRedCards: asNonNegativeNumber(source.awayRedCards),
+    awayYellowCards: asNonNegativeNumber(source.awayYellowCards),
   };
 }
 
 function extractScore(
-  score: any,
+  score: unknown,
   side: "home" | "away"
 ): number | null {
+  const scoreRecord = isRecord(score) ? score : {};
+  const fullTime = isRecord(scoreRecord.fullTime) ? scoreRecord.fullTime : {};
+  const regularTime = isRecord(scoreRecord.regularTime) ? scoreRecord.regularTime : {};
+  const extraTime = isRecord(scoreRecord.extraTime) ? scoreRecord.extraTime : {};
+  const halfTime = isRecord(scoreRecord.halfTime) ? scoreRecord.halfTime : {};
+
   const candidates = [
-    score?.fullTime?.[side],
-    score?.regularTime?.[side],
-    score?.extraTime?.[side],
-    score?.halfTime?.[side],
+    fullTime[side],
+    regularTime[side],
+    extraTime[side],
+    halfTime[side],
   ];
 
   for (const value of candidates) {
@@ -313,7 +326,7 @@ async function fetchJsonWithRetry(
   init: RequestInit,
   timeoutMs: number,
   maxRetries: number
-): Promise<any> {
+): Promise<unknown> {
   let lastError: unknown = null;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
@@ -414,22 +427,26 @@ async function getFootballDataMatches(
     maxRetries
   );
 
-  const rawMatches = Array.isArray(payload?.matches) ? payload.matches : [];
+  const payloadRecord = isRecord(payload) ? payload : {};
+  const rawMatches = Array.isArray(payloadRecord.matches)
+    ? payloadRecord.matches
+    : [];
   if (!rawMatches.length) return [];
 
   const teamLookup = await getTeamLookup();
   const mapped: ProviderMatch[] = [];
 
-  rawMatches.forEach((raw: any) => {
-    const rawId = raw?.id;
+  rawMatches.forEach((raw: unknown) => {
+    if (!isRecord(raw)) return;
+    const rawId = raw.id;
     const matchId =
       typeof rawId === "number" || typeof rawId === "string"
         ? `fd-${String(rawId)}`
         : null;
-    const homeTeamId = mapProviderTeamId(raw?.homeTeam, teamLookup);
-    const awayTeamId = mapProviderTeamId(raw?.awayTeam, teamLookup);
-    const status = toProviderStatus(raw?.status);
-    const stage = toProviderStage(raw?.stage);
+    const homeTeamId = mapProviderTeamId(raw.homeTeam, teamLookup);
+    const awayTeamId = mapProviderTeamId(raw.awayTeam, teamLookup);
+    const status = toProviderStatus(raw.status);
+    const stage = toProviderStage(raw.stage);
 
     if (!matchId || !homeTeamId || !awayTeamId || !status) {
       return;
@@ -439,11 +456,11 @@ async function getFootballDataMatches(
       matchId,
       homeTeamId,
       awayTeamId,
-      homeScore: extractScore(raw?.score, "home"),
-      awayScore: extractScore(raw?.score, "away"),
+      homeScore: extractScore(raw.score, "home"),
+      awayScore: extractScore(raw.score, "away"),
       status,
       stage,
-      kickoffTime: asIsoOrNull(raw?.utcDate),
+      kickoffTime: asIsoOrNull(raw.utcDate),
       homeRedCards: 0,
       homeYellowCards: 0,
       awayRedCards: 0,
@@ -485,7 +502,7 @@ async function fetchProviderMatches(
     console.log(
       "[ingest] LIVE_SCORES_PROVIDER not set. Skipping ingestion."
     );
-    const rawMatches: any[] = [];
+    const rawMatches: unknown[] = [];
     return rawMatches
       .map((item) => toProviderMatch(item))
       .filter((item): item is ProviderMatch => Boolean(item));
@@ -567,19 +584,20 @@ async function writeLiveOpsHealth(data: {
   try {
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
-      const current = snap.exists ? (snap.data() as any) : {};
-      const currentRunsRaw = Array.isArray(current?.recentRuns)
+      const current = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+      const currentRunsRaw = Array.isArray(current.recentRuns)
         ? current.recentRuns
         : [];
 
       const currentRuns = currentRunsRaw
-        .map((run: any) => {
-          const at = asIsoOrNull(run?.at);
+        .map((run: unknown) => {
+          if (!isRecord(run)) return null;
+          const at = asIsoOrNull(run.at);
           const runStatus =
-            run?.status === "success" || run?.status === "error"
-              ? (run.status as LiveOpsRunStatus)
+            run.status === "success" || run.status === "error"
+              ? run.status
               : null;
-          const runProvider = asProvider(run?.provider);
+          const runProvider = asProvider(run.provider);
 
           if (!at || !runStatus || !runProvider) return null;
 
@@ -587,22 +605,22 @@ async function writeLiveOpsHealth(data: {
             at,
             status: runStatus,
             provider: runProvider,
-            matches: asNonNegativeInteger(run?.matches),
-            updated: asNonNegativeInteger(run?.updated),
+            matches: asNonNegativeInteger(run.matches),
+            updated: asNonNegativeInteger(run.updated),
             errorMessage:
-              typeof run?.errorMessage === "string"
+              typeof run.errorMessage === "string"
                 ? run.errorMessage.slice(0, 1000)
                 : null,
           };
         })
-        .filter(Boolean) as Array<{
+        .filter((run): run is {
         at: string;
         status: LiveOpsRunStatus;
         provider: LiveScoresProvider;
         matches: number;
         updated: number;
         errorMessage: string | null;
-      }>;
+      } => run !== null);
 
       const nextRun = {
         at: runAtIso,
@@ -613,7 +631,7 @@ async function writeLiveOpsHealth(data: {
         errorMessage: safeErrorMessage,
       };
 
-      const currentFailures = asNonNegativeInteger(current?.consecutiveFailures);
+      const currentFailures = asNonNegativeInteger(current.consecutiveFailures);
       const consecutiveFailures = hasError ? currentFailures + 1 : 0;
 
       const payload: Record<string, unknown> = {
@@ -736,8 +754,10 @@ async function applyMatchUpdates(
     existingById[snap.id] = snap.exists ? snap.data() : undefined;
   });
 
-  const updates: Array<{ ref: FirebaseFirestore.DocumentReference; data: any }> =
-    [];
+  const updates: Array<{
+    ref: FirebaseFirestore.DocumentReference;
+    data: Record<string, unknown>;
+  }> = [];
 
   matches.forEach((match) => {
     const existing = existingById[match.matchId];
