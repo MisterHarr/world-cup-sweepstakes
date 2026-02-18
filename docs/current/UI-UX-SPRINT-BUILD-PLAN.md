@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, and Sprint 2 Step 1
-- **Next:** Sprint 2, Step 2 (sign-up options expansion: Google + email/password)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, and Sprint 2 Step 2
+- **Next:** Sprint 2, Step 4 (department page simplification)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -70,3 +70,9 @@
   - Landing/auth surface simplified to core content only (brand, logo, primary action).
   - Signed-in state simplified to `Welcome [name]!` plus only `Continue` and `Sign Out`.
   - Headline typography tightened for clearer hierarchy and cleaner first impression.
+- **Sprint 2 Step 2 Outcomes:**
+  - Added dual auth entry modes on landing (`Google` and `Email`).
+  - Added email/password account creation and email/password sign-in flow.
+  - Added auth error normalization for common email/password failure states.
+- **Note on Sprint 2 Step 3:**
+  - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

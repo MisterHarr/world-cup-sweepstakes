@@ -21,6 +21,7 @@
 - ✅ **Global Shell Baseline (Sprint 1 Step 2)** - Moved `Transfer` nav to end and made signed-in identity visible on mobile across primary app shells
 - ✅ **Sprint 1 Step 3 Correctness Hardening** - Fixed leaderboard department filtering reliability, enforced unique draw assignments, and normalized Match Center stage/live parsing
 - ✅ **Sprint 2 Step 1 Onboarding Simplification** - Reduced landing/auth screen to essential branding + action flow with cleaner welcome state typography
+- ✅ **Sprint 2 Step 2 Auth Expansion** - Added landing support for email/password account creation and sign-in while retaining Google auth
 
 ### Core Features
 - ✅ Google Authentication with Firebase
