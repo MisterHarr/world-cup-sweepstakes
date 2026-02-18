@@ -23,6 +23,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type BadgeRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+type BadgeFilter = "all" | BadgeRarity;
 
 type BadgeAchievement = {
   id: string;
@@ -82,6 +83,7 @@ export default function BadgesPage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<BadgeFilter>("all");
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -96,6 +98,17 @@ export default function BadgesPage() {
     achievements.length > 0
       ? Math.round((unlockedCount / achievements.length) * 100)
       : 0;
+  const filteredAchievements =
+    activeFilter === "all"
+      ? achievements
+      : achievements.filter((achievement) => achievement.rarity === activeFilter);
+  const rarityCounts: Record<BadgeRarity, number> = {
+    common: achievements.filter((achievement) => achievement.rarity === "common").length,
+    uncommon: achievements.filter((achievement) => achievement.rarity === "uncommon").length,
+    rare: achievements.filter((achievement) => achievement.rarity === "rare").length,
+    epic: achievements.filter((achievement) => achievement.rarity === "epic").length,
+    legendary: achievements.filter((achievement) => achievement.rarity === "legendary").length,
+  };
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
@@ -219,10 +232,47 @@ export default function BadgesPage() {
             ))}
           </div>
 
+          {/* Rarity Filters */}
+          <div className="mb-6 overflow-x-auto pb-1">
+            <div className="inline-flex min-w-full sm:min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/60 p-1">
+              {(["all", ...rarityOrder] as BadgeFilter[]).map((filter) => {
+                const isActive = activeFilter === filter;
+                const label = filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1);
+                const count =
+                  filter === "all" ? achievements.length : rarityCounts[filter];
+                return (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActiveFilter(filter)}
+                    className={cn(
+                      "whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all",
+                      isActive
+                        ? "bg-foreground text-background shadow-[0_8px_20px_rgba(255,255,255,0.18)]"
+                        : "bg-transparent text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                    <span
+                      className={cn(
+                        "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px]",
+                        isActive
+                          ? "bg-background/20 text-background"
+                          : "bg-white/5 text-muted-foreground",
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Achievements Grid or Empty State */}
           {achievements.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {achievements.map((achievement) => {
+              {filteredAchievements.length > 0 ? filteredAchievements.map((achievement) => {
               const Icon = achievement.icon;
               const progressValue =
                 typeof achievement.progress === "number"
@@ -318,7 +368,13 @@ export default function BadgesPage() {
                   </div>
                 </div>
               );
-              })}
+              }) : (
+                <div className="md:col-span-2 rounded-xl border border-white/10 bg-zinc-900/60 p-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    No {activeFilter === "all" ? "" : activeFilter + " "}badges in this view yet.
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="relative overflow-hidden border border-white/10 rounded-2xl p-12 text-center bg-gradient-to-br from-zinc-900/90 via-zinc-900/75 to-zinc-950/70 shadow-[0_18px_42px_rgba(0,0,0,0.35)]">
