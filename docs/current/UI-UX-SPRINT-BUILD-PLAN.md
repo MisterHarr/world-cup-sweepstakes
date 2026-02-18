@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, and Sprint 2 Step 6
-- **Next:** Sprint 3, Step 1 (reveal page emphasis and featured 2x clarity)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, and Sprint 3 Step 1
+- **Next:** Sprint 3, Step 2 (dashboard portfolio layout overhaul)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -87,5 +87,9 @@
   - Simplified featured confirmation modal copy and hierarchy for faster comprehension.
   - Removed decorative icon and mystery-teams filler copy.
   - Increased emphasis on featured team identity and 2x points note with a cleaner reveal CTA.
+- **Sprint 3 Step 1 Outcomes:**
+  - Reworked `/reveal` headline hierarchy and removed decorative intro icon noise.
+  - Added stronger featured-team differentiation (`Featured · 2x` badge, highlighted featured card treatment).
+  - Increased flag/name/code scale on reveal cards and removed the low-value tier explanation block.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

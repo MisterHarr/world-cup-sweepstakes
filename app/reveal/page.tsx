@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Star, ChevronRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { AppShell } from "@/components/AppShell";
 import { auth, db } from "@/lib/firebase";
+import type { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +34,7 @@ const tierLabels: Record<number, string> = {
 
 export default function TeamRevealPage() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [assignedTeams, setAssignedTeams] = useState<RevealTeam[]>([]);
 
@@ -157,21 +157,8 @@ export default function TeamRevealPage() {
   if (loading || assignedTeams.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
-    );
-  }
-
-  if (false) {
-    return (
-      <AppShell user={user}>
-        <div className="min-h-[calc(100vh-73px)] flex items-center justify-center bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50">
-          <div className="text-center">
-            <p className="text-muted-foreground mb-4">No teams assigned yet</p>
-            <Button onClick={() => router.push("/featured-team")}>Select Featured Team</Button>
-          </div>
-        </div>
-      </AppShell>
     );
   }
 
@@ -204,16 +191,15 @@ export default function TeamRevealPage() {
 
         <main className="container mx-auto px-4 py-8 relative z-10">
           {/* Intro Section */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 mb-4">
-              <Sparkles className="w-8 h-8 text-primary" />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
+          <div className="text-center mb-8 max-w-3xl mx-auto">
+            <h1 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-3">
               Your World Cup Squad
             </h1>
-            <p className="text-muted-foreground max-w-md mx-auto">
-              Your featured team plus {assignedTeams.length - 1} randomly drawn teams.
-              Tap each card to reveal!
+            <p className="text-primary text-base sm:text-lg font-semibold">
+              Featured Team earns <span className="font-black">2x points</span> while active.
+            </p>
+            <p className="text-muted-foreground text-sm sm:text-base mt-2">
+              Tap each card to reveal your full squad.
             </p>
           </div>
 
@@ -231,13 +217,13 @@ export default function TeamRevealPage() {
           </div>
 
           {/* Team Cards Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto mb-8">
             {assignedTeams.map((team, index) => (
               <div
                 key={`${team.code}:${index}`}
                 onClick={() => handleRevealNext(index)}
                 className={cn(
-                  "relative aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
+                  "relative aspect-[5/6] sm:aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
                   index >= revealedCount && "cursor-pointer hover:scale-105"
                 )}
               >
@@ -256,7 +242,9 @@ export default function TeamRevealPage() {
                     className={cn(
                       "absolute inset-0 backface-hidden rounded-2xl border overflow-hidden",
                       "bg-gradient-to-br from-card via-card to-muted/50 border-border",
-                      team.tier === 1 && "border-amber-500/50 shadow-lg shadow-amber-500/20"
+                      team.tier === 1 && "border-amber-500/50 shadow-lg shadow-amber-500/20",
+                      team.isChosen &&
+                        "border-primary shadow-[0_20px_45px_rgba(16,185,129,0.28)] ring-2 ring-primary/40"
                     )}
                     style={{ backfaceVisibility: "hidden" }}
                   >
@@ -270,27 +258,33 @@ export default function TeamRevealPage() {
                       Tier {team.tier}: {tierLabels[team.tier]}
                     </div>
 
-                    {/* Your Pick Badge */}
+                    {/* Featured Badge */}
                     {team.isChosen && (
-                      <div className="absolute top-10 right-2">
-                        <Badge className="bg-primary text-primary-foreground gap-1">
-                          <Star className="w-3 h-3 fill-current" />
-                          Your Pick
-                        </Badge>
+                      <div className="absolute top-10 left-1/2 -translate-x-1/2 rounded-full border border-primary/50 bg-primary/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
+                        Featured · 2x
                       </div>
                     )}
 
                     {/* Team Content */}
-                    <div className="flex flex-col items-center justify-center h-full pt-6">
-                      <div className="w-20 h-20 rounded-full overflow-hidden mb-3 border-2 border-border">
+                    <div className="flex flex-col items-center justify-center h-full pt-8 sm:pt-9">
+                      <div
+                        className={cn(
+                          "w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden mb-4 border-2",
+                          team.isChosen ? "border-primary/70" : "border-border"
+                        )}
+                      >
                         {team.flag ? (
                           <img src={team.flag} alt={team.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="text-4xl">🏳️</span>
                         )}
                       </div>
-                      <h3 className="text-xl font-bold text-foreground">{team.name}</h3>
-                      <p className="text-sm text-muted-foreground">{team.code}</p>
+                      <h3 className="text-2xl sm:text-[28px] font-black text-foreground text-center px-3 leading-tight">
+                        {team.name}
+                      </h3>
+                      <p className="text-base sm:text-lg text-muted-foreground font-semibold tracking-wider mt-1">
+                        {team.code}
+                      </p>
                     </div>
 
                     {/* Shine Effect for Tier 1 */}
@@ -308,14 +302,16 @@ export default function TeamRevealPage() {
                     }}
                   >
                     <div className="text-center">
-                      <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                        <span className="text-3xl">?</span>
+                      <div className="w-20 h-20 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                        <span className="text-4xl">?</span>
                       </div>
-                      <p className="text-sm text-muted-foreground">Team #{index + 1}</p>
+                      <p className="text-sm text-muted-foreground font-semibold">
+                        Team #{index + 1}
+                      </p>
                       {index === 0 && (
-                        <Badge variant="secondary" className="mt-2">
-                          Your Choice
-                        </Badge>
+                        <p className="mt-2 text-xs font-bold uppercase tracking-wider text-primary">
+                          Featured Team
+                        </p>
                       )}
                     </div>
                   </div>
@@ -336,39 +332,10 @@ export default function TeamRevealPage() {
                 Reveal All
               </Button>
             ) : (
-              <Button size="lg" className="gap-2" onClick={handleViewPortfolio}>
-                View My Portfolio
-                <ChevronRight className="w-5 h-5" />
+              <Button size="lg" onClick={handleViewPortfolio}>
+                Go to Dashboard
               </Button>
             )}
-          </div>
-
-          {/* Tier Explanation */}
-          <div className="mt-12 bg-card border border-border rounded-xl p-6 max-w-2xl mx-auto">
-            <h3 className="font-bold text-foreground mb-4">How Tiers Work</h3>
-            <div className="space-y-3">
-              {Object.entries(tierLabels).map(([tier, label]) => (
-                <div key={tier} className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "w-8 h-8 rounded-lg bg-gradient-to-r flex items-center justify-center text-white text-sm font-bold",
-                      tierColors[Number(tier)]
-                    )}
-                  >
-                    {tier}
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">{label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {tier === "1" && "Top 12 ranked teams - Favorites to win"}
-                      {tier === "2" && "Ranked 13-24 - Strong contenders"}
-                      {tier === "3" && "Ranked 25-36 - Potential surprise packages"}
-                      {tier === "4" && "Ranked 37-48 - Long shots with bonus potential"}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </main>
 

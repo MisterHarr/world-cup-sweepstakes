@@ -25,6 +25,7 @@
 - ✅ **Sprint 2 Step 4 Department Simplification** - Reworked `/department` into large centered department choices with minimal copy and stronger confirm CTA
 - ✅ **Sprint 2 Step 5 Featured Team UI Overhaul** - Updated `/featured-team` cards to compact horizontal composition, premium tier tiles, and full group filtering coverage
 - ✅ **Sprint 2 Step 6 Confirmation Modal Simplification** - Streamlined featured confirmation modal content and CTA with stronger featured-team + 2x points emphasis
+- ✅ **Sprint 3 Step 1 Reveal Emphasis Refresh** - Updated `/reveal` with stronger featured-team 2x signaling, larger card content hierarchy, and cleaner reduced-copy layout
 
 ### Core Features
 - ✅ Google Authentication with Firebase
