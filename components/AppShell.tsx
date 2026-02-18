@@ -49,8 +49,15 @@ export function AppShell({ children, user, showAuth = true }: AppShellProps) {
             {/* Auth Actions */}
             {showAuth && user && (
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm text-muted-foreground max-w-[120px] sm:max-w-none truncate">
-                  {user.displayName || user.email}
+                <span className="text-xs sm:text-sm text-muted-foreground max-w-[44vw] sm:max-w-[240px] truncate leading-tight">
+                  {user.displayName ? (
+                    <>
+                      <span className="sm:hidden">{user.displayName}</span>
+                      <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
+                    </>
+                  ) : (
+                    user.email || "Signed in"
+                  )}
                 </span>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   Sign Out

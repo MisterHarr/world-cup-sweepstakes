@@ -333,14 +333,21 @@ export default function StandaloneLeaderboardPage() {
               </h1>
             </div>
 
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[45vw] sm:max-w-none truncate text-right">
-              {signedIn
-                ? displayName
-                  ? `Signed in as ${displayName}`
-                  : "Signed in"
-                : checkingAuth
-                  ? "Checking session..."
-                  : "Signed out"}
+            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
+              {signedIn ? (
+                displayName ? (
+                  <>
+                    <span className="sm:hidden">{displayName}</span>
+                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
+                  </>
+                ) : (
+                  "Signed in"
+                )
+              ) : checkingAuth ? (
+                "Checking session..."
+              ) : (
+                "Signed out"
+              )}
             </div>
           </div>
         </header>

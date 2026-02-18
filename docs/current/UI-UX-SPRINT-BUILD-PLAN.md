@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, and Sprint 4 Step 3
-- **Next:** Sprint 4, Step 4 (final mobile and typography pass)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, Sprint 4 Step 3, and Sprint 4 Step 4
+- **Next:** UI/UX sprint sequence complete; run manual cross-device QA and open a targeted polish backlog from findings.
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -121,5 +121,9 @@
   - Replaced empty-state-only badge rendering with an always-visible catalog sourced from `lib/badgeDefinitions.ts`.
   - Added locked/unlocked card-state behavior so all badges appear immediately and brighten when earned.
   - Wired user-doc badge data parsing on `/badges` to reflect unlocked badges and unlocked dates when present.
+- **Sprint 4 Step 4 Outcomes:**
+  - Applied global typography polish (stronger heading/body hierarchy and tracking consistency) without network-dependent font fetches.
+  - Improved mobile signed-in identity visibility across shared headers by showing concise mobile name labels and fuller desktop labels.
+  - Tightened transfer-market mobile row layout for clearer trend/points/action readability on narrow screens.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

@@ -331,7 +331,7 @@ const DashboardTransferMarket = ({
                           resetConfirmState();
                         }}
                         className={[
-                          "grid cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] gap-3 border-b border-border px-4 py-3 transition-colors last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_110px_80px_110px]",
+                          "grid cursor-pointer grid-cols-1 gap-2 border-b border-border px-4 py-3 transition-colors last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_110px_80px_110px] md:gap-3",
                           !canPickReplacement ? "cursor-not-allowed opacity-60" : "",
                           selectedPickup?.id === team.id ? "bg-emerald-500/15" : "hover:bg-white/5",
                         ].join(" ")}
@@ -340,7 +340,10 @@ const DashboardTransferMarket = ({
                           <p className="truncate font-semibold text-foreground">{team.name}</p>
                           <p className="text-xs text-muted-foreground">{team.id}</p>
                         </div>
-                        <div className="flex items-center md:justify-start">
+                        <div className="flex items-center justify-between md:justify-start">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground md:hidden">
+                            Trend
+                          </span>
                           <span
                             className={[
                               "inline-flex rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-wider",
@@ -350,10 +353,13 @@ const DashboardTransferMarket = ({
                             {trend}
                           </span>
                         </div>
-                        <div className="flex items-center justify-end font-mono text-sm text-foreground/90">
-                          {team.points ?? 0}
+                        <div className="flex items-center justify-between md:justify-end font-mono text-sm text-foreground/90">
+                          <span className="text-[10px] font-sans uppercase tracking-wider text-muted-foreground md:hidden">
+                            Points
+                          </span>
+                          <span>{team.points ?? 0}</span>
                         </div>
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center justify-end pt-1 md:pt-0">
                           <button
                             type="button"
                             onClick={(event) => {

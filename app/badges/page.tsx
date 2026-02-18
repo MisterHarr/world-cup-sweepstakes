@@ -306,12 +306,19 @@ export default function BadgesPage() {
               </div>
               <h1 className="font-bold text-lg tracking-tight">{BRANDING.appName}</h1>
             </div>
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[45vw] sm:max-w-none truncate text-right">
-              {user
-                ? user.displayName
-                  ? `Signed in as ${user.displayName}`
-                  : "Signed in"
-                : "Signed out"}
+            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
+              {user ? (
+                user.displayName ? (
+                  <>
+                    <span className="sm:hidden">{user.displayName}</span>
+                    <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
+                  </>
+                ) : (
+                  "Signed in"
+                )
+              ) : (
+                "Signed out"
+              )}
             </div>
           </div>
         </header>
