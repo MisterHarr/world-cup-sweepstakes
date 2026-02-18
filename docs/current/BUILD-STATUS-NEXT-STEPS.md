@@ -29,6 +29,7 @@
 - ✅ **Sprint 3 Step 2 Dashboard Portfolio Overhaul** - Rebuilt `/dashboard` portfolio tab with nested summary containers, rank trend indicator, and cleaner expandable team data panels
 - ✅ **Sprint 3 Step 3 Leaderboard Cleanup + Squad Tray Redesign** - Removed redundant leaderboard meta strip and redesigned squad drawer cards for cleaner hierarchy and premium readability
 - ✅ **Sprint 3 Step 4 Bracket Header Cleanup** - Removed bracket-tab debug/meta labels and re-centered/enlarged `Match Center` + live-match signal while preserving dynamic stage/live behavior
+- ✅ **Sprint 3 Step 5 Transfer Tab Layout Migration** - Rebuilt `/dashboard?tab=market` into Light-Luxury-style two-step transfer flow + summary sidebar while preserving dark theme and hold-to-confirm trade logic
 
 ### Core Features
 - ✅ Google Authentication with Firebase

@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, and Sprint 3 Step 4
-- **Next:** Sprint 3, Step 5 (transfer tab layout migration to Light-Luxury structure)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, and Sprint 3 Step 5
+- **Next:** Sprint 4, Step 1 (premium badge visual system and rarity glows)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -105,5 +105,9 @@
   - Removed bracket-tab debug/meta clutter (`Last updated`, `v0 layout active`, and `Current Stage` label chrome).
   - Re-centered and scaled the `Match Center` header and live match signal for stronger hierarchy.
   - Kept match-live counts and stage navigation dynamic while reducing visual noise in the bracket header.
+- **Sprint 3 Step 5 Outcomes:**
+  - Migrated Transfer tab to a Light-Luxury-inspired structure in dark theme: two-step selection flow + sticky transfer summary panel.
+  - Reworked market list into denser table-like rows with clearer selection affordances and trend/points scanability.
+  - Preserved hold-to-confirm transfer execution, window/open-state gating, and transfer-history access while modernizing layout.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.
