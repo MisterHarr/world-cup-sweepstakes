@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, and Sprint 3 Step 1
-- **Next:** Sprint 3, Step 2 (dashboard portfolio layout overhaul)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, and Sprint 3 Step 2
+- **Next:** Sprint 3, Step 3 (leaderboard visual cleanup + squad tray redesign)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -91,5 +91,10 @@
   - Reworked `/reveal` headline hierarchy and removed decorative intro icon noise.
   - Added stronger featured-team differentiation (`Featured · 2x` badge, highlighted featured card treatment).
   - Increased flag/name/code scale on reveal cards and removed the low-value tier explanation block.
+- **Sprint 3 Step 2 Outcomes:**
+  - Rebuilt portfolio summary into nested containers: large total-points panel + dedicated rank-trend card.
+  - Added rank movement indicator (up/down/no-change) based on previously seen rank for the signed-in user.
+  - Reworked team rows and expanded panels into clearer nested card sections with premium tier badges.
+  - Removed `Your Pick` label and shifted featured signaling to crown + `Featured 2x` badge treatment.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

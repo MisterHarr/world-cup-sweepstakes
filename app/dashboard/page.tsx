@@ -1260,6 +1260,7 @@ function DashboardPageContent() {
         {/* Portfolio View - Show when on "My Teams" tab */}
         {signedIn && activeTab === "portfolio" && (
           <DashboardPortfolio
+            userId={uid}
             userStats={userStats}
             leaderboardCount={leaderboardData.length}
             teamStats={teamStats}
