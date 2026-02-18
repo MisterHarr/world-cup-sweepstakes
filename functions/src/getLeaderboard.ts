@@ -15,6 +15,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function asDepartment(value: unknown): "Primary" | "Secondary" | "Admin" | null {
+  if (typeof value !== "string") return null;
+  const token = value.trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (token === "primary") return "Primary";
+  if (token === "secondary") return "Secondary";
+  if (
+    token === "admin" ||
+    token === "opsadmin" ||
+    token === "operationsadmin" ||
+    token === "ops" ||
+    token === "operations"
+  ) {
+    return "Admin";
+  }
+  return null;
+}
+
 export const getLeaderboard = onCall(
   { region: "asia-southeast1" },
   async (request) => {
@@ -41,12 +58,7 @@ export const getLeaderboard = onCall(
             ? data.displayName.trim()
             : "Anonymous";
 
-        const department =
-          data.department === "Primary" ||
-          data.department === "Secondary" ||
-          data.department === "Admin"
-            ? data.department
-            : null;
+        const department = asDepartment(data.department);
 
         return {
           id: d.id,

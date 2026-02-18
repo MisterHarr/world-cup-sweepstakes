@@ -1,0 +1,32 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Featured Five 2026 cup mark">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="cup" x1="176" y1="110" x2="336" y2="330" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#CBD5E1"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="168" y1="154" x2="344" y2="314" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)"/>
+
+  <path d="M188 132H324V212C324 265.019 281.019 308 228 308H284C230.981 308 188 265.019 188 212V132Z" fill="url(#cup)"/>
+  <path d="M188 156H324V212C324 251.765 291.765 284 252 284C212.235 284 180 251.765 180 212V156H188Z" fill="url(#accent)" opacity="0.9"/>
+
+  <path d="M164 166H134C126.268 166 120 172.268 120 180V194C120 227.137 146.863 254 180 254H192" stroke="#E2E8F0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M348 166H378C385.732 166 392 172.268 392 180V194C392 227.137 365.137 254 332 254H320" stroke="#E2E8F0" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="230" y="296" width="44" height="54" rx="14" fill="#E2E8F0"/>
+  <rect x="184" y="346" width="136" height="28" rx="14" fill="#E2E8F0"/>
+
+  <circle cx="252" cy="206" r="44" fill="#0F172A" fill-opacity="0.28"/>
+  <path d="M252 168L266.5 194H296L272 211L281 238L252 222L223 238L232 211L208 194H237.5L252 168Z" fill="#F8FAFC"/>
+
+  <text x="256" y="424" text-anchor="middle" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="42" font-weight="700" letter-spacing="5">2026</text>
+</svg>

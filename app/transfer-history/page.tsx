@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Clock3, TrendingDown } from "lucide-react";
 
 import { AppShellV0 } from "@/components/app-shell-v0";
+import { BRANDING } from "@/lib/branding";
 import { auth, db, functions } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
@@ -253,12 +254,12 @@ export default function TransferHistoryPage() {
     <AppShellV0 navItems={navItems} activeId="transfer">
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-8">
         <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between lg:pr-[34rem]">
+          <div className="max-w-6xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
                 <img
-                  src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
-                  alt="GIS Logo"
+                  src={BRANDING.logoSrc}
+                  alt={BRANDING.logoAlt}
                   className="w-full h-full object-contain"
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                     e.currentTarget.style.display = "none";
@@ -269,7 +270,7 @@ export default function TransferHistoryPage() {
                 Transfer History
               </h1>
             </div>
-            <div className="hidden md:block text-[12px] text-muted-foreground">
+            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[45vw] sm:max-w-none truncate text-right">
               {signedIn
                 ? displayName
                   ? `Signed in as ${displayName}`

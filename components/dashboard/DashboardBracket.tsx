@@ -125,6 +125,17 @@ const DashboardBracket = ({
   );
 
   const liveMatchCount = liveMatches.length;
+  const totalLiveMatchCount = useMemo(
+    () =>
+      Object.values(matches).reduce((sum, stageMatches) => {
+        const rows = Array.isArray(stageMatches) ? stageMatches : [];
+        const live = rows.filter(
+          (match) => Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE"
+        ).length;
+        return sum + live;
+      }, 0),
+    [matches]
+  );
   const liveYourTeamCount = liveMatches.filter(
     (match) => isUserTeam(match.t1) || isUserTeam(match.t2)
   ).length;
@@ -166,7 +177,7 @@ const DashboardBracket = ({
             <div className="w-10 h-10 rounded-xl bg-destructive/20 flex items-center justify-center">
               <Tv className="w-5 h-5 text-destructive" />
             </div>
-            {liveMatchCount > 0 && (
+            {totalLiveMatchCount > 0 && (
               <>
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full animate-ping" />
                 <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full" />
@@ -177,7 +188,7 @@ const DashboardBracket = ({
             <h2 className="text-lg font-bold text-foreground">Match Center</h2>
             <p className="text-xs text-muted-foreground">
               {hasRealStages
-                ? `${liveMatchCount} match${liveMatchCount === 1 ? "" : "es"} live`
+                ? `${totalLiveMatchCount} match${totalLiveMatchCount === 1 ? "" : "es"} live`
                 : "Feed unavailable"}
             </p>
           </div>

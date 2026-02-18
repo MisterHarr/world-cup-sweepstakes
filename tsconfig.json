@@ -34,6 +34,8 @@
     "node_modules",
     "archive",
     "sweepstakes-game-ux",
-    "docs/sweepstakes-game-ux"
+    "docs/sweepstakes-game-ux",
+    "docs/sweepstakes-game-ux (1)",
+    "docs/sweepstakes-game-ux*"
   ]
 }

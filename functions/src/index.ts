@@ -21,6 +21,43 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+function uniqueByTeamId<T extends { id: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const unique: T[] = [];
+  rows.forEach((row) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id);
+    unique.push(row);
+  });
+  return unique;
+}
+
+function drawTierBalanced<T extends { id: string; tier: number }>(
+  eligibleTeams: T[],
+  count = 5
+): T[] {
+  const tier1 = eligibleTeams.filter((team) => team.tier === 1);
+  const tier2 = eligibleTeams.filter((team) => team.tier === 2);
+  const tier3 = eligibleTeams.filter((team) => team.tier === 3);
+  const tier4 = eligibleTeams.filter((team) => team.tier === 4);
+
+  const seeded = uniqueByTeamId([
+    ...shuffle(tier1).slice(0, 1),
+    ...shuffle(tier2).slice(0, 1),
+    ...shuffle(tier3).slice(0, 2),
+    ...shuffle(tier4).slice(0, 1),
+  ]);
+
+  if (seeded.length >= count) {
+    return seeded.slice(0, count);
+  }
+
+  const seededIds = new Set(seeded.map((team) => team.id));
+  const remainingPool = eligibleTeams.filter((team) => !seededIds.has(team.id));
+  const filled = seeded.concat(shuffle(remainingPool).slice(0, count - seeded.length));
+  return uniqueByTeamId(filled).slice(0, count);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -254,12 +291,16 @@ export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
   }
 
   const teamsSnap = await db.collection("teams").get();
-  const allTeamIds = teamsSnap.docs
-    .map((d) => {
-      const data = d.data() as Record<string, unknown>;
-      return asTrimmedString(data.id) ?? d.id;
-    })
-    .filter((x): x is string => typeof x === "string" && x.length > 0);
+  const allTeamIds = Array.from(
+    new Set(
+      teamsSnap.docs
+        .map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          return asTrimmedString(data.id) ?? d.id;
+        })
+        .filter((x): x is string => typeof x === "string" && x.length > 0)
+    )
+  );
 
   const exclude = new Set<string>([
     featured.teamId,
@@ -305,12 +346,14 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
   const userRef = db.collection("users").doc(uid);
 
   const teamsSnap = await db.collection("teams").get();
-  const allTeams = teamsSnap.docs
-    .map((d): TeamSeedRow | null => {
-      const data = d.data() as Record<string, unknown>;
-      return readTeamSeedRow(data, d.id);
-    })
-    .filter((team): team is TeamSeedRow => team !== null);
+  const allTeams = uniqueByTeamId(
+    teamsSnap.docs
+      .map((d): TeamSeedRow | null => {
+        const data = d.data() as Record<string, unknown>;
+        return readTeamSeedRow(data, d.id);
+      })
+      .filter((team): team is TeamSeedRow => team !== null)
+  );
 
   const featuredTeam = allTeams.find((t) => t.id === teamId);
   if (!featuredTeam) {
@@ -322,25 +365,12 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("failed-precondition", "Not enough teams to draw from.");
   }
 
-  // Tier-balanced draw: 1 from tier-1, 1 from tier-2, 2 from tier-3, 1 from tier-4
-  const tier1 = eligibleForDraw.filter((t) => t.tier === 1);
-  const tier2 = eligibleForDraw.filter((t) => t.tier === 2);
-  const tier3 = eligibleForDraw.filter((t) => t.tier === 3);
-  const tier4 = eligibleForDraw.filter((t) => t.tier === 4);
-
-  const drawnTeams = [
-    ...shuffle(tier1).slice(0, 1),
-    ...shuffle(tier2).slice(0, 1),
-    ...shuffle(tier3).slice(0, 2),
-    ...shuffle(tier4).slice(0, 1),
-  ];
-
-  // Fallback if not enough teams in specific tiers
+  const drawnTeams = drawTierBalanced(eligibleForDraw, 5);
   if (drawnTeams.length < 5) {
-    const remaining = 5 - drawnTeams.length;
-    const drawnIds = new Set(drawnTeams.map((t) => t.id));
-    const available = eligibleForDraw.filter((t) => !drawnIds.has(t.id));
-    drawnTeams.push(...shuffle(available).slice(0, remaining));
+    throw new HttpsError(
+      "failed-precondition",
+      "Not enough unique teams available for draw."
+    );
   }
 
   try {
@@ -544,24 +574,26 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
     name: string;
     tier: number;
   };
-  const allTeams = teamsSnap.docs
-    .map((d): TeamPoolRow | null => {
-      const data = d.data() as Record<string, unknown>;
-      const id = asTrimmedString(data.id) ?? d.id;
-      const name = asTrimmedString(data.name);
-      const tierRaw = data.tier;
-      const tier =
-        typeof tierRaw === "number" && Number.isFinite(tierRaw)
-          ? Math.floor(tierRaw)
-          : null;
-      if (!id || !name || tier === null || tier < 1 || tier > 4) return null;
-      return {
-        id,
-        name,
-        tier,
-      };
-    })
-    .filter((team): team is TeamPoolRow => team !== null);
+  const allTeams = uniqueByTeamId(
+    teamsSnap.docs
+      .map((d): TeamPoolRow | null => {
+        const data = d.data() as Record<string, unknown>;
+        const id = asTrimmedString(data.id) ?? d.id;
+        const name = asTrimmedString(data.name);
+        const tierRaw = data.tier;
+        const tier =
+          typeof tierRaw === "number" && Number.isFinite(tierRaw)
+            ? Math.floor(tierRaw)
+            : null;
+        if (!id || !name || tier === null || tier < 1 || tier > 4) return null;
+        return {
+          id,
+          name,
+          tier,
+        };
+      })
+      .filter((team): team is TeamPoolRow => team !== null)
+  );
 
   if (allTeams.length < 6) {
     throw new HttpsError("failed-precondition", "Not enough teams in database.");
@@ -572,25 +604,12 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
   const featuredTeam = shuffledTeams[0];
   const eligibleForDraw = shuffledTeams.slice(1);
 
-  // Tier-balanced draw: 1 from tier-1, 1 from tier-2, 2 from tier-3, 1 from tier-4
-  const tier1 = eligibleForDraw.filter((t) => t.tier === 1);
-  const tier2 = eligibleForDraw.filter((t) => t.tier === 2);
-  const tier3 = eligibleForDraw.filter((t) => t.tier === 3);
-  const tier4 = eligibleForDraw.filter((t) => t.tier === 4);
-
-  const drawnTeams = [
-    ...shuffle(tier1).slice(0, 1),
-    ...shuffle(tier2).slice(0, 1),
-    ...shuffle(tier3).slice(0, 2),
-    ...shuffle(tier4).slice(0, 1),
-  ];
-
-  // Fallback if not enough teams in specific tiers
+  const drawnTeams = drawTierBalanced(eligibleForDraw, 5);
   if (drawnTeams.length < 5) {
-    const remaining = 5 - drawnTeams.length;
-    const drawnIds = new Set(drawnTeams.map((t) => t.id));
-    const available = eligibleForDraw.filter((t) => !drawnIds.has(t.id));
-    drawnTeams.push(...shuffle(available).slice(0, remaining));
+    throw new HttpsError(
+      "failed-precondition",
+      "Not enough unique teams available for draw."
+    );
   }
 
   // Create portfolio and entry

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Trophy } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
+import { BRANDING } from "@/lib/branding";
 import { ensureUserDoc } from "@/lib/userBootstrap";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import {
@@ -186,14 +186,15 @@ export function AuthLandingPage() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo Section */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 mb-6 relative">
-            <Trophy className="w-10 h-10 text-primary" />
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-              <Sparkles className="w-2.5 h-2.5 text-primary-foreground" />
-            </div>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 mb-6 overflow-hidden p-1">
+            <img
+              src={BRANDING.logoSrc}
+              alt={BRANDING.logoAlt}
+              className="h-full w-full object-contain"
+            />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">World Cup 2026</h1>
-          <p className="text-muted-foreground">Office Sweepstakes</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">{BRANDING.shortName}</h1>
+          <p className="text-muted-foreground">{BRANDING.tagline}</p>
         </div>
 
         {/* Main Card */}

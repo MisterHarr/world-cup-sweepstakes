@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Crown, Shield, Trophy, X } from "lucide-react";
+import {
+  fromDepartmentKey,
+  normalizeDepartment,
+  toDepartmentKey,
+  type DepartmentKey,
+} from "@/lib/departments";
 
 export type LBUser = {
   id: string;
@@ -76,21 +82,6 @@ function TierPill({ tier }: { tier: number }) {
   );
 }
 
-function normalizeDepartment(value: unknown): "primary" | "secondary" | "admin" | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "primary") return "primary";
-  if (normalized === "secondary") return "secondary";
-  if (normalized === "admin") return "admin";
-  return null;
-}
-
-function toDepartmentLabel(value: "primary" | "secondary" | "admin"): string {
-  if (value === "primary") return "Primary";
-  if (value === "secondary") return "Secondary";
-  return "Admin";
-}
-
 function friendlyErrorMessage(err: unknown, fallback: string): string {
   if (!err || typeof err !== "object") return fallback;
   const raw =
@@ -117,9 +108,7 @@ export default function LeaderboardPanel({
   modeLabel = "Standalone",
 }: LeaderboardPanelProps) {
   const [selectedUser, setSelectedUser] = useState<LBUser | null>(null);
-  const [selectedDept, setSelectedDept] = useState<
-    "primary" | "secondary" | "admin" | null
-  >(null);
+  const [selectedDept, setSelectedDept] = useState<DepartmentKey | null>(null);
   const [sortMode, setSortMode] = useState<"points" | "badges">("points");
 
   const [squad, setSquad] = useState<SquadVM | null>(null);
@@ -156,7 +145,7 @@ export default function LeaderboardPanel({
   }, [data]);
 
   const hasDeptData = useMemo(
-    () => sorted.some((u) => Boolean(normalizeDepartment(u.department ?? u.dept))),
+    () => sorted.some((u) => Boolean(toDepartmentKey(u.department ?? u.dept))),
     [sorted]
   );
   const deptFilters = CORE_DEPARTMENT_TABS;
@@ -164,7 +153,7 @@ export default function LeaderboardPanel({
   const visibleRows = useMemo(() => {
     return selectedDept && hasDeptData
       ? sorted.filter(
-          (u) => normalizeDepartment(u.department ?? u.dept) === selectedDept
+          (u) => toDepartmentKey(u.department ?? u.dept) === selectedDept
         )
       : sorted;
   }, [hasDeptData, selectedDept, sorted]);
@@ -367,7 +356,7 @@ export default function LeaderboardPanel({
                 key={dept}
                 onClick={() => {
                   setSortMode("points");
-                  const deptKey = normalizeDepartment(dept);
+                  const deptKey = toDepartmentKey(dept);
                   if (!deptKey) {
                     setSelectedDept(null);
                     return;
@@ -376,7 +365,7 @@ export default function LeaderboardPanel({
                 }}
                 className={[
                   "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
-                  selectedDept === normalizeDepartment(dept) && sortMode === "points"
+                  selectedDept === toDepartmentKey(dept) && sortMode === "points"
                     ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                     : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
                 ].join(" ")}
@@ -404,7 +393,7 @@ export default function LeaderboardPanel({
             {filteredList.length > 0
               ? filteredList.map((user) => {
                   const isYou = Boolean(currentUserId && user.id === currentUserId);
-                  const dept = user.department ?? user.dept;
+                  const dept = normalizeDepartment(user.department ?? user.dept);
                   return (
                     <div
                       key={user.id}
@@ -461,7 +450,7 @@ export default function LeaderboardPanel({
                     {selectedDept && !hasDeptData
                       ? "Department splits are unavailable until leaderboard data includes departments."
                       : selectedDept
-                        ? `No participants found in ${toDepartmentLabel(selectedDept)}.`
+                        ? `No participants found in ${fromDepartmentKey(selectedDept)}.`
                         : "No participants to display."}
                   </div>
                 )}

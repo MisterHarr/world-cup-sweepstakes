@@ -4,6 +4,9 @@
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
+**Related Active Plan:** `/docs/current/UI-UX-SPRINT-BUILD-PLAN.md`
+**Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
+
 ---
 
 ## ✅ Recently Completed (v1.0)
@@ -15,6 +18,8 @@
 - ✅ **Firestore Indexes** - Deployed composite indexes for match queries
 - ✅ **Squad Details Placeholder Cleanup** - Replaced placeholder scores with real callable-driven totals/contributions
 - ✅ **Admin Transfer Window Toggle** - Added `/admin/fixtures` controls for opening/closing `settings/transferWindow` without console scripts
+- ✅ **Global Shell Baseline (Sprint 1 Step 2)** - Moved `Transfer` nav to end and made signed-in identity visible on mobile across primary app shells
+- ✅ **Sprint 1 Step 3 Correctness Hardening** - Fixed leaderboard department filtering reliability, enforced unique draw assignments, and normalized Match Center stage/live parsing
 
 ### Core Features
 - ✅ Google Authentication with Firebase

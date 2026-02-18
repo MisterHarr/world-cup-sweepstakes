@@ -8,6 +8,7 @@ const DEFAULT_TRANSFER_PENALTY_POINTS = 15;
 
 type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
 type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
+type Department = "Primary" | "Secondary" | "Admin";
 
 type MatchInput = {
   matchId?: unknown;
@@ -37,6 +38,23 @@ function asString(value: unknown): string | null {
 function asNumberOrNull(value: unknown): number | null {
   if (value === null) return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
+}
+
+function asDepartment(value: unknown): Department | null {
+  if (typeof value !== "string") return null;
+  const token = value.trim().toLowerCase().replace(/[^a-z]/g, "");
+  if (token === "primary") return "Primary";
+  if (token === "secondary") return "Secondary";
+  if (
+    token === "admin" ||
+    token === "opsadmin" ||
+    token === "operationsadmin" ||
+    token === "ops" ||
+    token === "operations"
+  ) {
+    return "Admin";
+  }
   return null;
 }
 
@@ -392,12 +410,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       asString(data.email) ??
       "Anonymous";
 
-    const department =
-      data.department === "Primary" ||
-      data.department === "Secondary" ||
-      data.department === "Admin"
-        ? data.department
-        : null;
+    const department = asDepartment(data.department);
 
     let featuredId: string | null = null;
     let drawnIds: string[] = [];

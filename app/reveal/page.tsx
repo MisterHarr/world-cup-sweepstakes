@@ -72,7 +72,9 @@ export default function TeamRevealPage() {
       const drawnTeamIds = userData.entry?.drawnTeamIds || [];
 
       // Fetch all 6 teams (featured + 5 drawn)
-      const allTeamIds = [featuredTeamId, ...drawnTeamIds].filter(Boolean);
+      const allTeamIds = Array.from(
+        new Set([featuredTeamId, ...drawnTeamIds].filter(Boolean))
+      );
       const teams: RevealTeam[] = [];
 
       for (const teamId of allTeamIds) {
@@ -232,7 +234,7 @@ export default function TeamRevealPage() {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-w-2xl mx-auto mb-8">
             {assignedTeams.map((team, index) => (
               <div
-                key={team.code}
+                key={`${team.code}:${index}`}
                 onClick={() => handleRevealNext(index)}
                 className={cn(
                   "relative aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
