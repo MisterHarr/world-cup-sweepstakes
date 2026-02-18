@@ -8,6 +8,7 @@
 **Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
+**Immediate Focus:** Clear `P1` backlog items `QA-001` to `QA-003`, then complete cross-device manual QA.
 
 ---
 
