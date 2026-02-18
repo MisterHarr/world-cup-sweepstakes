@@ -5,6 +5,12 @@
 **Related Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`  
 **Backlog Target:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
 
+## Automated Pre-Check (Engineer)
+
+- `npm run lint`: pass (0 errors)
+- `npm run build`: pass
+- Route health check (HTTP 200): `/`, `/department`, `/featured-team`, `/reveal`, `/dashboard`, `/leaderboard`, `/badges`, `/transfer-history`, `/admin`, `/admin/users`
+
 ## Session Setup
 
 - [ ] App running via `npm run dev`
