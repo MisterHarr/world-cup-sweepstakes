@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, and Sprint 2 Step 2
-- **Next:** Sprint 2, Step 4 (department page simplification)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, and Sprint 2 Step 4
+- **Next:** Sprint 2, Step 5 (featured-team selection UI overhaul)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -74,5 +74,9 @@
   - Added dual auth entry modes on landing (`Google` and `Email`).
   - Added email/password account creation and email/password sign-in flow.
   - Added auth error normalization for common email/password failure states.
+- **Sprint 2 Step 4 Outcomes:**
+  - Simplified `/department` UI to three large centered options (`Primary`, `Secondary`, `Ops/Admin`).
+  - Removed secondary helper copy and path/debug-style footer text from department selection.
+  - Increased confirmation CTA emphasis while preserving one-time department write behavior.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.
