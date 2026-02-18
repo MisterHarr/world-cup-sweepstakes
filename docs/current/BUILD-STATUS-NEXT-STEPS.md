@@ -8,7 +8,7 @@
 **Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
-**Immediate Focus:** Clear `P1` backlog items `QA-001` to `QA-003`, then complete cross-device manual QA.
+**Immediate Focus:** Run the manual cross-device checklist, then resolve remaining `P2` polish backlog items (`QA-004`, `QA-005`).
 
 ---
 
@@ -37,6 +37,7 @@
 - ✅ **Sprint 4 Step 2 Badge Rarity Filters** - Added `All/Common/Uncommon/Rare/Epic/Legendary` tabs on `/badges` with live filtering and per-rarity counts
 - ✅ **Sprint 4 Step 3 Always-Visible Badge Catalog** - Switched `/badges` to render the full badge definition set with locked-state cards by default and unlocked-state highlighting from user badge data
 - ✅ **Sprint 4 Step 4 Final Mobile + Typography Pass** - Polished global type hierarchy, improved mobile signed-in identity readability across shared headers, and tightened `/dashboard?tab=market` mobile row readability
+- ✅ **Post-Sprint P1 Hardening (`QA-001` to `QA-003`)** - Removed synchronous set-state-in-effect patterns from offline indicator, portfolio rank tracking, and transfer execution flows
 
 ### Core Features
 - ✅ Google Authentication with Firebase

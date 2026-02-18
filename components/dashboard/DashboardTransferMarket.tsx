@@ -53,10 +53,6 @@ const DashboardTransferMarket = ({
   const [confirmProgress, setConfirmProgress] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [pendingTrade, setPendingTrade] = useState<{
-    drop: MarketTeam;
-    pickup: MarketTeam;
-  } | null>(null);
 
   const projectedScore = selectedDrop && selectedPickup ? userScore - penalty : userScore;
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -67,7 +63,6 @@ const DashboardTransferMarket = ({
   };
   const resetConfirmState = () => {
     clearConfirmInterval();
-    setPendingTrade(null);
     setIsConfirmed(false);
     setConfirmProgress(0);
   };
@@ -81,13 +76,31 @@ const DashboardTransferMarket = ({
   const tradeButtonDisabled = !canExecuteTrade;
   const canPickReplacement = Boolean(selectedDrop);
 
+  const executeTrade = async (trade: { drop: MarketTeam; pickup: MarketTeam }) => {
+    setIsSubmitting(true);
+    try {
+      const result = await onTrade(trade);
+      if (result?.ok) {
+        setIsConfirmed(true);
+        return;
+      }
+      setIsConfirmed(false);
+      setConfirmProgress(0);
+    } catch {
+      setIsConfirmed(false);
+      setConfirmProgress(0);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const startConfirm = () => {
     if (!selectedDrop || !selectedPickup || !canExecuteTrade || isConfirmed) return;
 
-    setPendingTrade({
+    const trade = {
       drop: selectedDrop,
       pickup: selectedPickup,
-    });
+    };
 
     clearConfirmInterval();
     intervalRef.current = setInterval(() => {
@@ -95,6 +108,7 @@ const DashboardTransferMarket = ({
         const next = Math.min(prev + 4, 100);
         if (next >= 100) {
           clearConfirmInterval();
+          void executeTrade(trade);
         }
         return next;
       });
@@ -104,45 +118,8 @@ const DashboardTransferMarket = ({
   const stopConfirm = () => {
     if (isConfirmed || isSubmitting) return;
     clearConfirmInterval();
-    setPendingTrade(null);
     setConfirmProgress(0);
   };
-
-  useEffect(() => {
-    if (confirmProgress < 100) return;
-    if (isSubmitting || isConfirmed) return;
-    if (!pendingTrade) return;
-
-    const trade = pendingTrade;
-    let cancelled = false;
-
-    setPendingTrade(null);
-    setIsSubmitting(true);
-
-    void onTrade(trade)
-      .then((result) => {
-        if (cancelled) return;
-        if (result?.ok) {
-          setIsConfirmed(true);
-          return;
-        }
-        setIsConfirmed(false);
-        setConfirmProgress(0);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setIsConfirmed(false);
-        setConfirmProgress(0);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setIsSubmitting(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [confirmProgress, isSubmitting, isConfirmed, pendingTrade, onTrade]);
 
   useEffect(() => {
     return () => {

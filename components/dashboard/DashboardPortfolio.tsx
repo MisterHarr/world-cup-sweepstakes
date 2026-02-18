@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -361,18 +361,22 @@ export default function DashboardPortfolio({
   onTeamExpand,
   calculateTeamPoints,
 }: DashboardPortfolioProps) {
-  const [previousRank, setPreviousRank] = useState<number | null>(null);
+  const previousRank = useMemo(() => {
+    if (typeof window === "undefined") return null;
+    if (!userId) return null;
+    if (!userStats.rank) return null;
+
+    const key = `dashboard:rank:${userId}`;
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }, [userId, userStats.rank]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!userId) return;
     if (!userStats.rank) return;
-
-    const key = `dashboard:rank:${userId}`;
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? Number(raw) : NaN;
-    setPreviousRank(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
-    window.localStorage.setItem(key, String(userStats.rank));
+    window.localStorage.setItem(`dashboard:rank:${userId}`, String(userStats.rank));
   }, [userId, userStats.rank]);
 
   const rankTrend = useMemo(() => {
