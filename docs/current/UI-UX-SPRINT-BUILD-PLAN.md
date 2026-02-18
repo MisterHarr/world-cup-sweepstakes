@@ -52,8 +52,8 @@
 
 ## Current Step
 
-- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, and Sprint 4 Step 2
-- **Next:** Sprint 4, Step 3 (always-visible badge catalog with locked state)
+- **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, and Sprint 4 Step 3
+- **Next:** Sprint 4, Step 4 (final mobile and typography pass)
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -117,5 +117,9 @@
   - Added badge rarity filter tabs on `/badges`: `All`, `Common`, `Uncommon`, `Rare`, `Epic`, `Legendary`.
   - Wired tab state to render filtered badge cards with per-tab counts and an empty filtered-view message.
   - Kept filtering behavior responsive on mobile via horizontal scrollable tab treatment.
+- **Sprint 4 Step 3 Outcomes:**
+  - Replaced empty-state-only badge rendering with an always-visible catalog sourced from `lib/badgeDefinitions.ts`.
+  - Added locked/unlocked card-state behavior so all badges appear immediately and brighten when earned.
+  - Wired user-doc badge data parsing on `/badges` to reflect unlocked badges and unlocked dates when present.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

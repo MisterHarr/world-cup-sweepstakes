@@ -1,25 +1,24 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Lock,
   CheckCircle2,
-  Sparkles,
-  Trophy as TrophyIcon,
-  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppShellV0 } from "@/components/app-shell-v0";
 import { BRANDING } from "@/lib/branding";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
+import { BADGES } from "@/lib/badgeDefinitions";
 import {
   type User as FirebaseUser,
   onAuthStateChanged,
   signOut,
 } from "firebase/auth";
+import { doc, onSnapshot } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 type BadgeRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
@@ -29,15 +28,13 @@ type BadgeAchievement = {
   id: string;
   title: string;
   desc: string;
-  icon: LucideIcon;
+  icon: string;
   rarity: BadgeRarity;
   unlocked: boolean;
   unlockedAt?: string;
   progress?: number;
   total?: number;
 };
-
-const achievements: BadgeAchievement[] = [];
 
 const rarityOrder: BadgeRarity[] = [
   "common",
@@ -79,11 +76,116 @@ const rarityText: Record<BadgeRarity, string> = {
   legendary: "text-amber-400",
 };
 
+type BadgeUnlockMeta = {
+  unlockedAt?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function formatBadgeDate(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+    return value;
+  }
+
+  if (isRecord(value) && typeof value.toDate === "function") {
+    try {
+      const dt = value.toDate();
+      if (dt instanceof Date && !Number.isNaN(dt.getTime())) {
+        return dt.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      }
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (isRecord(value) && typeof value.seconds === "number") {
+    const dt = new Date(value.seconds * 1000);
+    if (!Number.isNaN(dt.getTime())) {
+      return dt.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+  }
+
+  return undefined;
+}
+
+function readUnlockedBadges(value: unknown): Record<string, BadgeUnlockMeta> {
+  const source = isRecord(value) ? value : {};
+  const unlocked: Record<string, BadgeUnlockMeta> = {};
+
+  const addUnlocked = (badgeId: unknown, unlockedAt?: unknown) => {
+    if (typeof badgeId !== "string" || badgeId.trim().length === 0) return;
+    unlocked[badgeId] = {
+      unlockedAt: formatBadgeDate(unlockedAt),
+    };
+  };
+
+  if (Array.isArray(source.earnedBadges)) {
+    source.earnedBadges.forEach((entry: unknown) => {
+      if (typeof entry === "string") {
+        addUnlocked(entry);
+        return;
+      }
+      if (!isRecord(entry)) return;
+      if (entry.unlocked === false) return;
+      addUnlocked(entry.badgeId, entry.unlockedAt);
+    });
+  }
+
+  if (Array.isArray(source.badges)) {
+    source.badges.forEach((entry: unknown) => {
+      if (typeof entry === "string") {
+        addUnlocked(entry);
+        return;
+      }
+      if (!isRecord(entry)) return;
+      if (entry.unlocked === false) return;
+      addUnlocked(entry.badgeId, entry.unlockedAt);
+    });
+  }
+
+  if (isRecord(source.badges)) {
+    Object.entries(source.badges).forEach(([badgeId, badgeValue]) => {
+      if (badgeValue === true) {
+        addUnlocked(badgeId);
+        return;
+      }
+      if (!isRecord(badgeValue)) return;
+      if (badgeValue.unlocked === false) return;
+      if (badgeValue.unlocked === true || badgeValue.unlockedAt) {
+        addUnlocked(badgeId, badgeValue.unlockedAt);
+      }
+    });
+  }
+
+  return unlocked;
+}
+
 export default function BadgesPage() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
   const [activeFilter, setActiveFilter] = useState<BadgeFilter>("all");
+  const [unlockedBadgeMap, setUnlockedBadgeMap] = useState<
+    Record<string, BadgeUnlockMeta>
+  >({});
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
@@ -92,6 +194,43 @@ export default function BadgesPage() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) {
+      setUnlockedBadgeMap({});
+      return;
+    }
+
+    const ref = doc(db, "users", user.uid);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        setUnlockedBadgeMap(readUnlockedBadges(data));
+      },
+      () => {
+        setUnlockedBadgeMap({});
+      }
+    );
+    return () => unsub();
+  }, [user?.uid]);
+
+  const achievements: BadgeAchievement[] = useMemo(
+    () =>
+      BADGES.map((badge) => {
+        const unlock = unlockedBadgeMap[badge.id];
+        return {
+          id: badge.id,
+          title: badge.name,
+          desc: badge.description,
+          icon: badge.icon,
+          rarity: badge.rarity,
+          unlocked: Boolean(unlock),
+          unlockedAt: unlock?.unlockedAt,
+        };
+      }),
+    [unlockedBadgeMap]
+  );
 
   const unlockedCount = achievements.filter((a) => a.unlocked).length;
   const progressPercent =
@@ -269,131 +408,125 @@ export default function BadgesPage() {
             </div>
           </div>
 
-          {/* Achievements Grid or Empty State */}
-          {achievements.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredAchievements.length > 0 ? filteredAchievements.map((achievement) => {
-              const Icon = achievement.icon;
-              const progressValue =
-                typeof achievement.progress === "number"
-                  ? achievement.progress
-                  : null;
-              const totalValue =
-                typeof achievement.total === "number" ? achievement.total : null;
-              const hasProgress =
-                progressValue !== null &&
-                totalValue !== null &&
-                totalValue > 0;
+          {/* Always-visible Badge Catalog */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredAchievements.length > 0 ? (
+              filteredAchievements.map((achievement) => {
+                const progressValue =
+                  typeof achievement.progress === "number"
+                    ? achievement.progress
+                    : null;
+                const totalValue =
+                  typeof achievement.total === "number" ? achievement.total : null;
+                const hasProgress =
+                  progressValue !== null &&
+                  totalValue !== null &&
+                  totalValue > 0;
 
-              return (
-                <div
-                  key={achievement.id}
-                  className={cn(
-                    "relative overflow-hidden border rounded-xl p-5 transition-all duration-300 bg-zinc-900/65 backdrop-blur-sm",
-                    rarityBorders[achievement.rarity],
-                    rarityGlow[achievement.rarity],
-                    achievement.unlocked
-                      ? "hover:shadow-xl hover:-translate-y-0.5"
-                      : "opacity-75",
-                  )}
-                >
+                return (
                   <div
+                    key={achievement.id}
                     className={cn(
-                      "pointer-events-none absolute inset-0 opacity-20",
-                      achievement.unlocked ? "bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_60%)]" : "",
+                      "relative overflow-hidden border rounded-xl p-5 transition-all duration-300 bg-zinc-900/65 backdrop-blur-sm",
+                      rarityBorders[achievement.rarity],
+                      rarityGlow[achievement.rarity],
+                      achievement.unlocked
+                        ? "hover:shadow-xl hover:-translate-y-0.5"
+                        : "opacity-65 saturate-50",
                     )}
-                  />
-                  <div className="flex items-start gap-4">
-                    {/* Icon */}
+                  >
                     <div
                       className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                        "pointer-events-none absolute inset-0 opacity-20",
                         achievement.unlocked
-                          ? cn("bg-gradient-to-br", rarityColors[achievement.rarity])
-                          : "bg-muted",
+                          ? "bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.2),transparent_60%)]"
+                          : "",
                       )}
-                    >
-                      {achievement.unlocked ? (
-                        <Icon className="w-6 h-6 text-white" />
-                      ) : (
-                        <Lock className="w-6 h-6 text-muted-foreground" />
-                      )}
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <h3 className="font-bold text-foreground">{achievement.title}</h3>
-                        {achievement.unlocked && (
-                          <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                    />
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center shrink-0",
+                          achievement.unlocked
+                            ? cn("bg-gradient-to-br", rarityColors[achievement.rarity])
+                            : "bg-muted/70 border border-border",
+                        )}
+                      >
+                        {achievement.unlocked ? (
+                          <span className="text-2xl leading-none" aria-hidden="true">
+                            {achievement.icon}
+                          </span>
+                        ) : (
+                          <Lock className="w-6 h-6 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground mb-3">{achievement.desc}</p>
 
-                      {/* Progress or Unlock Date */}
-                      {achievement.unlocked && achievement.unlockedAt ? (
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant="outline"
-                            className={cn("text-[10px] border-0 bg-gradient-to-r text-white", rarityColors[achievement.rarity])}
-                          >
-                            {achievement.rarity.toUpperCase()}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Unlocked {achievement.unlockedAt}
-                          </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h3 className="font-bold text-foreground">{achievement.title}</h3>
+                          {achievement.unlocked ? (
+                            <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                          ) : (
+                            <Lock className="w-4 h-4 text-muted-foreground/70 shrink-0" />
+                          )}
                         </div>
-                      ) : hasProgress ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Progress</span>
-                            <span className={cn("font-medium", rarityText[achievement.rarity])}>
-                              {progressValue}/{totalValue}
+                        <p className="text-sm text-muted-foreground mb-3">{achievement.desc}</p>
+
+                        {achievement.unlocked && achievement.unlockedAt ? (
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] border-0 bg-gradient-to-r text-white",
+                                rarityColors[achievement.rarity],
+                              )}
+                            >
+                              {achievement.rarity.toUpperCase()}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">
+                              Unlocked {achievement.unlockedAt}
                             </span>
                           </div>
-                          <Progress
-                            value={((progressValue ?? 0) / (totalValue ?? 1)) * 100}
-                            className="h-2"
-                          />
-                        </div>
-                      ) : (
-                        <Badge
-                          variant="outline"
-                          className={cn("text-[10px] border-0 bg-gradient-to-r text-white", rarityColors[achievement.rarity])}
-                        >
-                          {achievement.rarity.toUpperCase()}
-                        </Badge>
-                      )}
+                        ) : hasProgress ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Progress</span>
+                              <span className={cn("font-medium", rarityText[achievement.rarity])}>
+                                {progressValue}/{totalValue}
+                              </span>
+                            </div>
+                            <Progress
+                              value={((progressValue ?? 0) / (totalValue ?? 1)) * 100}
+                              className="h-2"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                "text-[10px] border-0 bg-gradient-to-r text-white",
+                                rarityColors[achievement.rarity],
+                              )}
+                            >
+                              {achievement.rarity.toUpperCase()}
+                            </Badge>
+                            <span className="text-xs text-muted-foreground">Locked</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-              }) : (
-                <div className="md:col-span-2 rounded-xl border border-white/10 bg-zinc-900/60 p-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No {activeFilter === "all" ? "" : activeFilter + " "}badges in this view yet.
-                  </p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="relative overflow-hidden border border-white/10 rounded-2xl p-12 text-center bg-gradient-to-br from-zinc-900/90 via-zinc-900/75 to-zinc-950/70 shadow-[0_18px_42px_rgba(0,0,0,0.35)]">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.2),transparent_52%),radial-gradient(circle_at_bottom_left,rgba(217,70,239,0.16),transparent_52%)]" />
-              <div className="max-w-md mx-auto">
-                <div className="w-16 h-16 rounded-full border border-white/15 bg-zinc-800/70 flex items-center justify-center mx-auto mb-4 shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
-                  <TrophyIcon className="w-8 h-8 text-amber-300" />
-                </div>
-                <h3 className="text-xl font-bold text-foreground mb-2">Badge Vault Ready</h3>
+                );
+              })
+            ) : (
+              <div className="md:col-span-2 rounded-xl border border-white/10 bg-zinc-900/60 p-8 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Your achievement catalog is active. Badge unlocks will light up here with rarity glows as progress is recorded.
+                  No {activeFilter === "all" ? "" : activeFilter + " "}badges in this view yet.
                 </p>
-                <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-zinc-800/70 px-3 py-1 text-xs text-muted-foreground">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                  Premium rarity tiers enabled
-                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </AppShellV0>
