@@ -2,18 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Trophy } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
+import { BRANDING } from "@/lib/branding";
+import { normalizeDepartment } from "@/lib/departments";
 import { ensureUserDoc } from "@/lib/userBootstrap";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import {
+  createUserWithEmailAndPassword,
   onAuthStateChanged,
+  signInWithEmailAndPassword,
   signOut,
+  updateProfile,
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
   if (!err || typeof err !== "object") return fallback;
@@ -23,6 +28,46 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
       : "";
   if (!raw) return fallback;
   return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
+}
+
+function readErrorCode(err: unknown): string {
+  if (!err || typeof err !== "object") return "";
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code.toLowerCase() : "";
+}
+
+function authErrorMessage(err: unknown, fallback: string): string {
+  const code = readErrorCode(err);
+  if (code === "auth/invalid-email") return "Enter a valid email address.";
+  if (code === "auth/email-already-in-use") return "That email is already in use.";
+  if (code === "auth/invalid-credential") return "Invalid email or password.";
+  if (code === "auth/user-not-found") return "No account found for that email.";
+  if (code === "auth/wrong-password") return "Invalid email or password.";
+  if (code === "auth/weak-password") return "Password must be at least 6 characters.";
+  if (code === "auth/operation-not-allowed") return "Email sign-in is not enabled.";
+  if (code === "auth/too-many-requests") return "Too many attempts. Try again shortly.";
+  if (code === "auth/network-request-failed") return "Network error. Check your connection.";
+  return friendlyErrorMessage(err, fallback);
+}
+
+function isExpectedAuthError(err: unknown): boolean {
+  const code = readErrorCode(err);
+  return code.startsWith("auth/");
+}
+
+function looksLikeEmail(value: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(value);
+}
+
+function deriveDisplayNameFromEmail(value: string): string {
+  const local = value.split("@")[0] ?? "";
+  const base = local.replace(/[._-]+/g, " ").trim();
+  if (!base) return "Player";
+  return base
+    .split(" ")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -58,9 +103,13 @@ export function AuthLandingPage() {
   const [displayName, setDisplayName] = useState<string>("");
   const [checking, setChecking] = useState(true);
 
-  const [status, setStatus] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [authMethod, setAuthMethod] = useState<"google" | "email">("google");
+  const [emailMode, setEmailMode] = useState<"signup" | "signin">("signup");
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const [continuing, setContinuing] = useState(false);
 
@@ -71,6 +120,7 @@ export function AuthLandingPage() {
       setUid(u?.uid ?? null);
       setDisplayName(u?.displayName ?? "");
       setChecking(false);
+      setAuthBusy(false);
       setContinuing(false);
 
       if (!u) return;
@@ -93,21 +143,73 @@ export function AuthLandingPage() {
     if (authBusy) return;
 
     setError("");
-    setStatus("");
     setAuthBusy(true);
 
     try {
-      setStatus("Opening Google sign-in...");
       const mode = await signInWithGoogle(auth);
       if (mode === "redirect") {
-        setStatus("Redirecting to Google sign-in...");
         return;
       }
-      setStatus("");
     } catch (e: unknown) {
       console.error(e);
-      setStatus("");
-      setError(friendlyErrorMessage(e, "Sign-in failed."));
+      setError(authErrorMessage(e, "Sign-in failed."));
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+
+  async function handleEmailAuth() {
+    if (authBusy) return;
+
+    const trimmedEmail = email.trim();
+    if (!looksLikeEmail(trimmedEmail)) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setError("");
+    setAuthBusy(true);
+
+    try {
+      if (emailMode === "signup") {
+        const cred = await createUserWithEmailAndPassword(
+          auth,
+          trimmedEmail,
+          password
+        );
+        const nextName = fullName.trim() || deriveDisplayNameFromEmail(trimmedEmail);
+        if (nextName && cred.user.displayName !== nextName) {
+          await updateProfile(cred.user, { displayName: nextName });
+          setDisplayName(nextName);
+        }
+      } else {
+        await signInWithEmailAndPassword(auth, trimmedEmail, password);
+      }
+
+      setPassword("");
+    } catch (e: unknown) {
+      const code = readErrorCode(e);
+      if (emailMode === "signup" && code === "auth/email-already-in-use") {
+        setEmailMode("signin");
+        setError("This email already has an account. Sign in below.");
+        setAuthBusy(false);
+        return;
+      }
+      if (!isExpectedAuthError(e)) {
+        console.error(e);
+      }
+      setError(
+        authErrorMessage(
+          e,
+          emailMode === "signup"
+            ? "Account creation failed."
+            : "Email sign-in failed."
+        )
+      );
     } finally {
       setAuthBusy(false);
     }
@@ -115,15 +217,11 @@ export function AuthLandingPage() {
 
   async function handleSignOut() {
     setError("");
-    setStatus("");
 
     try {
-      setStatus("Signing out...");
       await signOut(auth);
-      setStatus("");
     } catch (e: unknown) {
       console.error(e);
-      setStatus("");
       setError(friendlyErrorMessage(e, "Sign-out failed."));
     }
   }
@@ -134,19 +232,13 @@ export function AuthLandingPage() {
 
     setContinuing(true);
     setError("");
-    setStatus("Checking your profile...");
 
     try {
       const userRef = doc(db, "users", uid);
       const snap = await getDoc(userRef);
       const rawData = snap.exists() ? snap.data() : null;
       const data = isRecord(rawData) ? rawData : null;
-      const dept =
-        data?.department === "Primary" ||
-        data?.department === "Secondary" ||
-        data?.department === "Admin"
-          ? data.department
-          : null;
+      const dept = normalizeDepartment(data?.department);
       const confirmed = hasConfirmedEntry(data);
 
       const nextPath = confirmed ? "/dashboard" : "/featured-team";
@@ -160,115 +252,178 @@ export function AuthLandingPage() {
     } catch (e: unknown) {
       console.error(e);
       setError(friendlyErrorMessage(e, "Failed to load your profile."));
-      setStatus("");
       setContinuing(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Effects */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-primary/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 -right-32 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-3xl" />
-      </div>
-
-      {/* Grid Pattern */}
-      <div
-        className="absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: `linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)`,
-          backgroundSize: "60px 60px",
-        }}
-      />
-
-      <div className="w-full max-w-md relative z-10">
-        {/* Logo Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 mb-6 relative">
-            <Trophy className="w-10 h-10 text-primary" />
-            <div className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-              <Sparkles className="w-2.5 h-2.5 text-primary-foreground" />
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/25 backdrop-blur-xl p-6 sm:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white/5 border border-white/15 mb-5 overflow-hidden p-2">
+            <img
+              src={BRANDING.logoSrc}
+              alt={BRANDING.logoAlt}
+              className="h-full w-full object-contain"
+            />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">World Cup 2026</h1>
-          <p className="text-muted-foreground">Office Sweepstakes</p>
+          <h1
+            className="text-3xl sm:text-4xl font-black text-foreground tracking-tight"
+            style={{
+              fontFamily:
+                "\"Avenir Next\", \"Avenir\", \"SF Pro Display\", \"Helvetica Neue\", sans-serif",
+            }}
+          >
+            {BRANDING.shortName}
+          </h1>
+          {signedIn ? (
+            <h2 className="mt-4 text-2xl sm:text-3xl font-bold text-foreground">
+              Welcome {displayName?.trim() || "Player"}!
+            </h2>
+          ) : null}
         </div>
 
-        {/* Main Card */}
-        <div className="bg-card/50 backdrop-blur-xl border border-border rounded-2xl p-8 shadow-2xl shadow-black/20">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold text-foreground mb-1">
-              {signedIn ? "Welcome back!" : "Get Started"}
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              {signedIn
-                ? "Click continue to access your teams"
-                : "Sign in with Google to join the sweepstakes"}
-            </p>
+        {error ? (
+          <div className="mt-5 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
+            {error}
           </div>
+        ) : null}
 
-          {/* Error Message */}
-          {error && (
-            <div className="mb-4 p-3 rounded-xl border border-destructive/20 bg-destructive/10 text-sm text-destructive">
-              {error}
-            </div>
-          )}
+        <div className="mt-6 space-y-3">
+          {!signedIn ? (
+            <>
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/5 p-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setAuthMethod("google");
+                  }}
+                  className={[
+                    "h-10 rounded-lg text-sm font-semibold transition-colors",
+                    authMethod === "google"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground/80 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError("");
+                    setAuthMethod("email");
+                  }}
+                  className={[
+                    "h-10 rounded-lg text-sm font-semibold transition-colors",
+                    authMethod === "email"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-foreground/80 hover:text-foreground",
+                  ].join(" ")}
+                >
+                  Email
+                </button>
+              </div>
 
-          {/* Status Message */}
-          {status && (
-            <div className="mb-4 p-3 rounded-xl border border-primary/20 bg-primary/10 text-sm text-primary">
-              {status}
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="space-y-3">
-            {!signedIn ? (
-              <Button
-                onClick={handleGoogleSignIn}
-                disabled={checking || authBusy}
-                className="w-full h-12"
-                size="lg"
-              >
-                {checking ? "Checking..." : authBusy ? "Please wait..." : "Sign in with Google"}
-              </Button>
-            ) : (
-              <>
+              {authMethod === "google" ? (
                 <Button
-                  onClick={handleContinue}
-                  disabled={continuing}
-                  className="w-full h-12"
+                  onClick={handleGoogleSignIn}
+                  disabled={checking || authBusy}
+                  className="w-full h-12 text-base font-semibold"
                   size="lg"
                 >
-                  {continuing ? "Loading..." : "Continue →"}
+                  {checking
+                    ? "Checking..."
+                    : authBusy
+                      ? "Please wait..."
+                      : "Sign in with Google"}
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleSignOut}
-                  className="w-full"
-                  size="sm"
+              ) : (
+                <form
+                  className="space-y-3"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void handleEmailAuth();
+                  }}
                 >
-                  Sign Out
-                </Button>
-              </>
-            )}
-          </div>
-
-          {/* Info Text */}
-          {signedIn && displayName && (
-            <p className="mt-4 text-center text-xs text-muted-foreground">
-              Signed in as{" "}
-              <span className="font-medium text-foreground">{displayName}</span>
-            </p>
+                  {emailMode === "signup" ? (
+                    <Input
+                      type="text"
+                      value={fullName}
+                      onChange={(event) => setFullName(event.target.value)}
+                      placeholder="Full name (optional)"
+                      autoComplete="name"
+                      className="h-11"
+                    />
+                  ) : null}
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="Email address"
+                    autoComplete="email"
+                    className="h-11"
+                  />
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="Password"
+                    autoComplete={
+                      emailMode === "signup" ? "new-password" : "current-password"
+                    }
+                    className="h-11"
+                  />
+                  <Button
+                    type="submit"
+                    disabled={checking || authBusy}
+                    className="w-full h-12 text-base font-semibold"
+                    size="lg"
+                  >
+                    {authBusy
+                      ? "Please wait..."
+                      : emailMode === "signup"
+                        ? "Create Account"
+                        : "Sign in with Email"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setError("");
+                      setEmailMode((prev) =>
+                        prev === "signup" ? "signin" : "signup"
+                      );
+                    }}
+                    className="w-full h-10 text-sm font-semibold"
+                  >
+                    {emailMode === "signup"
+                      ? "I already have an account"
+                      : "Create a new account"}
+                  </Button>
+                </form>
+              )}
+            </>
+          ) : (
+            <>
+              <Button
+                onClick={handleContinue}
+                disabled={continuing}
+                className="w-full h-12 text-base font-semibold"
+                size="lg"
+              >
+                {continuing ? "Loading..." : "Continue"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSignOut}
+                className="w-full h-11 text-sm font-semibold"
+              >
+                Sign Out
+              </Button>
+            </>
           )}
         </div>
-
-        {/* Footer Note */}
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Choose your featured team → Draw 5 random teams → Earn points
-        </p>
       </div>
     </div>
   );

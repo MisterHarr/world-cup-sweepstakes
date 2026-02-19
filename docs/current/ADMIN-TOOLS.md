@@ -20,6 +20,33 @@ Recommended flow:
 2. Click **Seed Teams**.
 3. Verify success message.
 
+### Seed Mock Users (Load Rehearsal)
+
+Path: `/admin/users`
+
+Use this to generate many trial users for manual UX/load rehearsals.
+
+What it does:
+- Creates Firebase Auth users (email/password).
+- Creates `users/{uid}` docs with department + confirmed squad.
+- Marks `hasSeenReveal: true` so seeded users can go straight to dashboard.
+- Recomputes leaderboard after seeding.
+
+Recommended flow:
+1. Click **Load Users** first.
+2. In **Mock User Batch Seeding**, set:
+   - `Count` (recommended: `24-60`)
+   - `Departments` (`Round Robin` recommended)
+3. Click **Seed Mock Users** and confirm.
+4. Verify status includes:
+   - created count
+   - failed count
+   - batch tag
+5. Click **Load Users** again and confirm new users appear.
+
+Default seeded login password:
+- `Test1234!`
+
 ### Fixture Ingest
 
 Path: `/admin/fixtures`

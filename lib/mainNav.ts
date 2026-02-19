@@ -49,13 +49,6 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       onClick: onPortfolio,
     },
     {
-      id: "transfer",
-      label: "Transfer",
-      icon: ArrowLeftRight,
-      href: "/dashboard?tab=market",
-      onClick: onTransfer,
-    },
-    {
       id: "leaderboard",
       label: "Leaderboard",
       icon: Users,
@@ -74,6 +67,13 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       label: "Badges",
       icon: Award,
       href: "/badges",
+    },
+    {
+      id: "transfer",
+      label: "Transfer",
+      icon: ArrowLeftRight,
+      href: "/dashboard?tab=market",
+      onClick: onTransfer,
     },
   ];
 }

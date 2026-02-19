@@ -1,7 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Crown, Shield, Trophy, X } from "lucide-react";
+import {
+  fromDepartmentKey,
+  normalizeDepartment,
+  toDepartmentKey,
+  type DepartmentKey,
+} from "@/lib/departments";
 
 export type LBUser = {
   id: string;
@@ -38,6 +44,7 @@ export type SquadVM = {
 };
 
 const CORE_DEPARTMENT_TABS = ["Primary", "Secondary", "Admin"] as const;
+const OVERALL_PAGE_SIZE = 10;
 
 const Skeleton = ({ className }: { className: string }) => (
   <div className={`animate-pulse bg-white/10 rounded ${className}`} />
@@ -52,43 +59,33 @@ function tierLabel(tier: number) {
 
 function tierPillClass(tier: number) {
   if (tier === 1) {
-    return "bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/40 shadow-sm shadow-yellow-500/20";
+    return "bg-gradient-to-br from-amber-400/20 to-yellow-500/10 text-amber-100 border-amber-400/45 shadow-[0_8px_18px_rgba(251,191,36,0.28)]";
   }
   if (tier === 2) {
-    return "bg-gradient-to-r from-slate-400/20 to-gray-300/20 text-slate-100 border-slate-400/40 shadow-sm shadow-slate-400/20";
+    return "bg-gradient-to-br from-slate-300/20 to-zinc-300/10 text-slate-100 border-slate-300/45 shadow-[0_8px_18px_rgba(203,213,225,0.18)]";
   }
   if (tier === 3) {
-    return "bg-gradient-to-r from-orange-600/20 to-amber-700/20 text-orange-200 border-orange-600/40 shadow-sm shadow-orange-600/20";
+    return "bg-gradient-to-br from-orange-500/18 to-amber-600/12 text-orange-100 border-orange-500/45 shadow-[0_8px_18px_rgba(249,115,22,0.20)]";
   }
-  return "bg-gradient-to-r from-rose-900/20 to-red-950/20 text-rose-200 border-rose-800/40 shadow-sm shadow-rose-900/20";
+  return "bg-gradient-to-br from-zinc-500/18 to-zinc-700/14 text-zinc-100 border-zinc-400/35 shadow-[0_8px_18px_rgba(113,113,122,0.20)]";
 }
 
 function TierPill({ tier }: { tier: number }) {
   return (
-    <span
+    <div
       className={[
-        "text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border",
+        "inline-flex flex-col items-center rounded-xl border px-2.5 py-1.5 text-center min-w-[88px]",
         tierPillClass(tier),
       ].join(" ")}
     >
-      Tier {tier} - {tierLabel(tier)}
-    </span>
+      <span className="text-[10px] font-black leading-none tracking-[0.08em] uppercase">
+        Tier {tier}
+      </span>
+      <span className="text-[11px] font-semibold leading-tight mt-0.5">
+        {tierLabel(tier)}
+      </span>
+    </div>
   );
-}
-
-function normalizeDepartment(value: unknown): "primary" | "secondary" | "admin" | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim().toLowerCase();
-  if (normalized === "primary") return "primary";
-  if (normalized === "secondary") return "secondary";
-  if (normalized === "admin") return "admin";
-  return null;
-}
-
-function toDepartmentLabel(value: "primary" | "secondary" | "admin"): string {
-  if (value === "primary") return "Primary";
-  if (value === "secondary") return "Secondary";
-  return "Admin";
 }
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
@@ -117,10 +114,9 @@ export default function LeaderboardPanel({
   modeLabel = "Standalone",
 }: LeaderboardPanelProps) {
   const [selectedUser, setSelectedUser] = useState<LBUser | null>(null);
-  const [selectedDept, setSelectedDept] = useState<
-    "primary" | "secondary" | "admin" | null
-  >(null);
+  const [selectedDept, setSelectedDept] = useState<DepartmentKey | null>(null);
   const [sortMode, setSortMode] = useState<"points" | "badges">("points");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [squad, setSquad] = useState<SquadVM | null>(null);
   const [loadingSquad, setLoadingSquad] = useState(false);
@@ -156,7 +152,7 @@ export default function LeaderboardPanel({
   }, [data]);
 
   const hasDeptData = useMemo(
-    () => sorted.some((u) => Boolean(normalizeDepartment(u.department ?? u.dept))),
+    () => sorted.some((u) => Boolean(toDepartmentKey(u.department ?? u.dept))),
     [sorted]
   );
   const deptFilters = CORE_DEPARTMENT_TABS;
@@ -164,7 +160,7 @@ export default function LeaderboardPanel({
   const visibleRows = useMemo(() => {
     return selectedDept && hasDeptData
       ? sorted.filter(
-          (u) => normalizeDepartment(u.department ?? u.dept) === selectedDept
+          (u) => toDepartmentKey(u.department ?? u.dept) === selectedDept
         )
       : sorted;
   }, [hasDeptData, selectedDept, sorted]);
@@ -191,6 +187,26 @@ export default function LeaderboardPanel({
     () => rankedRows.filter((u) => !topIds.has(u.id)),
     [rankedRows, topIds]
   );
+  const totalPages = useMemo(() => {
+    if (rankedRows.length === 0) return 1;
+    return Math.max(1, Math.ceil(rankedRows.length / OVERALL_PAGE_SIZE));
+  }, [rankedRows.length]);
+  const pagedList = useMemo(() => {
+    const pageStartRank = (currentPage - 1) * OVERALL_PAGE_SIZE + 1;
+    const pageEndRank = currentPage * OVERALL_PAGE_SIZE;
+    const minListRank = Math.max(4, pageStartRank);
+    return rankedRows.filter(
+      (user) => user.viewRank >= minListRank && user.viewRank <= pageEndRank
+    );
+  }, [currentPage, rankedRows]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDept, sortMode]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const currentUserRow = useMemo(() => {
     if (!currentUserId) return null;
@@ -200,33 +216,7 @@ export default function LeaderboardPanel({
 
   return (
     <main className="relative min-h-[500px] max-w-full overflow-x-hidden">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 px-2 sm:px-1">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-            <Trophy className="w-5 h-5 text-primary" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-foreground">Leaderboard</h1>
-            <p className="text-xs text-muted-foreground">
-              {sorted.length} Participants
-            </p>
-          </div>
-        </div>
-        <div className="text-[10px] uppercase tracking-widest font-semibold px-2 py-1 rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-200">
-          {modeLabel}
-        </div>
-        <div
-          className="text-emerald-300 text-xs font-semibold border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 rounded-full flex items-center gap-2 shadow-sm"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-          </span>
-          LIVE
-        </div>
-      </div>
+      <span className="sr-only">{modeLabel}</span>
 
       {isLoading ? (
         <div
@@ -367,7 +357,7 @@ export default function LeaderboardPanel({
                 key={dept}
                 onClick={() => {
                   setSortMode("points");
-                  const deptKey = normalizeDepartment(dept);
+                  const deptKey = toDepartmentKey(dept);
                   if (!deptKey) {
                     setSelectedDept(null);
                     return;
@@ -376,7 +366,7 @@ export default function LeaderboardPanel({
                 }}
                 className={[
                   "shrink-0 rounded-lg px-4 py-3 text-sm font-semibold transition-all min-h-[44px]",
-                  selectedDept === normalizeDepartment(dept) && sortMode === "points"
+                  selectedDept === toDepartmentKey(dept) && sortMode === "points"
                     ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
                     : "bg-card border border-border text-muted-foreground hover:text-foreground hover:border-primary/30",
                 ].join(" ")}
@@ -402,9 +392,9 @@ export default function LeaderboardPanel({
 
           <div className="space-y-2">
             {filteredList.length > 0
-              ? filteredList.map((user) => {
+              ? pagedList.map((user) => {
                   const isYou = Boolean(currentUserId && user.id === currentUserId);
-                  const dept = user.department ?? user.dept;
+                  const dept = normalizeDepartment(user.department ?? user.dept);
                   return (
                     <div
                       key={user.id}
@@ -461,11 +451,37 @@ export default function LeaderboardPanel({
                     {selectedDept && !hasDeptData
                       ? "Department splits are unavailable until leaderboard data includes departments."
                       : selectedDept
-                        ? `No participants found in ${toDepartmentLabel(selectedDept)}.`
+                        ? `No participants found in ${fromDepartmentKey(selectedDept)}.`
                         : "No participants to display."}
                   </div>
                 )}
           </div>
+
+          {totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-border bg-card/70 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1}
+                className="min-h-[40px] rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
+                disabled={currentPage >= totalPages}
+                className="min-h-[40px] rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
 
           {showPinnedYou && currentUserRow ? (
             <div className="sticky bottom-3 z-20 mt-6">
@@ -577,7 +593,6 @@ export default function LeaderboardPanel({
                     squadTeams.map((team) => {
                       const isCaptain = team.role === "featured";
                       const tier = Number(team.tier ?? 0);
-                      const group = String(team.group ?? "-");
                       const teamId = String(team.id ?? "-");
                       const flagUrl = String(team.flagUrl ?? "");
 
@@ -585,39 +600,21 @@ export default function LeaderboardPanel({
                         <div
                           key={`${team.role}:${teamId}`}
                           className={[
-                            "relative p-3 sm:p-5 rounded-2xl flex flex-col justify-between min-h-[132px] sm:min-h-[180px]",
-                            "bg-card border border-border",
-                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)]",
+                            "relative p-3 sm:p-4 rounded-2xl min-h-[148px] sm:min-h-[186px]",
+                            "bg-card border border-white/10",
+                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)] transition-colors",
                           ].join(" ")}
                         >
                           {isCaptain && (
-                            <div className="absolute -top-3 -right-2 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm z-10">
+                            <div className="absolute -top-3 -right-2 bg-orange-500 border border-orange-300 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md z-10">
                               <Crown size={12} className="fill-current" aria-hidden="true" />
                               CAPTAIN 2x
                             </div>
                           )}
 
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="font-bold text-sm sm:text-lg text-foreground tracking-tight truncate">
-                                {team.name}
-                              </div>
-                              <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground/80">
-                                Team ID{" "}
-                                <span className="font-mono text-foreground/90">
-                                  {teamId}
-                                </span>
-                              </div>
-                              <div className="mt-1 text-[10px] sm:text-xs text-muted-foreground/80">
-                                Group{" "}
-                                <span className="font-semibold text-foreground/90">
-                                  {group}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="flex flex-col items-end gap-2">
-                              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border border-border bg-white/5 flex items-center justify-center shadow-inner">
+                          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+                            <div className="min-w-0 flex flex-col items-start gap-2">
+                              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-white/15 bg-black/20 flex items-center justify-center">
                                 {flagUrl ? (
                                   <img
                                     src={flagUrl}
@@ -631,19 +628,26 @@ export default function LeaderboardPanel({
                                 )}
                               </div>
 
-                              <TierPill tier={tier || 4} />
+                              <div className="min-w-0">
+                                <div className="font-black text-sm sm:text-base text-foreground tracking-tight leading-tight line-clamp-2">
+                                  {team.name}
+                                </div>
+                                <div className="mt-1 inline-flex rounded-md border border-white/15 bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono text-foreground/90">
+                                  {teamId}
+                                </div>
+                              </div>
                             </div>
-                          </div>
 
-                          <div className="mt-3 sm:mt-5">
-                            <div className="text-[10px] sm:text-xs text-muted-foreground/70 font-semibold uppercase tracking-wider mb-1">
-                              Contribution
-                            </div>
-                            <div className="text-lg sm:text-2xl font-mono text-foreground font-medium">
-                              {Number(team.contribution ?? 0)}{" "}
-                              <span className="text-[10px] sm:text-xs text-emerald-300 font-bold">
-                                pts
-                              </span>
+                            <div className="flex flex-col items-end gap-2">
+                              <TierPill tier={tier || 4} />
+                              <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-right min-w-[98px]">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                  Points
+                                </div>
+                                <div className="text-lg sm:text-xl font-black text-foreground leading-none mt-1">
+                                  {Number(team.contribution ?? 0)}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>

@@ -30,6 +30,35 @@ type AssignTeamsPayload = {
   userId: string;
 };
 
+type SeedDepartmentMode =
+  | "round-robin"
+  | "random"
+  | "primary"
+  | "secondary"
+  | "admin";
+
+type AdminSeedMockUsersPayload = {
+  count?: number;
+  password?: string;
+  departmentMode?: SeedDepartmentMode;
+  recompute?: boolean;
+  prefix?: string;
+  batchTag?: string;
+};
+
+type AdminSeedMockUsersResponse = {
+  ok?: boolean;
+  batchTag?: string;
+  countRequested?: number;
+  created?: number;
+  failed?: number;
+  password?: string;
+  departmentMode?: string;
+  recomputed?: boolean;
+  sampleUsers?: unknown;
+  errors?: unknown;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -69,6 +98,11 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+  const [seedCountInput, setSeedCountInput] = useState("24");
+  const [seedDepartmentMode, setSeedDepartmentMode] =
+    useState<SeedDepartmentMode>("round-robin");
+  const [seeding, setSeeding] = useState(false);
+  const [seedStatus, setSeedStatus] = useState("");
 
   // Check auth + admin status
   useEffect(() => {
@@ -202,6 +236,76 @@ export default function AdminUsersPage() {
     await loadUsers();
   }
 
+  async function seedMockUsers() {
+    if (!uid) {
+      setSeedStatus("❌ Not signed in.");
+      return;
+    }
+    if (!isAdmin) {
+      setSeedStatus("❌ Admin access required.");
+      return;
+    }
+
+    const parsed = Number(seedCountInput);
+    const count =
+      Number.isFinite(parsed) && parsed > 0
+        ? Math.min(60, Math.floor(parsed))
+        : 24;
+
+    if (
+      !confirm(
+        `Create ${count} mock users with seeded squads?\n` +
+          `Department mode: ${seedDepartmentMode}\n` +
+          `Default password: Test1234!`
+      )
+    ) {
+      setSeedStatus("Cancelled.");
+      return;
+    }
+
+    setSeeding(true);
+    setSeedStatus("Seeding mock users...");
+
+    try {
+      const fn = httpsCallable<
+        AdminSeedMockUsersPayload,
+        AdminSeedMockUsersResponse
+      >(functions, "adminSeedMockUsers");
+      const res = await fn({
+        count,
+        departmentMode: seedDepartmentMode,
+        recompute: true,
+      });
+      const data = res.data;
+
+      const failures = Number(data.failed ?? 0);
+      const created = Number(data.created ?? 0);
+      const tag = String(data.batchTag ?? "-");
+      const recomputed = data.recomputed === true ? "yes" : "no";
+
+      let errorPreview = "";
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        const first = data.errors[0];
+        if (isRecord(first)) {
+          errorPreview = ` First failure: ${String(first.reason ?? "unknown")}`;
+        }
+      }
+
+      setSeedStatus(
+        `✅ Batch ${tag}: created ${created}, failed ${failures}. ` +
+          `Leaderboard recomputed: ${recomputed}. Login password: Test1234!.` +
+          errorPreview
+      );
+
+      await loadUsers();
+    } catch (err: unknown) {
+      console.error(err);
+      setSeedStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setSeeding(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
       <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -234,7 +338,7 @@ export default function AdminUsersPage() {
             <div className="text-sm text-slate-400">Not authorized.</div>
           ) : (
             <>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   onClick={loadUsers}
                   disabled={loading}
@@ -252,6 +356,62 @@ export default function AdminUsersPage() {
                     Assign Teams to All Without
                   </button>
                 )}
+              </div>
+
+              <div className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 space-y-3">
+                <div className="text-sm font-semibold text-slate-100">
+                  Mock User Batch Seeding
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="space-y-1">
+                    <div className="text-xs text-slate-400 uppercase tracking-wider">
+                      Count
+                    </div>
+                    <input
+                      value={seedCountInput}
+                      onChange={(event) => setSeedCountInput(event.target.value)}
+                      inputMode="numeric"
+                      className="w-24 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <div className="text-xs text-slate-400 uppercase tracking-wider">
+                      Departments
+                    </div>
+                    <select
+                      value={seedDepartmentMode}
+                      onChange={(event) =>
+                        setSeedDepartmentMode(event.target.value as SeedDepartmentMode)
+                      }
+                      className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+                    >
+                      <option value="round-robin">Round Robin</option>
+                      <option value="random">Random</option>
+                      <option value="primary">Primary Only</option>
+                      <option value="secondary">Secondary Only</option>
+                      <option value="admin">Admin Only</option>
+                    </select>
+                  </label>
+
+                  <button
+                    onClick={seedMockUsers}
+                    disabled={seeding || loading || processing !== null}
+                    className="px-4 py-2 rounded-xl bg-amber-400/90 text-amber-950 font-semibold disabled:opacity-50"
+                  >
+                    {seeding ? "Seeding..." : "Seed Mock Users"}
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Creates auth + Firestore users with teams assigned, marks reveal as seen, and recomputes leaderboard.
+                </p>
+
+                {seedStatus ? (
+                  <div className="text-sm text-slate-300 whitespace-pre-wrap">
+                    {seedStatus}
+                  </div>
+                ) : null}
               </div>
 
               {status && (

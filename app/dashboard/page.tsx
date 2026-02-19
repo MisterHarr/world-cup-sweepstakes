@@ -22,6 +22,8 @@ import {
   type BracketMatch as Match,
   type BracketStage as Stage,
 } from "@/lib/bracketUtils";
+import { BRANDING } from "@/lib/branding";
+import { normalizeDepartment, type Department } from "@/lib/departments";
 import { auth, db, functions } from "@/lib/firebase";
 import { fetchTeamsByIds } from "@/lib/dashboardData";
 import { signInWithGoogle } from "@/lib/googleAuth";
@@ -88,7 +90,6 @@ function TabPanelLoading() {
   );
 }
 
-type Department = "Primary" | "Secondary" | "Admin";
 type DashboardTab = "portfolio" | "leaderboard" | "bracket" | "market";
 
 function parseDashboardTab(tabParam: string | null): DashboardTab {
@@ -148,6 +149,15 @@ function toTrimmedString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null;
+}
+
+function resolveLeaderboardUserId(row: Record<string, unknown>): string {
+  return (
+    toTrimmedString(row.userId) ??
+    toTrimmedString(row.uid) ??
+    toTrimmedString(row.id) ??
+    ""
+  );
 }
 
 function toUITeam(id: string, t: Record<string, unknown> | null): UITeam {
@@ -214,6 +224,49 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
   return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
 }
 
+function normalizeStageId(value: unknown): string {
+  const raw = toTrimmedString(value);
+  if (!raw) return "GROUP";
+  const token = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (token === "GROUP" || token === "GROUPSTAGE") return "GROUP";
+  if (token === "R32" || token === "ROUND32" || token === "ROUNDOF32") {
+    return "R32";
+  }
+  if (token === "R16" || token === "ROUND16" || token === "ROUNDOF16") {
+    return "R16";
+  }
+  if (token === "QF" || token === "QUARTERFINAL" || token === "QUARTERFINALS") {
+    return "QF";
+  }
+  if (token === "SF" || token === "SEMIFINAL" || token === "SEMIFINALS") {
+    return "SF";
+  }
+  if (token === "FINAL" || token === "FINALS") return "FINAL";
+  return raw.toUpperCase();
+}
+
+function normalizeMatchStatus(value: unknown): "LIVE" | "FINISHED" | "SCHEDULED" {
+  const raw = toTrimmedString(value);
+  const token = (raw ?? "SCHEDULED").toUpperCase().replace(/[^A-Z]/g, "");
+  if (
+    token === "LIVE" ||
+    token === "INPLAY" ||
+    token === "INPROGRESS" ||
+    token === "ONGOING"
+  ) {
+    return "LIVE";
+  }
+  if (
+    token === "FINISHED" ||
+    token === "FINAL" ||
+    token === "FT" ||
+    token === "FULLTIME"
+  ) {
+    return "FINISHED";
+  }
+  return "SCHEDULED";
+}
+
 /** ---------- LEADERBOARD (your UI; now powered by Firestore snapshot) ---------- **/
 /** ---------- Page ---------- **/
 function DashboardPageContent() {
@@ -257,6 +310,9 @@ function DashboardPageContent() {
   // ✅ Leaderboard state (now from Firestore snapshot)
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [departmentByUserId, setDepartmentByUserId] = useState<
+    Record<string, Department | null>
+  >({});
 
   // ✅ Match Center state (live from Firestore)
   const [bracketStages, setBracketStages] = useState<Stage[]>([]);
@@ -296,12 +352,7 @@ function DashboardPageContent() {
     () => (isRecord(userDoc) ? userDoc : {}),
     [userDoc]
   );
-  const department: Department | null =
-    userDocData.department === "Primary" ||
-    userDocData.department === "Secondary" ||
-    userDocData.department === "Admin"
-      ? userDocData.department
-      : null;
+  const department = normalizeDepartment(userDocData.department);
 
   const activeNavId = useMemo(() => {
     if (activeTab === "portfolio") return "portfolio";
@@ -415,6 +466,7 @@ function DashboardPageContent() {
       setUserDoc(null);
       setTeamsById({});
       setLeaderboardData([]);
+      setDepartmentByUserId({});
       setError("");
       setStatus("");
 
@@ -435,6 +487,44 @@ function DashboardPageContent() {
 
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!signedIn) {
+      setDepartmentByUserId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadDepartmentMap() {
+      try {
+        const fn = httpsCallable(functions, "getLeaderboard");
+        const res = await fn({ limit: 500 });
+        const payload = isRecord(res.data) ? res.data : {};
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+        const map: Record<string, Department | null> = {};
+        rows.forEach((row: unknown) => {
+          const rowData = isRecord(row) ? row : {};
+          const id = resolveLeaderboardUserId(rowData);
+          if (!id) return;
+          map[id] = normalizeDepartment(rowData.department);
+        });
+
+        if (!cancelled) {
+          setDepartmentByUserId(map);
+        }
+      } catch (err: unknown) {
+        console.error(err);
+      }
+    }
+
+    loadDepartmentMap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
 
   // Department gate (same behaviour you already tested)
   useEffect(() => {
@@ -524,15 +614,21 @@ function DashboardPageContent() {
         const mapped: LBUser[] = rows
           .map((r: unknown, idx: number) => {
             const row = isRecord(r) ? r : {};
+            const id = resolveLeaderboardUserId(row);
+            const department =
+              normalizeDepartment(row.department) ??
+              normalizeDepartment(row.dept) ??
+              departmentByUserId[id] ??
+              null;
             return {
-            id: String(row.userId ?? row.id ?? ""),
-            rank: Number(row.rank ?? idx + 1),
-            name: String(row.displayName ?? row.name ?? "Anonymous"),
-            totalScore: Number(row.totalScore ?? 0),
-            badgeCount: Number(row.badgeCount ?? 0),
-            department: typeof row.department === "string" ? row.department : null,
-            dept: typeof row.dept === "string" ? row.dept : null,
-            teams: [], // drawer is hydrated via getSquadDetails
+              id,
+              rank: Number(row.rank ?? idx + 1),
+              name: String(row.displayName ?? row.name ?? "Anonymous"),
+              totalScore: Number(row.totalScore ?? 0),
+              badgeCount: Number(row.badgeCount ?? 0),
+              department,
+              dept: department,
+              teams: [], // drawer is hydrated via getSquadDetails
             };
           })
           .filter((row: LBUser) => Boolean(row.id));
@@ -558,7 +654,7 @@ function DashboardPageContent() {
     return () => {
       unsub();
     };
-  }, [signedIn]);
+  }, [departmentByUserId, signedIn]);
 
   // ✅ Live Match Center via Firestore snapshot
   useEffect(() => {
@@ -589,7 +685,7 @@ function DashboardPageContent() {
 
         snap.forEach((docSnap) => {
           const data = docSnap.data() as Record<string, unknown>;
-          const stage = String(data.stage ?? "GROUP");
+          const stage = normalizeStageId(data.stage);
           const kickoffTime =
             typeof data.kickoffTime === "string" ? data.kickoffTime : "";
           const updatedAt = toIsoString(data.lastUpdated);
@@ -605,9 +701,9 @@ function DashboardPageContent() {
           const s2 =
             typeof data.awayScore === "number" ? data.awayScore : undefined;
 
-          const statusRaw = String(data.status ?? "SCHEDULED");
-          const impact = statusRaw === "LIVE" ? "Match live" : undefined;
-          const impactType = statusRaw === "LIVE" ? "high" : undefined;
+          const statusCode = normalizeMatchStatus(data.status);
+          const impact = statusCode === "LIVE" ? "Match live" : undefined;
+          const impactType = statusCode === "LIVE" ? "high" : undefined;
 
           const match: Match = {
             id: docSnap.id,
@@ -615,12 +711,12 @@ function DashboardPageContent() {
             t2: away,
             s1,
             s2,
-            status: matchStatusLabel(statusRaw),
+            status: matchStatusLabel(statusCode),
             impact,
             impactType,
             kickoffTime,
             updatedAt,
-            isLive: statusRaw === "LIVE",
+            isLive: statusCode === "LIVE",
           };
 
           if (!grouped[stage]) grouped[stage] = [];
@@ -909,6 +1005,50 @@ function DashboardPageContent() {
         0
       );
 
+    const callableLooksEmpty = drawn.length === 0 && (!featured || !featured.id);
+    if (callableLooksEmpty && uid && userId === uid) {
+      const localFeatured: SquadTeamVM | null = featuredTeamId
+        ? {
+            id: String(featuredTeamId),
+            name: String(
+              teamsById[String(featuredTeamId)]?.name ?? String(featuredTeamId)
+            ),
+            group: String(teamsById[String(featuredTeamId)]?.group ?? ""),
+            tier: Number(teamsById[String(featuredTeamId)]?.tier ?? 4),
+            flagUrl: String(teamsById[String(featuredTeamId)]?.flagUrl ?? ""),
+            role: "featured",
+            contribution:
+              calculateTeamPoints(teamsById[String(featuredTeamId)] ?? null) * 2,
+          }
+        : null;
+      const localDrawn: SquadTeamVM[] = (drawnTeamIds ?? []).slice(0, 5).map((teamId) => {
+        const id = String(teamId);
+        const team = teamsById[id] ?? null;
+        return {
+          id,
+          name: String(team?.name ?? id),
+          group: String(team?.group ?? ""),
+          tier: Number(team?.tier ?? 4),
+          flagUrl: String(team?.flagUrl ?? ""),
+          role: "drawn" as const,
+          contribution: calculateTeamPoints(team),
+        };
+      });
+
+      return {
+        userId: uid,
+        displayName: String(payload.displayName ?? displayNameFallback),
+        totalScore:
+          Number(localFeatured?.contribution ?? 0) +
+          localDrawn.reduce(
+            (sum, team) => sum + Number(team.contribution ?? 0),
+            0
+          ),
+        featured: localFeatured,
+        drawn: localDrawn,
+      };
+    }
+
     return {
       userId: String(payload.userId ?? userId),
       displayName: String(payload.displayName ?? displayNameFallback),
@@ -959,15 +1099,30 @@ function DashboardPageContent() {
   }
 
   // User's score and rank from leaderboard
+  const localDerivedScore = useMemo(() => {
+    const featuredPoints = featuredTeamId
+      ? calculateTeamPoints(teamsById[String(featuredTeamId)] ?? null) * 2
+      : 0;
+    const drawnPoints = (drawnTeamIds ?? []).slice(0, 5).reduce((sum, teamId) => {
+      return sum + calculateTeamPoints(teamsById[String(teamId)] ?? null);
+    }, 0);
+    const transferPenaltyPoints = Number(userDocData.transferPenaltyPoints ?? 0);
+    return featuredPoints + drawnPoints - transferPenaltyPoints;
+  }, [featuredTeamId, drawnTeamIds, teamsById, userDocData]);
+
   const userStats = useMemo(() => {
-    const fallbackScore = Number(userDocData.totalScore ?? 0);
+    const userDocScore = Number(userDocData.totalScore);
+    const fallbackScore =
+      Number.isFinite(userDocScore) && userDocScore !== 0
+        ? userDocScore
+        : localDerivedScore;
     if (!uid || !leaderboardData.length) return { score: fallbackScore, rank: null };
     const userEntry = leaderboardData.find((u) => u.id === uid);
     return {
       score: userEntry?.totalScore ?? fallbackScore,
       rank: userEntry?.rank ?? null,
     };
-  }, [uid, leaderboardData, userDocData]);
+  }, [uid, leaderboardData, userDocData, localDerivedScore]);
 
   const remainingTransfers = Math.max(
     0,
@@ -1133,32 +1288,34 @@ function DashboardPageContent() {
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-20 md:pb-0">
         {/* Sticky Header */}
         <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between lg:pr-[34rem]">
+          <div className="max-w-4xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
                 <img
-                  src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
-                  alt="GIS Logo"
+                  src={BRANDING.logoSrc}
+                  alt={BRANDING.logoAlt}
                   className="w-full h-full object-contain"
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                     e.currentTarget.style.display = "none";
                   }}
                 />
               </div>
-              <h1 className="font-bold text-lg tracking-tight">
-                GIS 2026{" "}
-                <span className="text-muted-foreground/70 font-normal">
-                  WORLD CUP SWEEPSTAKE
-                </span>
-              </h1>
+              <h1 className="font-bold text-lg tracking-tight">{BRANDING.appName}</h1>
             </div>
 
-            <div className="hidden md:block text-[12px] text-muted-foreground">
-              {signedIn
-                ? displayName
-                  ? `Signed in as ${displayName}`
-                  : "Signed in"
-                : "Signed out"}
+            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
+              {signedIn ? (
+                displayName ? (
+                  <>
+                    <span className="sm:hidden">{displayName}</span>
+                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
+                  </>
+                ) : (
+                  "Signed in"
+                )
+              ) : (
+                "Signed out"
+              )}
             </div>
           </div>
         </header>
@@ -1178,6 +1335,7 @@ function DashboardPageContent() {
         {/* Portfolio View - Show when on "My Teams" tab */}
         {signedIn && activeTab === "portfolio" && (
           <DashboardPortfolio
+            userId={uid}
             userStats={userStats}
             leaderboardCount={leaderboardData.length}
             teamStats={teamStats}

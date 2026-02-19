@@ -1,8 +1,15 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-19
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
+
+**Related Active Plan:** `/docs/current/UI-UX-SPRINT-BUILD-PLAN.md`
+**Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
+**Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
+**Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
+**UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
+**Immediate Focus:** Run many-user load rehearsal by seeding mock users in `/admin/users`, then staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
 
 ---
 
@@ -15,6 +22,28 @@
 - ✅ **Firestore Indexes** - Deployed composite indexes for match queries
 - ✅ **Squad Details Placeholder Cleanup** - Replaced placeholder scores with real callable-driven totals/contributions
 - ✅ **Admin Transfer Window Toggle** - Added `/admin/fixtures` controls for opening/closing `settings/transferWindow` without console scripts
+- ✅ **Global Shell Baseline (Sprint 1 Step 2)** - Moved `Transfer` nav to end and made signed-in identity visible on mobile across primary app shells
+- ✅ **Sprint 1 Step 3 Correctness Hardening** - Fixed leaderboard department filtering reliability, enforced unique draw assignments, and normalized Match Center stage/live parsing
+- ✅ **Sprint 2 Step 1 Onboarding Simplification** - Reduced landing/auth screen to essential branding + action flow with cleaner welcome state typography
+- ✅ **Sprint 2 Step 2 Auth Expansion** - Added landing support for email/password account creation and sign-in while retaining Google auth
+- ✅ **Sprint 2 Step 4 Department Simplification** - Reworked `/department` into large centered department choices with minimal copy and stronger confirm CTA
+- ✅ **Sprint 2 Step 5 Featured Team UI Overhaul** - Updated `/featured-team` cards to compact horizontal composition, premium tier tiles, and full group filtering coverage
+- ✅ **Sprint 2 Step 6 Confirmation Modal Simplification** - Streamlined featured confirmation modal content and CTA with stronger featured-team + 2x points emphasis
+- ✅ **Sprint 3 Step 1 Reveal Emphasis Refresh** - Updated `/reveal` with stronger featured-team 2x signaling, larger card content hierarchy, and cleaner reduced-copy layout
+- ✅ **Sprint 3 Step 2 Dashboard Portfolio Overhaul** - Rebuilt `/dashboard` portfolio tab with nested summary containers, rank trend indicator, and cleaner expandable team data panels
+- ✅ **Sprint 3 Step 3 Leaderboard Cleanup + Squad Tray Redesign** - Removed redundant leaderboard meta strip and redesigned squad drawer cards for cleaner hierarchy and premium readability
+- ✅ **Sprint 3 Step 4 Bracket Header Cleanup** - Removed bracket-tab debug/meta labels and re-centered/enlarged `Match Center` + live-match signal while preserving dynamic stage/live behavior
+- ✅ **Sprint 3 Step 5 Transfer Tab Layout Migration** - Rebuilt `/dashboard?tab=market` into Light-Luxury-style two-step transfer flow + summary sidebar while preserving dark theme and hold-to-confirm trade logic
+- ✅ **Sprint 4 Step 1 Premium Badge Visual System** - Upgraded `/badges` with rarity-based premium styling tokens, glow treatment, and refreshed header/progress/legend card hierarchy
+- ✅ **Sprint 4 Step 2 Badge Rarity Filters** - Added `All/Common/Uncommon/Rare/Epic/Legendary` tabs on `/badges` with live filtering and per-rarity counts
+- ✅ **Sprint 4 Step 3 Always-Visible Badge Catalog** - Switched `/badges` to render the full badge definition set with locked-state cards by default and unlocked-state highlighting from user badge data
+- ✅ **Sprint 4 Step 4 Final Mobile + Typography Pass** - Polished global type hierarchy, improved mobile signed-in identity readability across shared headers, and tightened `/dashboard?tab=market` mobile row readability
+- ✅ **Post-Sprint P1 Hardening (`QA-001` to `QA-003`)** - Removed synchronous set-state-in-effect patterns from offline indicator, portfolio rank tracking, and transfer execution flows
+- ✅ **Post-Sprint P2 Hardening (`QA-004` to `QA-005`)** - Removed unstable manual memoization in `DashboardBracket` and excluded reference UX docs from lint scope
+- ✅ **Manual QA Findings Slice (`F-001` to `F-007`)** - Implemented onboarding auth/offline reliability fixes plus reveal, portfolio, squad drawer, and badges UX refinements
+- ✅ **Manual QA Reliability Follow-up (`F-008` to `F-009`)** - Fixed transfer hold-confirm runtime state update regression and hardened own-user score/squad fallback paths
+- ✅ **Manual QA Follow-up (`F-010`)** - Added leaderboard pagination for large-user datasets with stable 10-rank page buckets (`1-10`, `11-20`, ...)
+- ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
 
 ### Core Features
 - ✅ Google Authentication with Firebase

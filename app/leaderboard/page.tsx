@@ -9,6 +9,8 @@ import LeaderboardPanel, {
   type SquadTeamVM,
   type SquadVM,
 } from "@/components/leaderboard/LeaderboardPanel";
+import { BRANDING } from "@/lib/branding";
+import { normalizeDepartment, type Department } from "@/lib/departments";
 import { auth, db, functions } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
@@ -20,8 +22,6 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc, onSnapshot } from "firebase/firestore";
-
-type Department = "Primary" | "Secondary" | "Admin";
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
   if (!err || typeof err !== "object") return fallback;
@@ -35,6 +35,21 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function toTrimmedString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function resolveLeaderboardUserId(row: Record<string, unknown>): string {
+  return (
+    toTrimmedString(row.userId) ??
+    toTrimmedString(row.uid) ??
+    toTrimmedString(row.id) ??
+    ""
+  );
 }
 
 export default function StandaloneLeaderboardPage() {
@@ -53,18 +68,16 @@ export default function StandaloneLeaderboardPage() {
 
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [departmentByUserId, setDepartmentByUserId] = useState<
+    Record<string, Department | null>
+  >({});
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
   const userDocData = useMemo<Record<string, unknown>>(
     () => (isRecord(userDoc) ? userDoc : {}),
     [userDoc]
   );
-  const department: Department | null =
-    userDocData.department === "Primary" ||
-    userDocData.department === "Secondary" ||
-    userDocData.department === "Admin"
-      ? userDocData.department
-      : null;
+  const department = normalizeDepartment(userDocData.department);
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
@@ -165,6 +178,7 @@ export default function StandaloneLeaderboardPage() {
       setError("");
       setStatus("");
       setLeaderboardData([]);
+      setDepartmentByUserId({});
 
       if (!user) return;
 
@@ -195,6 +209,44 @@ export default function StandaloneLeaderboardPage() {
 
   useEffect(() => {
     if (!signedIn) {
+      setDepartmentByUserId({});
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadDepartmentMap() {
+      try {
+        const fn = httpsCallable(functions, "getLeaderboard");
+        const res = await fn({ limit: 500 });
+        const payload = isRecord(res.data) ? res.data : {};
+        const rows = Array.isArray(payload.rows) ? payload.rows : [];
+
+        const map: Record<string, Department | null> = {};
+        rows.forEach((row: unknown) => {
+          const rowData = isRecord(row) ? row : {};
+          const id = resolveLeaderboardUserId(rowData);
+          if (!id) return;
+          map[id] = normalizeDepartment(rowData.department);
+        });
+
+        if (!cancelled) {
+          setDepartmentByUserId(map);
+        }
+      } catch (err: unknown) {
+        console.error(err);
+      }
+    }
+
+    loadDepartmentMap();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn]);
+
+  useEffect(() => {
+    if (!signedIn) {
       setLeaderboardData([]);
       setLoadingLeaderboard(false);
       return;
@@ -219,17 +271,20 @@ export default function StandaloneLeaderboardPage() {
         const mapped: LBUser[] = rows
           .map((row: unknown, idx: number) => {
             const rowData = isRecord(row) ? row : {};
+            const id = resolveLeaderboardUserId(rowData);
+            const department =
+              normalizeDepartment(rowData.department) ??
+              normalizeDepartment(rowData.dept) ??
+              departmentByUserId[id] ??
+              null;
             return {
-              id: String(rowData.userId ?? rowData.id ?? ""),
+              id,
               rank: Number(rowData.rank ?? idx + 1),
               name: String(rowData.displayName ?? rowData.name ?? "Anonymous"),
               totalScore: Number(rowData.totalScore ?? 0),
               badgeCount: Number(rowData.badgeCount ?? 0),
-              department:
-                typeof rowData.department === "string"
-                  ? rowData.department
-                  : null,
-              dept: typeof rowData.dept === "string" ? rowData.dept : null,
+              department,
+              dept: department,
               teams: [],
             };
           })
@@ -259,7 +314,7 @@ export default function StandaloneLeaderboardPage() {
     return () => {
       unsub();
     };
-  }, [signedIn]);
+  }, [departmentByUserId, signedIn]);
 
   const navItems = buildMainNavItems({
     signedIn,
@@ -276,12 +331,12 @@ export default function StandaloneLeaderboardPage() {
     <AppShellV0 navItems={navItems} activeId="leaderboard">
       <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-20 md:pb-0">
         <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between lg:pr-[34rem]">
+          <div className="max-w-4xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
                 <img
-                  src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
-                  alt="GIS Logo"
+                  src={BRANDING.logoSrc}
+                  alt={BRANDING.logoAlt}
                   className="w-full h-full object-contain"
                   onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
                     e.currentTarget.style.display = "none";
@@ -289,21 +344,25 @@ export default function StandaloneLeaderboardPage() {
                 />
               </div>
               <h1 className="font-bold text-lg tracking-tight">
-                GIS 2026{" "}
-                <span className="text-muted-foreground/70 font-normal">
-                  LEADERBOARD
-                </span>
+                {BRANDING.shortName} <span className="text-muted-foreground/70 font-normal">LEADERBOARD</span>
               </h1>
             </div>
 
-            <div className="hidden md:block text-[12px] text-muted-foreground">
-              {signedIn
-                ? displayName
-                  ? `Signed in as ${displayName}`
-                  : "Signed in"
-                : checkingAuth
-                  ? "Checking session..."
-                  : "Signed out"}
+            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
+              {signedIn ? (
+                displayName ? (
+                  <>
+                    <span className="sm:hidden">{displayName}</span>
+                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
+                  </>
+                ) : (
+                  "Signed in"
+                )
+              ) : checkingAuth ? (
+                "Checking session..."
+              ) : (
+                "Signed out"
+              )}
             </div>
           </div>
         </header>

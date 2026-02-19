@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { auth } from "@/lib/firebase";
+import { BRANDING } from "@/lib/branding";
 import { signOut } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 
@@ -30,8 +31,8 @@ export function AppShell({ children, user, showAuth = true }: AppShellProps) {
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white shadow-md p-1 overflow-hidden">
                 <img
-                  src="https://www.gardenschool.edu.my/wp-content/uploads/2021/09/gis-logo.png"
-                  alt="GIS Logo"
+                  src={BRANDING.logoSrc}
+                  alt={BRANDING.logoAlt}
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     const target = e.currentTarget as HTMLImageElement;
@@ -40,16 +41,23 @@ export function AppShell({ children, user, showAuth = true }: AppShellProps) {
                 />
               </div>
               <div>
-                <h1 className="text-lg font-bold text-foreground">GIS 2026 World Cup</h1>
-                <p className="text-xs text-muted-foreground">Office Sweepstakes</p>
+                <h1 className="text-lg font-bold text-foreground">{BRANDING.shortName}</h1>
+                <p className="text-xs text-muted-foreground">{BRANDING.tagline}</p>
               </div>
             </div>
 
             {/* Auth Actions */}
             {showAuth && user && (
               <div className="flex items-center gap-2">
-                <span className="hidden sm:inline text-sm text-muted-foreground">
-                  {user.displayName || user.email}
+                <span className="text-xs sm:text-sm text-muted-foreground max-w-[44vw] sm:max-w-[240px] truncate leading-tight">
+                  {user.displayName ? (
+                    <>
+                      <span className="sm:hidden">{user.displayName}</span>
+                      <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
+                    </>
+                  ) : (
+                    user.email || "Signed in"
+                  )}
                 </span>
                 <Button variant="outline" size="sm" onClick={handleSignOut}>
                   Sign Out
