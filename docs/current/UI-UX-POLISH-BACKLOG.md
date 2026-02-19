@@ -1,6 +1,6 @@
 # UI/UX Polish Backlog
 
-**Last Updated:** 2026-02-18  
+**Last Updated:** 2026-02-19  
 **Status:** Post-sprint backlog (driven by manual QA findings)
 
 ## Prioritization Rules
@@ -48,6 +48,7 @@
 | F-007 | P2 | `app/badges/page.tsx` | Badge page had duplicate rarity organization controls and low-signal header/progress treatment | Remove extra rarity legend, promote common display to uncommon, simplify/center header + progress styling | Done |
 | F-008 | P1 | `components/dashboard/DashboardTransferMarket.tsx` | React runtime error during hold-confirm transfer (`Cannot update a component while rendering a different component`) | Trigger trade execution outside `setState` updater callback using ref-based progress updates | Done |
 | F-009 | P1 | `app/dashboard/page.tsx`, `app/leaderboard/page.tsx` | Own score/squad could desync when leaderboard row id schema varied or callable returned empty for current user | Accept `userId/uid/id` row keys and add current-user local score/squad fallback path | Done |
+| F-010 | P2 | `components/leaderboard/LeaderboardPanel.tsx` | Leaderboard with 60+ users rendered as one long list without pagination | Add stable 10-rank page buckets with explicit `Prev/Next` controls and page indicator | Done |
 
 ## Intake From Manual QA
 

@@ -65,6 +65,7 @@
 | F-007 | P2 | `/badges` | Mobile + desktop | Review rarity/filter controls | No duplicate legend+nav, cleaner hierarchy, uncommon taxonomy | Patched: common promoted to uncommon display, legend removed, centered title/progress cleanup | |
 | F-008 | P1 | `/dashboard?tab=market` transfer flow | Mobile + desktop | Hold-to-confirm transfer to 100% | No React `setState in render` runtime error | Patched: moved transfer execution trigger out of state-updater callback using ref-based progress loop | |
 | F-009 | P1 | `/dashboard` + `/leaderboard` score/squad parity | Mobile + desktop | Compare My Teams score + own squad drawer with leaderboard | Own score should not fall to stale zero fallback; own squad drawer should populate | Patched: resilient leaderboard id parsing (`userId`/`uid`/`id`) + local score/squad fallback for current user | |
+| F-010 | P2 | `/leaderboard` list pagination | Mobile + desktop | Open leaderboard with 60+ users and scroll list | Leaderboard should page in stable rank buckets with clear controls | Patched: pagination now uses overall rank buckets (`1-10`, `11-20`, etc.); page 1 list renders `4-10` beneath podium | |
 
 ## Sign-Off
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Crown, Shield, Trophy, X } from "lucide-react";
 import {
   fromDepartmentKey,
@@ -44,6 +44,7 @@ export type SquadVM = {
 };
 
 const CORE_DEPARTMENT_TABS = ["Primary", "Secondary", "Admin"] as const;
+const OVERALL_PAGE_SIZE = 10;
 
 const Skeleton = ({ className }: { className: string }) => (
   <div className={`animate-pulse bg-white/10 rounded ${className}`} />
@@ -115,6 +116,7 @@ export default function LeaderboardPanel({
   const [selectedUser, setSelectedUser] = useState<LBUser | null>(null);
   const [selectedDept, setSelectedDept] = useState<DepartmentKey | null>(null);
   const [sortMode, setSortMode] = useState<"points" | "badges">("points");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [squad, setSquad] = useState<SquadVM | null>(null);
   const [loadingSquad, setLoadingSquad] = useState(false);
@@ -185,6 +187,26 @@ export default function LeaderboardPanel({
     () => rankedRows.filter((u) => !topIds.has(u.id)),
     [rankedRows, topIds]
   );
+  const totalPages = useMemo(() => {
+    if (rankedRows.length === 0) return 1;
+    return Math.max(1, Math.ceil(rankedRows.length / OVERALL_PAGE_SIZE));
+  }, [rankedRows.length]);
+  const pagedList = useMemo(() => {
+    const pageStartRank = (currentPage - 1) * OVERALL_PAGE_SIZE + 1;
+    const pageEndRank = currentPage * OVERALL_PAGE_SIZE;
+    const minListRank = Math.max(4, pageStartRank);
+    return rankedRows.filter(
+      (user) => user.viewRank >= minListRank && user.viewRank <= pageEndRank
+    );
+  }, [currentPage, rankedRows]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedDept, sortMode]);
+
+  useEffect(() => {
+    setCurrentPage((prev) => Math.min(prev, totalPages));
+  }, [totalPages]);
 
   const currentUserRow = useMemo(() => {
     if (!currentUserId) return null;
@@ -370,7 +392,7 @@ export default function LeaderboardPanel({
 
           <div className="space-y-2">
             {filteredList.length > 0
-              ? filteredList.map((user) => {
+              ? pagedList.map((user) => {
                   const isYou = Boolean(currentUserId && user.id === currentUserId);
                   const dept = normalizeDepartment(user.department ?? user.dept);
                   return (
@@ -434,6 +456,32 @@ export default function LeaderboardPanel({
                   </div>
                 )}
           </div>
+
+          {totalPages > 1 ? (
+            <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-border bg-card/70 px-3 py-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1}
+                className="min-h-[40px] rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </p>
+              <button
+                type="button"
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                }
+                disabled={currentPage >= totalPages}
+                className="min-h-[40px] rounded-md border border-border px-3 py-2 text-sm font-semibold text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
 
           {showPinnedYou && currentUserRow ? (
             <div className="sticky bottom-3 z-20 mt-6">

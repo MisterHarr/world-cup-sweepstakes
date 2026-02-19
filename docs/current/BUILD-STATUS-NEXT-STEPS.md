@@ -1,6 +1,6 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2026-02-18
+**Last Updated:** 2026-02-19
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
@@ -42,6 +42,7 @@
 - ✅ **Post-Sprint P2 Hardening (`QA-004` to `QA-005`)** - Removed unstable manual memoization in `DashboardBracket` and excluded reference UX docs from lint scope
 - ✅ **Manual QA Findings Slice (`F-001` to `F-007`)** - Implemented onboarding auth/offline reliability fixes plus reveal, portfolio, squad drawer, and badges UX refinements
 - ✅ **Manual QA Reliability Follow-up (`F-008` to `F-009`)** - Fixed transfer hold-confirm runtime state update regression and hardened own-user score/squad fallback paths
+- ✅ **Manual QA Follow-up (`F-010`)** - Added leaderboard pagination for large-user datasets with stable 10-rank page buckets (`1-10`, `11-20`, ...)
 - ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
 
 ### Core Features
