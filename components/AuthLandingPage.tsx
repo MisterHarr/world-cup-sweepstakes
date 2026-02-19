@@ -50,6 +50,11 @@ function authErrorMessage(err: unknown, fallback: string): string {
   return friendlyErrorMessage(err, fallback);
 }
 
+function isExpectedAuthError(err: unknown): boolean {
+  const code = readErrorCode(err);
+  return code.startsWith("auth/");
+}
+
 function looksLikeEmail(value: string): boolean {
   return /^\S+@\S+\.\S+$/.test(value);
 }
@@ -187,7 +192,16 @@ export function AuthLandingPage() {
 
       setPassword("");
     } catch (e: unknown) {
-      console.error(e);
+      const code = readErrorCode(e);
+      if (emailMode === "signup" && code === "auth/email-already-in-use") {
+        setEmailMode("signin");
+        setError("This email already has an account. Sign in below.");
+        setAuthBusy(false);
+        return;
+      }
+      if (!isExpectedAuthError(e)) {
+        console.error(e);
+      }
       setError(
         authErrorMessage(
           e,

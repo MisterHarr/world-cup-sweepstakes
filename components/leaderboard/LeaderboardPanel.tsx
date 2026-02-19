@@ -552,20 +552,20 @@ export default function LeaderboardPanel({
                         <div
                           key={`${team.role}:${teamId}`}
                           className={[
-                            "relative p-3 sm:p-4 rounded-2xl flex flex-col gap-3 min-h-[140px] sm:min-h-[186px]",
+                            "relative p-3 sm:p-4 rounded-2xl min-h-[148px] sm:min-h-[186px]",
                             "bg-card border border-white/10",
                             "shadow-[0_12px_30px_rgba(0,0,0,0.10)] transition-colors",
                           ].join(" ")}
                         >
                           {isCaptain && (
-                            <div className="absolute -top-3 -right-2 bg-orange-500/15 border border-orange-500/30 text-orange-200 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 shadow-sm z-10">
+                            <div className="absolute -top-3 -right-2 bg-orange-500 border border-orange-300 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md z-10">
                               <Crown size={12} className="fill-current" aria-hidden="true" />
                               CAPTAIN 2x
                             </div>
                           )}
 
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex items-center gap-3">
+                          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
+                            <div className="min-w-0 flex flex-col items-start gap-2">
                               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-white/15 bg-black/20 flex items-center justify-center">
                                 {flagUrl ? (
                                   <img
@@ -581,7 +581,7 @@ export default function LeaderboardPanel({
                               </div>
 
                               <div className="min-w-0">
-                                <div className="font-black text-sm sm:text-lg text-foreground tracking-tight truncate">
+                                <div className="font-black text-sm sm:text-base text-foreground tracking-tight leading-tight line-clamp-2">
                                   {team.name}
                                 </div>
                                 <div className="mt-1 inline-flex rounded-md border border-white/15 bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono text-foreground/90">
@@ -592,18 +592,14 @@ export default function LeaderboardPanel({
 
                             <div className="flex flex-col items-end gap-2">
                               <TierPill tier={tier || 4} />
-                            </div>
-                          </div>
-
-                          <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3">
-                            <div className="text-[10px] sm:text-xs text-muted-foreground/70 font-semibold uppercase tracking-wider mb-1">
-                              Contribution
-                            </div>
-                            <div className="text-lg sm:text-2xl font-mono text-foreground font-medium leading-none">
-                              {Number(team.contribution ?? 0)}{" "}
-                              <span className="text-[10px] sm:text-xs text-emerald-300 font-bold">
-                                pts
-                              </span>
+                              <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-right min-w-[98px]">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+                                  Points
+                                </div>
+                                <div className="text-lg sm:text-xl font-black text-foreground leading-none mt-1">
+                                  {Number(team.contribution ?? 0)}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>

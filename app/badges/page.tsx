@@ -5,7 +5,6 @@ import {
   Lock,
   CheckCircle2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { AppShellV0 } from "@/components/app-shell-v0";
 import { BRANDING } from "@/lib/branding";
@@ -22,54 +21,50 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 
 type BadgeRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
-type BadgeFilter = "all" | BadgeRarity;
+type DisplayBadgeRarity = "uncommon" | "rare" | "epic" | "legendary";
+type BadgeFilter = "all" | DisplayBadgeRarity;
 
 type BadgeAchievement = {
   id: string;
   title: string;
   desc: string;
   icon: string;
-  rarity: BadgeRarity;
+  rarity: DisplayBadgeRarity;
   unlocked: boolean;
   unlockedAt?: string;
   progress?: number;
   total?: number;
 };
 
-const rarityOrder: BadgeRarity[] = [
-  "common",
+const rarityOrder: DisplayBadgeRarity[] = [
   "uncommon",
   "rare",
   "epic",
   "legendary",
 ];
 
-const rarityColors: Record<BadgeRarity, string> = {
-  common: "from-zinc-500 to-zinc-400",
+const rarityColors: Record<DisplayBadgeRarity, string> = {
   uncommon: "from-emerald-500 to-lime-400",
   rare: "from-sky-500 to-cyan-400",
   epic: "from-fuchsia-500 to-pink-400",
   legendary: "from-amber-500 to-yellow-300",
 };
 
-const rarityBorders: Record<BadgeRarity, string> = {
-  common: "border-zinc-400/35",
+const rarityBorders: Record<DisplayBadgeRarity, string> = {
   uncommon: "border-emerald-400/35",
   rare: "border-sky-400/35",
   epic: "border-fuchsia-400/35",
   legendary: "border-amber-400/45",
 };
 
-const rarityGlow: Record<BadgeRarity, string> = {
-  common: "shadow-[0_12px_28px_rgba(148,163,184,0.16)]",
+const rarityGlow: Record<DisplayBadgeRarity, string> = {
   uncommon: "shadow-[0_14px_30px_rgba(16,185,129,0.2)]",
   rare: "shadow-[0_14px_30px_rgba(14,165,233,0.24)]",
   epic: "shadow-[0_14px_30px_rgba(217,70,239,0.24)]",
   legendary: "shadow-[0_16px_34px_rgba(245,158,11,0.28)]",
 };
 
-const rarityText: Record<BadgeRarity, string> = {
-  common: "text-zinc-400",
+const rarityText: Record<DisplayBadgeRarity, string> = {
   uncommon: "text-emerald-300",
   rare: "text-sky-300",
   epic: "text-fuchsia-300",
@@ -82,6 +77,13 @@ type BadgeUnlockMeta = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function toDisplayRarity(value: BadgeRarity | string | undefined): DisplayBadgeRarity {
+  if (value === "rare") return "rare";
+  if (value === "epic") return "epic";
+  if (value === "legendary") return "legendary";
+  return "uncommon";
 }
 
 function formatBadgeDate(value: unknown): string | undefined {
@@ -224,7 +226,7 @@ export default function BadgesPage() {
           title: badge.name,
           desc: badge.description,
           icon: badge.icon,
-          rarity: badge.rarity,
+          rarity: toDisplayRarity(badge.rarity),
           unlocked: Boolean(unlock),
           unlockedAt: unlock?.unlockedAt,
         };
@@ -241,8 +243,7 @@ export default function BadgesPage() {
     activeFilter === "all"
       ? achievements
       : achievements.filter((achievement) => achievement.rarity === activeFilter);
-  const rarityCounts: Record<BadgeRarity, number> = {
-    common: achievements.filter((achievement) => achievement.rarity === "common").length,
+  const rarityCounts: Record<DisplayBadgeRarity, number> = {
     uncommon: achievements.filter((achievement) => achievement.rarity === "uncommon").length,
     rare: achievements.filter((achievement) => achievement.rarity === "rare").length,
     epic: achievements.filter((achievement) => achievement.rarity === "epic").length,
@@ -326,56 +327,22 @@ export default function BadgesPage() {
         <div className="container mx-auto px-4 py-6 max-w-6xl">
 
           {/* Header */}
-          <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Badge Vault</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {unlockedCount}/{achievements.length} unlocked
-              </p>
-            </div>
-            <Badge
-              variant="outline"
-              className="w-fit rounded-full border-white/15 bg-zinc-900/70 px-3 py-1 text-xs text-foreground"
-            >
-              {progressPercent}% complete
-            </Badge>
+          <div className="mb-6 text-center">
+            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
+              Badge Vault
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
+              {unlockedCount}/{achievements.length} unlocked
+            </p>
           </div>
 
           {/* Progress Overview */}
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-zinc-900/90 via-zinc-900/75 to-zinc-950/75 p-6 mb-6 shadow-[0_18px_42px_rgba(0,0,0,0.35)]">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_52%),radial-gradient(circle_at_bottom_left,rgba(56,189,248,0.16),transparent_52%)]" />
-            <div className="relative">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-foreground">Achievement Progress</span>
-                <span className="text-2xl font-bold text-primary">{progressPercent}%</span>
-              </div>
-              <Progress value={progressPercent} className="h-3" />
+          <div className="rounded-2xl border border-white/10 bg-zinc-900/80 p-5 sm:p-6 mb-6 shadow-[0_12px_28px_rgba(0,0,0,0.28)]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-semibold text-foreground">Achievement Progress</span>
+              <span className="text-2xl font-black text-primary">{progressPercent}%</span>
             </div>
-          </div>
-
-          {/* Rarity Legend */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
-            {rarityOrder.map((rarity) => (
-              <div
-                key={rarity}
-                className={cn(
-                  "relative overflow-hidden rounded-xl border bg-zinc-900/65 backdrop-blur-sm px-3 py-2",
-                  rarityBorders[rarity],
-                  rarityGlow[rarity],
-                )}
-              >
-                <div
-                  className={cn(
-                    "pointer-events-none absolute inset-0 opacity-30",
-                    "bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.28),transparent_58%)]",
-                  )}
-                />
-                <div className="relative flex items-center gap-2">
-                  <div className={cn("w-3 h-3 rounded-full bg-gradient-to-r", rarityColors[rarity])} />
-                  <span className={cn("text-xs font-semibold capitalize", rarityText[rarity])}>{rarity}</span>
-                </div>
-              </div>
-            ))}
+            <Progress value={progressPercent} className="h-3" />
           </div>
 
           {/* Rarity Filters */}
@@ -386,16 +353,23 @@ export default function BadgesPage() {
                 const label = filter === "all" ? "All" : filter[0].toUpperCase() + filter.slice(1);
                 const count =
                   filter === "all" ? achievements.length : rarityCounts[filter];
+                const rarityTone = filter === "all" ? null : filter;
                 return (
                   <button
                     key={filter}
                     type="button"
                     onClick={() => setActiveFilter(filter)}
                     className={cn(
-                      "whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all",
+                      "whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-all border",
                       isActive
-                        ? "bg-foreground text-background shadow-[0_8px_20px_rgba(255,255,255,0.18)]"
-                        : "bg-transparent text-muted-foreground hover:text-foreground",
+                        ? rarityTone
+                          ? cn(
+                              "bg-zinc-900 text-foreground",
+                              rarityBorders[rarityTone],
+                              rarityGlow[rarityTone]
+                            )
+                          : "bg-foreground text-background border-transparent shadow-[0_8px_20px_rgba(255,255,255,0.18)]"
+                        : "bg-transparent border-transparent text-muted-foreground hover:text-foreground hover:border-white/15",
                     )}
                   >
                     {label}
@@ -481,15 +455,14 @@ export default function BadgesPage() {
 
                         {achievement.unlocked && achievement.unlockedAt ? (
                           <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
+                            <span
                               className={cn(
-                                "text-[10px] border-0 bg-gradient-to-r text-white",
+                                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold border border-white/20 bg-gradient-to-r text-white",
                                 rarityColors[achievement.rarity],
                               )}
                             >
                               {achievement.rarity.toUpperCase()}
-                            </Badge>
+                            </span>
                             <span className="text-xs text-muted-foreground">
                               Unlocked {achievement.unlockedAt}
                             </span>
@@ -509,15 +482,14 @@ export default function BadgesPage() {
                           </div>
                         ) : (
                           <div className="flex items-center gap-2">
-                            <Badge
-                              variant="outline"
+                            <span
                               className={cn(
-                                "text-[10px] border-0 bg-gradient-to-r text-white",
+                                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold border border-white/20 bg-gradient-to-r text-white",
                                 rarityColors[achievement.rarity],
                               )}
                             >
                               {achievement.rarity.toUpperCase()}
-                            </Badge>
+                            </span>
                             <span className="text-xs text-muted-foreground">Locked</span>
                           </div>
                         )}

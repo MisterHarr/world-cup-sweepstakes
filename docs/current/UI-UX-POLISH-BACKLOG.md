@@ -35,6 +35,18 @@
 | QA-004 | P2 | `components/dashboard/DashboardBracket.tsx` | Lint error: manual memoization preservation warning on `matches` dependency | Normalize/clone dependency input or simplify memoization path | Done |
 | QA-005 | P2 | Tooling / repo hygiene | `npm run lint` scans reference UX docs folder and returns unrelated errors | Add lint ignore for `docs/sweepstakes-game-ux (1)` (reference-only artifacts) | Done |
 
+## Manual QA Findings (2026-02-19 Onboarding Slice)
+
+| ID | Priority | Surface | Finding | Proposed Fix | Status |
+|---|---|---|---|---|---|
+| F-001 | P1 | `components/AuthLandingPage.tsx` | Email sign-up with existing account surfaced noisy Firebase console error context | Detect `auth/email-already-in-use`, auto-switch to sign-in mode, and show clear user message | Done |
+| F-002 | P1 | `components/OfflineIndicator.tsx` | False-positive persistent offline banner in normal online usage | Start optimistic online state and run connectivity probe before asserting offline banner | Done |
+| F-003 | P2 | `app/reveal/page.tsx` | Completion CTA copy and placement felt dev-oriented and easy to miss | Replace with sticky bottom CTA (`See My Teams`) and stronger visual prominence | Done |
+| F-004 | P2 | `app/reveal/page.tsx` | Reveal cards were oversized on small mobile causing excessive scroll | Use denser 2-column small-screen layout and scale media/text spacing | Done |
+| F-005 | P3 | `components/dashboard/DashboardPortfolio.tsx` | Expanded team sections consumed excess vertical space on mobile | Place `Recent Form` + `Next Match` in one row with stats below | Done |
+| F-006 | P2 | `components/leaderboard/LeaderboardPanel.tsx` | Squad details card hierarchy was messy and captain tag too translucent | Rebuild two-column card structure and make `CAPTAIN 2x` badge solid | Done |
+| F-007 | P2 | `app/badges/page.tsx` | Badge page had duplicate rarity organization controls and low-signal header/progress treatment | Remove extra rarity legend, promote common display to uncommon, simplify/center header + progress styling | Done |
+
 ## Intake From Manual QA
 
 - Add new findings with route + viewport + reproduction steps.

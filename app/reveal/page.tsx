@@ -41,6 +41,7 @@ export default function TeamRevealPage() {
   const [revealedCount, setRevealedCount] = useState(0);
   const [isRevealing, setIsRevealing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const revealComplete = revealedCount >= assignedTeams.length && assignedTeams.length > 0;
 
   // Auth and data fetch
   useEffect(() => {
@@ -217,13 +218,13 @@ export default function TeamRevealPage() {
           </div>
 
           {/* Team Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-w-4xl mx-auto mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto mb-8">
             {assignedTeams.map((team, index) => (
               <div
                 key={`${team.code}:${index}`}
                 onClick={() => handleRevealNext(index)}
                 className={cn(
-                  "relative aspect-[5/6] sm:aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
+                  "relative aspect-[3/4] sm:aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
                   index >= revealedCount && "cursor-pointer hover:scale-105"
                 )}
               >
@@ -251,7 +252,7 @@ export default function TeamRevealPage() {
                     {/* Tier Banner */}
                     <div
                       className={cn(
-                        "absolute top-0 left-0 right-0 py-1.5 text-center text-xs font-bold text-white bg-gradient-to-r",
+                        "absolute top-0 left-0 right-0 py-1 text-center text-[10px] sm:text-xs font-bold text-white bg-gradient-to-r",
                         tierColors[team.tier]
                       )}
                     >
@@ -260,16 +261,16 @@ export default function TeamRevealPage() {
 
                     {/* Featured Badge */}
                     {team.isChosen && (
-                      <div className="absolute top-10 left-1/2 -translate-x-1/2 rounded-full border border-primary/50 bg-primary/20 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-primary">
+                      <div className="absolute top-8 sm:top-10 left-1/2 -translate-x-1/2 rounded-full border border-primary/50 bg-primary/20 px-2.5 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary">
                         Featured · 2x
                       </div>
                     )}
 
                     {/* Team Content */}
-                    <div className="flex flex-col items-center justify-center h-full pt-8 sm:pt-9">
+                    <div className="flex flex-col items-center justify-center h-full pt-7 sm:pt-9">
                       <div
                         className={cn(
-                          "w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden mb-4 border-2",
+                          "w-16 h-16 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden mb-2.5 sm:mb-4 border-2",
                           team.isChosen ? "border-primary/70" : "border-border"
                         )}
                       >
@@ -279,10 +280,10 @@ export default function TeamRevealPage() {
                           <span className="text-4xl">🏳️</span>
                         )}
                       </div>
-                      <h3 className="text-2xl sm:text-[28px] font-black text-foreground text-center px-3 leading-tight">
+                      <h3 className="text-sm sm:text-[28px] font-black text-foreground text-center px-2 sm:px-3 leading-tight">
                         {team.name}
                       </h3>
-                      <p className="text-base sm:text-lg text-muted-foreground font-semibold tracking-wider mt-1">
+                      <p className="text-[11px] sm:text-lg text-muted-foreground font-semibold tracking-wider mt-0.5 sm:mt-1">
                         {team.code}
                       </p>
                     </div>
@@ -321,8 +322,8 @@ export default function TeamRevealPage() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            {revealedCount < assignedTeams.length ? (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pb-20 sm:pb-0">
+            {!revealComplete ? (
               <Button
                 variant="outline"
                 size="lg"
@@ -331,12 +332,22 @@ export default function TeamRevealPage() {
               >
                 Reveal All
               </Button>
-            ) : (
-              <Button size="lg" onClick={handleViewPortfolio}>
-                Go to Dashboard
-              </Button>
-            )}
+            ) : null}
           </div>
+
+          {revealComplete ? (
+            <div className="fixed inset-x-0 bottom-4 z-40 px-4">
+              <div className="mx-auto max-w-sm">
+                <Button
+                  size="lg"
+                  onClick={handleViewPortfolio}
+                  className="w-full h-14 text-lg font-black tracking-tight shadow-[0_18px_40px_rgba(16,185,129,0.35)]"
+                >
+                  See My Teams
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </main>
 
         <style jsx>{`

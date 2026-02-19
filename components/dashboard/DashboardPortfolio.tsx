@@ -291,8 +291,8 @@ function PortfolioTeamCard({
             </div>
           ) : null}
 
-          <div className="grid gap-3 lg:grid-cols-3 mt-3">
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Recent Form
               </p>
@@ -313,7 +313,7 @@ function PortfolioTeamCard({
               )}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3">
               <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 <Clock className="w-3 h-3" />
                 Next Match
@@ -335,7 +335,7 @@ function PortfolioTeamCard({
               )}
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+            <div className="col-span-2 rounded-xl border border-white/10 bg-black/20 p-2.5 sm:p-3">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">
                 Stats
               </p>

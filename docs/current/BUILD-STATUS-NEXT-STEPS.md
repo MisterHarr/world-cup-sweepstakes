@@ -9,7 +9,7 @@
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
-**Immediate Focus:** Run the manual cross-device checklist and log any new UX findings for prioritization.
+**Immediate Focus:** Re-test and sign off manual QA findings `F-001` to `F-007` across mobile and desktop.
 
 ---
 
@@ -40,6 +40,7 @@
 - ✅ **Sprint 4 Step 4 Final Mobile + Typography Pass** - Polished global type hierarchy, improved mobile signed-in identity readability across shared headers, and tightened `/dashboard?tab=market` mobile row readability
 - ✅ **Post-Sprint P1 Hardening (`QA-001` to `QA-003`)** - Removed synchronous set-state-in-effect patterns from offline indicator, portfolio rank tracking, and transfer execution flows
 - ✅ **Post-Sprint P2 Hardening (`QA-004` to `QA-005`)** - Removed unstable manual memoization in `DashboardBracket` and excluded reference UX docs from lint scope
+- ✅ **Manual QA Findings Slice (`F-001` to `F-007`)** - Implemented onboarding auth/offline reliability fixes plus reveal, portfolio, squad drawer, and badges UX refinements
 
 ### Core Features
 - ✅ Google Authentication with Firebase

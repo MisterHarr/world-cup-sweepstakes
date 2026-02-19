@@ -3,20 +3,35 @@
 import { useEffect, useState } from "react";
 import { Wifi, WifiOff } from "lucide-react";
 
-function readNavigatorOnline(): boolean {
-  if (typeof navigator === "undefined") return true;
-  return navigator.onLine;
-}
-
 /**
  * Offline indicator component
  * Shows banner when user loses network connection
  */
 export function OfflineIndicator() {
-  const [isOnline, setIsOnline] = useState(readNavigatorOnline);
+  const [isOnline, setIsOnline] = useState(true);
   const [showReconnected, setShowReconnected] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+
+    async function runConnectivityProbe() {
+      if (typeof window === "undefined") return;
+      try {
+        await fetch(`${window.location.origin}/favicon.ico`, {
+          method: "HEAD",
+          cache: "no-store",
+        });
+        if (mounted) {
+          setIsOnline(true);
+        }
+      } catch {
+        if (mounted) {
+          setIsOnline(false);
+          setShowReconnected(false);
+        }
+      }
+    }
+
     function handleOnline() {
       setIsOnline(true);
       setShowReconnected(true);
@@ -31,8 +46,10 @@ export function OfflineIndicator() {
 
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    void runConnectivityProbe();
 
     return () => {
+      mounted = false;
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
@@ -79,7 +96,7 @@ export function OfflineIndicator() {
  * Returns current online/offline state
  */
 export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(readNavigatorOnline);
+  const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
     function handleOnline() {
