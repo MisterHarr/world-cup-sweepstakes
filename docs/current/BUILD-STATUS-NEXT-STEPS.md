@@ -9,7 +9,7 @@
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
-**Immediate Focus:** Run many-user load rehearsal with staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
+**Immediate Focus:** Run many-user load rehearsal by seeding mock users in `/admin/users`, then staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
 
 ---
 
@@ -42,6 +42,7 @@
 - ✅ **Post-Sprint P2 Hardening (`QA-004` to `QA-005`)** - Removed unstable manual memoization in `DashboardBracket` and excluded reference UX docs from lint scope
 - ✅ **Manual QA Findings Slice (`F-001` to `F-007`)** - Implemented onboarding auth/offline reliability fixes plus reveal, portfolio, squad drawer, and badges UX refinements
 - ✅ **Manual QA Reliability Follow-up (`F-008` to `F-009`)** - Fixed transfer hold-confirm runtime state update regression and hardened own-user score/squad fallback paths
+- ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
 
 ### Core Features
 - ✅ Google Authentication with Firebase

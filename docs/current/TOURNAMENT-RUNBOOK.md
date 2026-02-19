@@ -40,8 +40,14 @@ Important current dataset note:
 - This section replays that group slice in **3 waves**.
 
 One-time setup:
-1. Open `/admin/fixtures` as admin.
-2. Click `Preview Reset`, then `Reset + Ingest` with:
+1. Open `/admin/users` as admin.
+2. In `Mock User Batch Seeding`, run:
+   - `Count`: `24` to `60`
+   - `Departments`: `Round Robin`
+   - Click `Seed Mock Users`
+   - Seeded login password: `Test1234!`
+3. Open `/admin/fixtures`.
+4. Click `Preview Reset`, then `Reset + Ingest` with:
    - `maxMatches`: blank
    - `cutoffIso`: `2022-11-21T23:59:59Z`
 

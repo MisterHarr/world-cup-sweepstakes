@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { recomputeScoresCore } from "./scoring";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -138,6 +139,82 @@ type TeamSeedRow = {
   tier: number;
   flagUrl: string;
 };
+
+type SeedDepartmentMode =
+  | "round-robin"
+  | "random"
+  | "primary"
+  | "secondary"
+  | "admin";
+
+function asPositiveIntegerWithin(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+): number {
+  const parsed =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.floor(value)
+      : Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+function asSeedDepartmentMode(value: unknown): SeedDepartmentMode | null {
+  if (typeof value !== "string") return null;
+  const token = value.trim().toLowerCase();
+  if (
+    token === "round-robin" ||
+    token === "random" ||
+    token === "primary" ||
+    token === "secondary" ||
+    token === "admin"
+  ) {
+    return token;
+  }
+  return null;
+}
+
+function sanitizeSeedToken(value: string): string {
+  const token = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return token.length > 0 ? token : "seed";
+}
+
+function sanitizeEmailDomain(value: string): string {
+  const token = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9.-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/\.+/g, ".")
+    .replace(/^[.-]+|[.-]+$/g, "");
+  if (!token) return "example.test";
+  return token.includes(".") ? token : `${token}.test`;
+}
+
+function pickDepartmentForSeed(
+  index: number,
+  mode: SeedDepartmentMode
+): "Primary" | "Secondary" | "Admin" {
+  const departments: Array<"Primary" | "Secondary" | "Admin"> = [
+    "Primary",
+    "Secondary",
+    "Admin",
+  ];
+  if (mode === "primary") return "Primary";
+  if (mode === "secondary") return "Secondary";
+  if (mode === "admin") return "Admin";
+  if (mode === "random") {
+    return departments[Math.floor(Math.random() * departments.length)];
+  }
+  return departments[index % departments.length];
+}
 
 function readPortfolio(value: unknown): PortfolioItem[] {
   if (!Array.isArray(value)) return [];
@@ -639,6 +716,162 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
     message: `Assigned ${featuredTeam.name} (featured) + 5 drawn teams.`,
     featured: featuredTeam.name,
     drawn: drawnTeams.map((t) => t.name),
+  };
+});
+
+export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => {
+  const isAdmin = request.auth?.token?.admin === true;
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const payload = isRecord(request.data) ? request.data : {};
+  const count = asPositiveIntegerWithin(payload.count, 24, 1, 60);
+  const password = asTrimmedString(payload.password) ?? "Test1234!";
+  if (password.length < 6) {
+    throw new HttpsError("invalid-argument", "password must be at least 6 characters.");
+  }
+
+  const prefix = sanitizeSeedToken(asTrimmedString(payload.prefix) ?? "wcpseed");
+  const domain = sanitizeEmailDomain(asTrimmedString(payload.domain) ?? "example.test");
+  const departmentMode = asSeedDepartmentMode(payload.departmentMode) ?? "round-robin";
+  const recompute = payload.recompute !== false;
+  const batchTag =
+    sanitizeSeedToken(asTrimmedString(payload.batchTag) ?? new Date().toISOString());
+
+  type TeamPoolRow = {
+    id: string;
+    name: string;
+    tier: number;
+  };
+
+  const teamsSnap = await db.collection("teams").get();
+  const allTeams = uniqueByTeamId(
+    teamsSnap.docs
+      .map((d): TeamPoolRow | null => {
+        const data = d.data() as Record<string, unknown>;
+        const id = asTrimmedString(data.id) ?? d.id;
+        const name = asTrimmedString(data.name);
+        const tierRaw = data.tier;
+        const tier =
+          typeof tierRaw === "number" && Number.isFinite(tierRaw)
+            ? Math.floor(tierRaw)
+            : null;
+        if (!id || !name || tier === null || tier < 1 || tier > 4) return null;
+        return { id, name, tier };
+      })
+      .filter((team): team is TeamPoolRow => team !== null)
+  );
+
+  if (allTeams.length < 6) {
+    throw new HttpsError("failed-precondition", "Not enough teams in database.");
+  }
+
+  const created: Array<{
+    uid: string;
+    email: string;
+    displayName: string;
+    department: "Primary" | "Secondary" | "Admin";
+  }> = [];
+  const failed: Array<{ index: number; reason: string }> = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const ordinal = i + 1;
+    const displayName = `WCP Seed User ${ordinal}`;
+    const suffix = Math.random().toString(36).slice(2, 8);
+    const email =
+      `${prefix}_${batchTag}_${String(ordinal).padStart(2, "0")}_${suffix}@${domain}`.toLowerCase();
+    const department = pickDepartmentForSeed(i, departmentMode);
+
+    try {
+      const authUser = await admin.auth().createUser({
+        email,
+        password,
+        displayName,
+        emailVerified: true,
+      });
+
+      const shuffledTeams = shuffle(allTeams);
+      const featuredTeam = shuffledTeams[0];
+      const drawnTeams = drawTierBalanced(shuffledTeams.slice(1), 5);
+
+      if (drawnTeams.length < 5) {
+        throw new Error("Not enough unique teams available for draw.");
+      }
+
+      const nextPortfolio = [
+        { teamId: featuredTeam.id, role: "featured" as const },
+        ...drawnTeams.map((team) => ({ teamId: team.id, role: "drawn" as const })),
+      ];
+
+      const entry = {
+        confirmedAt: FieldValue.serverTimestamp(),
+        featuredTeamId: featuredTeam.id,
+        drawnTeamIds: drawnTeams.map((team) => team.id),
+        version: 1,
+      };
+
+      await db.collection("users").doc(authUser.uid).set(
+        {
+          uid: authUser.uid,
+          displayName,
+          email,
+          photoURL: null,
+          isAdmin: false,
+          department,
+          hasSeenReveal: true,
+          remainingTransfers: 2,
+          transferPenaltyPoints: 0,
+          totalScore: 0,
+          entry,
+          portfolio: nextPortfolio,
+          mockSeed: {
+            batchTag,
+            index: ordinal,
+            createdBy: request.auth?.uid ?? "admin",
+          },
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      created.push({
+        uid: authUser.uid,
+        email,
+        displayName,
+        department,
+      });
+    } catch (err: unknown) {
+      const reason =
+        err instanceof Error && err.message.trim().length > 0
+          ? err.message.trim()
+          : "Failed to create seed user.";
+      failed.push({ index: ordinal, reason });
+    }
+  }
+
+  let recomputed = false;
+  if (recompute && created.length > 0) {
+    await recomputeScoresCore({
+      includeLive: true,
+      scoringVersion: "v1",
+      initiatedBy: request.auth?.uid ?? "admin",
+    });
+    recomputed = true;
+  }
+
+  return {
+    ok: true,
+    batchTag,
+    countRequested: count,
+    created: created.length,
+    failed: failed.length,
+    password,
+    departmentMode,
+    recomputed,
+    sampleUsers: created.slice(0, 12),
+    errors: failed.slice(0, 12),
   };
 });
 
