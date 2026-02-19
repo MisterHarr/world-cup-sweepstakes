@@ -151,6 +151,15 @@ function toTrimmedString(value: unknown): string | null {
     : null;
 }
 
+function resolveLeaderboardUserId(row: Record<string, unknown>): string {
+  return (
+    toTrimmedString(row.userId) ??
+    toTrimmedString(row.uid) ??
+    toTrimmedString(row.id) ??
+    ""
+  );
+}
+
 function toUITeam(id: string, t: Record<string, unknown> | null): UITeam {
   const team = t ?? {};
   return {
@@ -497,7 +506,7 @@ function DashboardPageContent() {
         const map: Record<string, Department | null> = {};
         rows.forEach((row: unknown) => {
           const rowData = isRecord(row) ? row : {};
-          const id = String(rowData.id ?? "").trim();
+          const id = resolveLeaderboardUserId(rowData);
           if (!id) return;
           map[id] = normalizeDepartment(rowData.department);
         });
@@ -605,7 +614,7 @@ function DashboardPageContent() {
         const mapped: LBUser[] = rows
           .map((r: unknown, idx: number) => {
             const row = isRecord(r) ? r : {};
-            const id = String(row.userId ?? row.id ?? "");
+            const id = resolveLeaderboardUserId(row);
             const department =
               normalizeDepartment(row.department) ??
               normalizeDepartment(row.dept) ??
@@ -996,6 +1005,50 @@ function DashboardPageContent() {
         0
       );
 
+    const callableLooksEmpty = drawn.length === 0 && (!featured || !featured.id);
+    if (callableLooksEmpty && uid && userId === uid) {
+      const localFeatured: SquadTeamVM | null = featuredTeamId
+        ? {
+            id: String(featuredTeamId),
+            name: String(
+              teamsById[String(featuredTeamId)]?.name ?? String(featuredTeamId)
+            ),
+            group: String(teamsById[String(featuredTeamId)]?.group ?? ""),
+            tier: Number(teamsById[String(featuredTeamId)]?.tier ?? 4),
+            flagUrl: String(teamsById[String(featuredTeamId)]?.flagUrl ?? ""),
+            role: "featured",
+            contribution:
+              calculateTeamPoints(teamsById[String(featuredTeamId)] ?? null) * 2,
+          }
+        : null;
+      const localDrawn: SquadTeamVM[] = (drawnTeamIds ?? []).slice(0, 5).map((teamId) => {
+        const id = String(teamId);
+        const team = teamsById[id] ?? null;
+        return {
+          id,
+          name: String(team?.name ?? id),
+          group: String(team?.group ?? ""),
+          tier: Number(team?.tier ?? 4),
+          flagUrl: String(team?.flagUrl ?? ""),
+          role: "drawn" as const,
+          contribution: calculateTeamPoints(team),
+        };
+      });
+
+      return {
+        userId: uid,
+        displayName: String(payload.displayName ?? displayNameFallback),
+        totalScore:
+          Number(localFeatured?.contribution ?? 0) +
+          localDrawn.reduce(
+            (sum, team) => sum + Number(team.contribution ?? 0),
+            0
+          ),
+        featured: localFeatured,
+        drawn: localDrawn,
+      };
+    }
+
     return {
       userId: String(payload.userId ?? userId),
       displayName: String(payload.displayName ?? displayNameFallback),
@@ -1046,15 +1099,30 @@ function DashboardPageContent() {
   }
 
   // User's score and rank from leaderboard
+  const localDerivedScore = useMemo(() => {
+    const featuredPoints = featuredTeamId
+      ? calculateTeamPoints(teamsById[String(featuredTeamId)] ?? null) * 2
+      : 0;
+    const drawnPoints = (drawnTeamIds ?? []).slice(0, 5).reduce((sum, teamId) => {
+      return sum + calculateTeamPoints(teamsById[String(teamId)] ?? null);
+    }, 0);
+    const transferPenaltyPoints = Number(userDocData.transferPenaltyPoints ?? 0);
+    return featuredPoints + drawnPoints - transferPenaltyPoints;
+  }, [featuredTeamId, drawnTeamIds, teamsById, userDocData]);
+
   const userStats = useMemo(() => {
-    const fallbackScore = Number(userDocData.totalScore ?? 0);
+    const userDocScore = Number(userDocData.totalScore);
+    const fallbackScore =
+      Number.isFinite(userDocScore) && userDocScore !== 0
+        ? userDocScore
+        : localDerivedScore;
     if (!uid || !leaderboardData.length) return { score: fallbackScore, rank: null };
     const userEntry = leaderboardData.find((u) => u.id === uid);
     return {
       score: userEntry?.totalScore ?? fallbackScore,
       rank: userEntry?.rank ?? null,
     };
-  }, [uid, leaderboardData, userDocData]);
+  }, [uid, leaderboardData, userDocData, localDerivedScore]);
 
   const remainingTransfers = Math.max(
     0,

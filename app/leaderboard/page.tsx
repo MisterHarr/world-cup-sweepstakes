@@ -37,6 +37,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function toTrimmedString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function resolveLeaderboardUserId(row: Record<string, unknown>): string {
+  return (
+    toTrimmedString(row.userId) ??
+    toTrimmedString(row.uid) ??
+    toTrimmedString(row.id) ??
+    ""
+  );
+}
+
 export default function StandaloneLeaderboardPage() {
   const router = useRouter();
 
@@ -210,7 +225,7 @@ export default function StandaloneLeaderboardPage() {
         const map: Record<string, Department | null> = {};
         rows.forEach((row: unknown) => {
           const rowData = isRecord(row) ? row : {};
-          const id = String(rowData.id ?? "").trim();
+          const id = resolveLeaderboardUserId(rowData);
           if (!id) return;
           map[id] = normalizeDepartment(rowData.department);
         });
@@ -256,7 +271,7 @@ export default function StandaloneLeaderboardPage() {
         const mapped: LBUser[] = rows
           .map((row: unknown, idx: number) => {
             const rowData = isRecord(row) ? row : {};
-            const id = String(rowData.userId ?? rowData.id ?? "");
+            const id = resolveLeaderboardUserId(rowData);
             const department =
               normalizeDepartment(rowData.department) ??
               normalizeDepartment(rowData.dept) ??

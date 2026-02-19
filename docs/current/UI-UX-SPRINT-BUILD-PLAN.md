@@ -53,7 +53,7 @@
 ## Current Step
 
 - **Completed:** Sprint 1, Step 1, Step 2, Step 3, Sprint 2 Step 1, Sprint 2 Step 2, Sprint 2 Step 4, Sprint 2 Step 5, Sprint 2 Step 6, Sprint 3 Step 1, Sprint 3 Step 2, Sprint 3 Step 3, Sprint 3 Step 4, Sprint 3 Step 5, Sprint 4 Step 1, Sprint 4 Step 2, Sprint 4 Step 3, and Sprint 4 Step 4
-- **Next:** Re-test manual QA findings `F-001` to `F-007` using `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md` and close sign-off.
+- **Next:** Re-test manual QA findings `F-001` to `F-009` using `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md` and close sign-off.
 - **Step 1 Definition of Done Met:**
   - Branding name finalized in one source file: `/lib/branding.ts`.
   - Logo asset local and copyright-safe: `/public/branding/featured-five-2026-mark.svg`.
@@ -141,5 +141,8 @@
   - Improved reveal CTA language/placement and small-screen card density.
   - Compacted dashboard team expansion layout on mobile and reorganized squad drawer cards for clearer hierarchy.
   - Simplified badge taxonomy/controls by promoting `common` display into `uncommon` and removing duplicate rarity legend controls.
+- **Manual QA Reliability Follow-up Outcomes (`F-008` to `F-009`):**
+  - Removed transfer-confirm runtime state-update regression by shifting trade execution outside state updater callbacks.
+  - Hardened leaderboard row-id parsing and added current-user local score/squad fallback when remote row/schema data is inconsistent.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

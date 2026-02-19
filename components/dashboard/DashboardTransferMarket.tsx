@@ -53,6 +53,7 @@ const DashboardTransferMarket = ({
   const [confirmProgress, setConfirmProgress] = useState(0);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const confirmProgressRef = useRef(0);
 
   const projectedScore = selectedDrop && selectedPickup ? userScore - penalty : userScore;
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -63,6 +64,7 @@ const DashboardTransferMarket = ({
   };
   const resetConfirmState = () => {
     clearConfirmInterval();
+    confirmProgressRef.current = 0;
     setIsConfirmed(false);
     setConfirmProgress(0);
   };
@@ -104,20 +106,21 @@ const DashboardTransferMarket = ({
 
     clearConfirmInterval();
     intervalRef.current = setInterval(() => {
-      setConfirmProgress((prev) => {
-        const next = Math.min(prev + 4, 100);
-        if (next >= 100) {
-          clearConfirmInterval();
-          void executeTrade(trade);
-        }
-        return next;
-      });
+      const next = Math.min(confirmProgressRef.current + 4, 100);
+      confirmProgressRef.current = next;
+      setConfirmProgress(next);
+
+      if (next >= 100) {
+        clearConfirmInterval();
+        void executeTrade(trade);
+      }
     }, 20);
   };
 
   const stopConfirm = () => {
     if (isConfirmed || isSubmitting) return;
     clearConfirmInterval();
+    confirmProgressRef.current = 0;
     setConfirmProgress(0);
   };
 

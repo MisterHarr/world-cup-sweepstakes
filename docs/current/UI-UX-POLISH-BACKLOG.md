@@ -46,6 +46,8 @@
 | F-005 | P3 | `components/dashboard/DashboardPortfolio.tsx` | Expanded team sections consumed excess vertical space on mobile | Place `Recent Form` + `Next Match` in one row with stats below | Done |
 | F-006 | P2 | `components/leaderboard/LeaderboardPanel.tsx` | Squad details card hierarchy was messy and captain tag too translucent | Rebuild two-column card structure and make `CAPTAIN 2x` badge solid | Done |
 | F-007 | P2 | `app/badges/page.tsx` | Badge page had duplicate rarity organization controls and low-signal header/progress treatment | Remove extra rarity legend, promote common display to uncommon, simplify/center header + progress styling | Done |
+| F-008 | P1 | `components/dashboard/DashboardTransferMarket.tsx` | React runtime error during hold-confirm transfer (`Cannot update a component while rendering a different component`) | Trigger trade execution outside `setState` updater callback using ref-based progress updates | Done |
+| F-009 | P1 | `app/dashboard/page.tsx`, `app/leaderboard/page.tsx` | Own score/squad could desync when leaderboard row id schema varied or callable returned empty for current user | Accept `userId/uid/id` row keys and add current-user local score/squad fallback path | Done |
 
 ## Intake From Manual QA
 
