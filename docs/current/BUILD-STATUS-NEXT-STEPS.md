@@ -9,7 +9,7 @@
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
-**Immediate Focus:** Re-test and sign off manual QA findings `F-001` to `F-009` across mobile and desktop.
+**Immediate Focus:** Run many-user load rehearsal with staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
 
 ---
 

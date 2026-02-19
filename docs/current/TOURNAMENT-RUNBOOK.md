@@ -31,6 +31,42 @@ When automation is `DISABLED`, scheduled ingestion does not run. This is the rec
    - `/dashboard?tab=leaderboard`
    - `/dashboard?tab=bracket` → `Results`
 
+## 2.1) Staged 2022 Replay (Recommended for Load Rehearsals)
+
+Use staged ingest to simulate tournament progression instead of dumping all fixture data at once.
+
+Important current dataset note:
+- `functions/src/fixtures/worldcup2022.json` currently contains **12 group-stage matches** (opening slice), not full knockout coverage.
+- This section replays that group slice in **3 waves**.
+
+One-time setup:
+1. Open `/admin/fixtures` as admin.
+2. Click `Preview Reset`, then `Reset + Ingest` with:
+   - `maxMatches`: blank
+   - `cutoffIso`: `2022-11-21T23:59:59Z`
+
+Wave schedule (cumulative cutoffs):
+
+| Wave | Purpose | cutoffIso | Expected selected matches |
+|---|---|---|---|
+| G1 | Group opener block | `2022-11-21T23:59:59Z` | 4 |
+| G2 | Group mid block | `2022-11-22T23:59:59Z` | 8 |
+| G3 | Group close block | `2022-11-23T23:59:59Z` | 12 |
+
+For each wave:
+1. Set `cutoffIso` to the wave value above.
+2. Leave `maxMatches` blank.
+3. Click `Preview Selection` and verify count.
+4. Click `Run Fixture Ingest`.
+5. Click `Recompute Leaderboard` (explicit safety pass for rehearsal consistency).
+6. Validate:
+   - `/dashboard?tab=portfolio` score parity
+   - `/dashboard?tab=leaderboard` rank movement
+   - `/dashboard?tab=market` transfer execution (if window open)
+
+If/when full 2022 fixtures are added:
+- Continue the same staged method with additional knockout cutoffs (R16, QF, SF, Final) rather than one-shot ingest.
+
 ## 3) Go-Live Switch (Tournament)
 
 Use this only when real provider integration is ready and tested.
