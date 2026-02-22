@@ -9,6 +9,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 - 🏆 [Tournament Runbook](./docs/current/TOURNAMENT-RUNBOOK.md)
 - 🚀 [Build Status & Roadmap](./docs/current/BUILD-STATUS-NEXT-STEPS.md)
 - 🎖️ [Badge System Design](./docs/current/BADGE-SYSTEM-DESIGN.md)
+- ❓ [User Guide & FAQ](./docs/current/USER-GUIDE-FAQ.md)
+- 💝 [Charity Payments Module](./docs/current/CHARITY-PAYMENTS.md)
 
 **Admin Operations:**
 - Admin tools UI: `http://localhost:3000/admin`

@@ -10,6 +10,7 @@
 
 ```bash
 npm run test:badges
+npm run test:badge-feasibility
 ```
 
 ### What This Verifies
@@ -23,6 +24,7 @@ npm run test:badges
   - Firestore `Timestamp` object
   - ISO date string
 - Leaderboard rows contain expected `badgeCount` values after recompute.
+- Badge definition criteria stay inside the currently feasible criteria-type allowlist.
 
 ### Files
 
@@ -80,4 +82,3 @@ Record findings in:
 
 - `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 - `/docs/current/UI-UX-POLISH-BACKLOG.md`
-

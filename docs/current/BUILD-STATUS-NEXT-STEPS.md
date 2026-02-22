@@ -9,7 +9,10 @@
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
 **Badges Test Plan:** `/docs/current/BADGES-TEST-PLAN.md`
+**Badge Feasibility Audit:** `/docs/current/BADGE-FEASIBILITY-AUDIT-2022.md`
 **Hardening Audit:** `/docs/current/HARDENING-AUDIT-2026-02-22.md`
+**User Guide & FAQ:** `/docs/current/USER-GUIDE-FAQ.md`
+**Charity Payments Module:** `/docs/current/CHARITY-PAYMENTS.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
 **Immediate Focus:** Run many-user load rehearsal by seeding mock users in `/admin/users`, then staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
 
@@ -47,6 +50,7 @@
 - ✅ **Manual QA Follow-up (`F-010`)** - Added leaderboard pagination for large-user datasets with stable 10-rank page buckets (`1-10`, `11-20`, ...)
 - ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
 - ✅ **Badge Count Hardening + Regression Test** - Added schema-resilient badge counting in `recomputeScores` and emulator regression coverage (`npm run test:badges`)
+- ✅ **Guide + Charity Module + Badge Feasibility Update** - Added `/guide` help/FAQ route, feature-flagged `/charity` payment rails, and revised badge definitions to remove criteria impossible under current data telemetry
 
 ### Core Features
 - ✅ Google Authentication with Firebase

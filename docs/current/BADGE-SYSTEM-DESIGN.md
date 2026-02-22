@@ -4,6 +4,8 @@
 **Target:** ~30 badges for pre-launch
 **Research Sources:** FPL, Fantasy Sports, Gamification Best Practices
 
+> Update note (2026-02-22): Feasibility adjustments for current 2022 replay data are tracked in `/docs/current/BADGE-FEASIBILITY-AUDIT-2022.md` and reflected in `/lib/badgeDefinitions.ts`.
+
 ---
 
 ## Research Summary

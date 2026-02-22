@@ -33,6 +33,8 @@
 - [ ] `/transfer-history`: cards/timeline remain readable on mobile
 - [ ] `/leaderboard`: tabs/squad drawer scroll and typography are stable on small screens
 - [ ] `/badges`: filters work; locked vs unlocked visual states are clear
+- [ ] `/guide`: quick-start, FAQ, and scoring formulas are readable on mobile + desktop
+- [ ] `/charity` (if enabled): provider links render and open correctly; terms/disclaimer visible
 
 ## Header + Navigation
 
