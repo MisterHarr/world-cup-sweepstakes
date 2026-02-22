@@ -1,6 +1,6 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2026-02-19
+**Last Updated:** 2026-02-22
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
@@ -8,6 +8,8 @@
 **Branding Source of Truth:** `/docs/current/BRANDING-LOCK.md`
 **Manual QA Checklist:** `/docs/current/UI-UX-MANUAL-QA-CHECKLIST.md`
 **Manual QA Run Sheet:** `/docs/current/UI-UX-MANUAL-QA-RUN-2026-02-18.md`
+**Badges Test Plan:** `/docs/current/BADGES-TEST-PLAN.md`
+**Hardening Audit:** `/docs/current/HARDENING-AUDIT-2026-02-22.md`
 **UI Polish Backlog:** `/docs/current/UI-UX-POLISH-BACKLOG.md`
 **Immediate Focus:** Run many-user load rehearsal by seeding mock users in `/admin/users`, then staged 2022 ingest (Group Waves `G1/G2/G3`) per `/docs/current/TOURNAMENT-RUNBOOK.md`.
 
@@ -44,6 +46,7 @@
 - ✅ **Manual QA Reliability Follow-up (`F-008` to `F-009`)** - Fixed transfer hold-confirm runtime state update regression and hardened own-user score/squad fallback paths
 - ✅ **Manual QA Follow-up (`F-010`)** - Added leaderboard pagination for large-user datasets with stable 10-rank page buckets (`1-10`, `11-20`, ...)
 - ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
+- ✅ **Badge Count Hardening + Regression Test** - Added schema-resilient badge counting in `recomputeScores` and emulator regression coverage (`npm run test:badges`)
 
 ### Core Features
 - ✅ Google Authentication with Firebase

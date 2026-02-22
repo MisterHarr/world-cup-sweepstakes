@@ -204,31 +204,44 @@ function calcTeamPoints(stats: TeamStats): number {
   );
 }
 
-function hasBadgeEntry(value: unknown): boolean {
+function hasBadgeUnlockTimestamp(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  return isRecord(value);
+}
+
+function hasBadgeId(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return typeof value.badgeId === "string" && value.badgeId.trim().length > 0;
+}
+
+function shouldCountBadge(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (!isRecord(value)) return false;
+
+  if (value.unlocked === false) return false;
+  if (value.unlocked === true) return true;
+  if (hasBadgeUnlockTimestamp(value.unlockedAt)) return true;
+
+  return hasBadgeId(value);
 }
 
 function readBadgeCount(userData: unknown): number {
   const source = isRecord(userData) ? userData : {};
 
   if (Array.isArray(source.earnedBadges)) {
-    return source.earnedBadges.filter((entry: unknown) => hasBadgeEntry(entry))
+    return source.earnedBadges.filter((entry: unknown) => shouldCountBadge(entry))
       .length;
   }
 
   if (Array.isArray(source.badges)) {
-    return source.badges.filter((entry: unknown) => hasBadgeEntry(entry)).length;
+    return source.badges.filter((entry: unknown) => shouldCountBadge(entry)).length;
   }
 
   if (isRecord(source.badges)) {
-    return Object.values(source.badges).filter((value: unknown) => {
-      if (value === true) return true;
-      if (!isRecord(value)) return false;
-      if (value.unlocked === true) return true;
-      return isRecord(value.unlockedAt);
-    }).length;
+    return Object.values(source.badges).filter((value: unknown) => shouldCountBadge(value)).length;
   }
 
   return 0;

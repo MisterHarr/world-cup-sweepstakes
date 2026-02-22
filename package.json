@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:badges": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only auth,firestore,functions \"cd functions && npm run test:emulator:badges\"",
     "test:rehearsal": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only auth,firestore,functions \"cd functions && npm run test:emulator:transfer && npm run test:emulator:transfer-closed && npm run test:emulator:squad-authz\""
   },
   "dependencies": {
