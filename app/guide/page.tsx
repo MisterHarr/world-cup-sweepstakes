@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-
+import { useRouter } from "next/navigation";
+import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import { AppShellV0 } from "@/components/app-shell-v0";
 import { BRANDING } from "@/lib/branding";
 import { auth } from "@/lib/firebase";
@@ -15,55 +16,118 @@ type FaqItem = {
   a: string;
 };
 
-const HOW_TO_PLAY = [
-  "Sign in using Google or email/password on the landing page.",
-  "Pick your department (`Primary`, `Secondary`, or `Ops/Admin`).",
-  "Choose 1 Featured Team.",
-  "Confirm your entry and reveal your 5 randomly drawn teams.",
-  "Open `My Teams` to track points and `Leaderboard` to track rank.",
-  "Use `Transfer` during an open transfer window to swap drawn teams.",
+type GlossaryItem = {
+  term: string;
+  meaning: string;
+};
+
+type NavHelpItem = {
+  label: string;
+  meaning: string;
+};
+
+const FIRST_TIME_STEPS = [
+  "Sign in.",
+  "Choose your group (Primary, Secondary, or Ops/Admin).",
+  "Pick one Star Team (this is your main team).",
+  "Confirm your pick and reveal your 5 random teams.",
+  "Open My Teams to see your full squad and score.",
+  "Use Leaderboard to see your rank compared with everyone else.",
+];
+
+const FOOTBALL_BASICS: GlossaryItem[] = [
+  {
+    term: "Star Team",
+    meaning: "The team you choose yourself. Its points are doubled.",
+  },
+  {
+    term: "Drawn Teams",
+    meaning: "The 5 extra teams the app gives you at random.",
+  },
+  {
+    term: "Transfer",
+    meaning: "Swap one drawn team for another team.",
+  },
+  {
+    term: "Clean Sheet",
+    meaning: "A team that lets in 0 goals in a match.",
+  },
+  {
+    term: "Yellow / Red Card",
+    meaning: "Penalty cards in football. They reduce points.",
+  },
+];
+
+const NAV_HELP: NavHelpItem[] = [
+  {
+    label: "My Teams",
+    meaning: "Your full squad, total points, and team-by-team details.",
+  },
+  {
+    label: "Leaderboard",
+    meaning: "Who is currently winning and where you are ranked.",
+  },
+  {
+    label: "Live",
+    meaning: "Match updates and tournament progress.",
+  },
+  {
+    label: "Transfer",
+    meaning: "Where you swap teams (only when transfer window is open).",
+  },
+];
+
+const SIMPLE_POINTS_RULES = [
+  "Win = +3 points",
+  "Draw = +1 point",
+  "Each goal scored = +1 point",
+  "Clean sheet (0 goals conceded) = +1 point",
+  "Yellow card = -0.5 point",
+  "Red card = -1 point",
+  "Star Team points are always doubled",
+];
+
+const FAIRNESS_NOTES = [
+  "Your 5 random teams are drawn by the server (not your browser).",
+  "Your Star Team is removed from the random pool before the draw.",
+  "Duplicate teams are blocked, so you cannot get the same team twice.",
+  "Transfers are logged and penalty points are applied automatically.",
 ];
 
 const FAQS: FaqItem[] = [
   {
+    q: "I don’t know football. Can I still play?",
+    a: "Yes. You only need to pick one Star Team. The app handles the rest and keeps scoring automatically.",
+  },
+  {
+    q: "Why is my Star Team special?",
+    a: "Your Star Team gets double points, so it has the biggest effect on your score.",
+  },
+  {
     q: "Why can’t I transfer right now?",
-    a: "Transfers are blocked unless the admin opens the transfer window in /admin/fixtures.",
+    a: "Transfers are only available when the transfer window is open. If the window is closed, everyone is locked.",
   },
   {
-    q: "Can I transfer my Featured Team?",
-    a: "No. Featured Team is locked after confirmation and always earns 2x points.",
+    q: "Can I transfer my Star Team?",
+    a: "No. Only your 5 drawn teams can be swapped.",
   },
   {
-    q: "How are random teams selected?",
-    a: "The backend excludes your Featured Team, shuffles eligible teams, enforces uniqueness, and draws a tier-balanced set of 5.",
+    q: "Why did my score go down after a transfer?",
+    a: "Every transfer has a point cost. Bigger upgrades usually cost more points.",
   },
   {
-    q: "Why did my score drop after a transfer?",
-    a: "Each transfer applies a penalty cost. Upgrade moves cost more than lateral/downgrade moves.",
+    q: "I don’t see the Charity tab. Is it broken?",
+    a: "No. Charity is optional and can be turned on or off by the organisers.",
   },
-  {
-    q: "Why does leaderboard order change after recompute?",
-    a: "Rank is recalculated from latest match/team stats and transfer penalties whenever recompute runs.",
-  },
-  {
-    q: "How does badges ranking work?",
-    a: "The `Badges` tab sorts participants by badge count first, then by points as tie-breaker.",
-  },
-];
-
-const TECH_NOTES = [
-  "Team scoring formula: `wins*3 + draws*1 + goalsScored*1 + cleanSheets*1 - redCards*1 - yellowCards*0.5`.",
-  "User total score formula: `featuredTeamPoints*2 + sum(drawnTeamPoints) - transferPenaltyPoints`.",
-  "Transfer penalty model: `max(5, 10 + upgradeSteps*15 - downgradeSteps*3)`.",
-  "Duplicate teams are blocked in all assignment and transfer paths.",
-  "Department filters normalize values (`Primary`, `Secondary`, `Admin`) before ranking.",
 ];
 
 export default function GuidePage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (nextUser) => {
@@ -72,6 +136,13 @@ export default function GuidePage() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) return;
+    setRedirecting(true);
+    router.replace("/");
+  }, [loading, user, router]);
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
@@ -108,7 +179,7 @@ export default function GuidePage() {
     onSignOut: handleSignOut,
   });
 
-  if (loading) {
+  if (loading || redirecting) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
@@ -118,33 +189,23 @@ export default function GuidePage() {
 
   return (
     <AppShellV0 navItems={navItems} activeId="guide">
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-8">
-        <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-6xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
+      <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
+        <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+          <div className="pt-safe">
+            <FeaturedFiveTopBar
+              className="mx-auto max-w-6xl px-4 pr-14 sm:pr-4"
+              brand={
+                <AppBrandBlock
+                  variant="ff-chrome"
+                  title={BRANDING.shortName}
+                  tagline={BRANDING.tagline}
                 />
-              </div>
-              <h1 className="font-bold text-lg tracking-tight">User Guide</h1>
-            </div>
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
-              {user ? (
-                user.displayName ? (
-                  <>
-                    <span className="sm:hidden">{user.displayName}</span>
-                    <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
-                  </>
-                ) : (
-                  "Signed in"
-                )
-              ) : (
-                "Signed out"
-              )}
-            </div>
+              }
+              liveCount={0}
+              userDisplayName={user?.displayName ?? null}
+              userEmail={auth.currentUser?.email ?? null}
+              showUserTile={Boolean(user)}
+            />
           </div>
         </header>
 
@@ -157,10 +218,34 @@ export default function GuidePage() {
 
           <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Start Here
+              You Don&apos;t Need Football Knowledge
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-muted-foreground">
+              This game is built so anyone can play, even if you have never watched
+              football before.
+            </p>
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {FOOTBALL_BASICS.map((item) => (
+                <article
+                  key={item.term}
+                  className="rounded-xl border border-border bg-background/40 p-4"
+                >
+                  <h3 className="font-semibold text-foreground">{item.term}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.meaning}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section
+            id="first-time"
+            className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 scroll-mt-24"
+          >
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              First Time: What To Click
             </h2>
             <ol className="mt-4 space-y-2 text-sm sm:text-base text-muted-foreground list-decimal list-inside">
-              {HOW_TO_PLAY.map((step) => (
+              {FIRST_TIME_STEPS.map((step) => (
                 <li key={step}>{step}</li>
               ))}
             </ol>
@@ -168,22 +253,48 @@ export default function GuidePage() {
 
           <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-              Scoring Transparency
+              Main Tabs Explained
+            </h2>
+            <div className="mt-4 space-y-3">
+              {NAV_HELP.map((item) => (
+                <article
+                  key={item.label}
+                  className="rounded-xl border border-border bg-background/40 p-4"
+                >
+                  <h3 className="font-semibold text-foreground">{item.label}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{item.meaning}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              How Points Work (Simple)
             </h2>
             <ul className="mt-4 space-y-2 text-sm sm:text-base text-muted-foreground list-disc list-inside">
-              {TECH_NOTES.map((note) => (
+              {SIMPLE_POINTS_RULES.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm text-muted-foreground">
+              In plain terms: your score is your 6 teams&apos; points, with your Star Team
+              counting double, minus any transfer costs.
+            </p>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+              Fairness & Trust
+            </h2>
+            <ul className="mt-4 space-y-2 text-sm sm:text-base text-muted-foreground list-disc list-inside">
+              {FAIRNESS_NOTES.map((note) => (
                 <li key={note}>{note}</li>
               ))}
             </ul>
             <p className="mt-4 text-sm text-muted-foreground">
-              For deeper operational details, see{" "}
-              <Link
-                href="/admin/runbook"
-                className="text-primary underline underline-offset-2"
-              >
-                Admin Runbook
-              </Link>
-              .
+              If you want deeper rules detail, ask your organiser for the admin
+              rules guide.
             </p>
           </section>
 

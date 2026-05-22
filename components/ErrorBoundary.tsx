@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { AlertTriangle } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 
 type ErrorBoundaryProps = {
@@ -32,12 +34,10 @@ export class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // Log to console in development
     if (process.env.NODE_ENV === "development") {
       console.error("ErrorBoundary caught:", error, errorInfo);
     }
 
-    // Call optional error handler
     this.props.onError?.(error, errorInfo);
   }
 
@@ -47,28 +47,30 @@ export class ErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError && this.state.error) {
-      // Use custom fallback if provided
       if (this.props.fallback) {
         return this.props.fallback(this.state.error, this.reset);
       }
 
-      // Default fallback UI
       return (
-        <div className="flex min-h-screen items-center justify-center bg-slate-950 p-4">
-          <div className="max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 text-center">
-            <div className="mb-4 text-4xl">⚠️</div>
-            <h1 className="mb-2 text-xl font-semibold text-white">
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center text-card-foreground shadow-lg">
+            <div className="mb-4 flex justify-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-destructive/15 text-destructive">
+                <AlertTriangle className="size-8" strokeWidth={2} aria-hidden />
+              </div>
+            </div>
+            <h1 className="mb-2 text-xl font-semibold text-foreground">
               Something went wrong
             </h1>
-            <p className="mb-4 text-sm text-slate-400">
+            <p className="mb-4 text-sm text-muted-foreground">
               An unexpected error occurred. Please try reloading the page.
             </p>
             {process.env.NODE_ENV === "development" && (
-              <details className="mb-4 rounded border border-slate-700 bg-slate-950 p-3 text-left text-xs">
-                <summary className="cursor-pointer font-mono text-red-400">
+              <details className="mb-4 rounded-lg border border-border bg-muted/50 p-3 text-left text-xs">
+                <summary className="cursor-pointer font-mono text-destructive">
                   Error Details (dev only)
                 </summary>
-                <pre className="mt-2 overflow-auto text-slate-300">
+                <pre className="mt-2 overflow-auto text-foreground">
                   {this.state.error.message}
                   {"\n\n"}
                   {this.state.error.stack}
@@ -76,11 +78,7 @@ export class ErrorBoundary extends React.Component<
               </details>
             )}
             <div className="flex gap-2">
-              <Button
-                onClick={this.reset}
-                variant="default"
-                className="flex-1"
-              >
+              <Button onClick={this.reset} variant="default" className="flex-1">
                 Try Again
               </Button>
               <Button
@@ -111,15 +109,22 @@ export function RouteErrorFallback({
   reset: () => void;
 }) {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center p-4">
-      <div className="max-w-md rounded-lg border border-slate-800 bg-slate-900 p-6 text-center">
-        <div className="mb-3 text-3xl">⚠️</div>
-        <h2 className="mb-2 text-lg font-semibold text-white">
+    <div className="flex min-h-[50vh] items-center justify-center p-4 bg-background">
+      <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center text-card-foreground shadow-lg">
+        <div className="mb-3 flex justify-center text-destructive">
+          <AlertTriangle className="size-10" strokeWidth={2} aria-hidden />
+        </div>
+        <h2 className="mb-2 text-lg font-semibold text-foreground">
           Failed to load this section
         </h2>
-        <p className="mb-4 text-sm text-slate-400">
+        <p className="mb-4 text-sm text-muted-foreground">
           Something went wrong while loading this content.
         </p>
+        {process.env.NODE_ENV === "development" && error.message ? (
+          <p className="mb-4 text-left text-xs font-mono text-muted-foreground break-all">
+            {error.message}
+          </p>
+        ) : null}
         <Button onClick={reset} variant="default" size="sm">
           Try Again
         </Button>

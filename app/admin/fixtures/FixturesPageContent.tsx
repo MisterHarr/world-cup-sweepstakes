@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth, functions } from "@/lib/firebase";
-import { getIdTokenResult } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { collection, doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { AdminEnvironmentBadge } from "@/components/admin/AdminEnvironmentBadge";
+import { AdminGate } from "@/components/admin/AdminGate";
+import { LocalhostProductionWarning } from "@/components/admin/LocalhostProductionWarning";
+import { db, functions } from "@/lib/firebase";
 
-export default function FixtureIngestPage() {
-  type LiveOpsProvider = "stub" | "fixture" | "provider";
+function FixtureIngestContent(props: { uid: string }) {
+  const { uid } = props;
+  type LiveOpsProvider = "stub" | "fixture" | "football-data" | "sportmonks";
+  type LiveOpsMode = "disabled" | "shadow" | "staging" | "production";
   type LiveOpsRun = {
     at: string;
     status: "success" | "error";
@@ -19,6 +22,7 @@ export default function FixtureIngestPage() {
   };
   type LiveOpsState = {
     enabled: boolean;
+    mode: LiveOpsMode;
     provider: LiveOpsProvider;
     fixtureMaxMatches: number;
     fixtureCutoffIso: string;
@@ -46,6 +50,7 @@ export default function FixtureIngestPage() {
 
   const DEFAULT_LIVE_OPS: LiveOpsState = {
     enabled: false,
+    mode: "disabled",
     provider: "fixture",
     fixtureMaxMatches: 0,
     fixtureCutoffIso: "",
@@ -86,6 +91,10 @@ export default function FixtureIngestPage() {
   type IngestResult = {
     matches?: number;
     updated?: number;
+    quarantined?: number;
+    provider?: string;
+    target?: string;
+    leaderboardTarget?: string;
   };
 
   type ResetPreviewResult = {
@@ -102,14 +111,158 @@ export default function FixtureIngestPage() {
   type RecomputeResult = {
     users?: number;
     matches?: number;
+    wasDirty?: boolean;
+    dirtyReason?: string | null;
+    retried?: boolean;
+    target?: string;
+  };
+
+  type LeaderboardRowStatus = {
+    userId: string;
+    displayName: string;
+    totalScore: number;
+    rank: number;
+  };
+
+  type LeaderboardStatus = {
+    lastUpdated?: string;
+    scoringVersion?: string;
+    includeLive?: boolean;
+    rows?: LeaderboardRowStatus[];
+  };
+
+  type ReplayResult = {
+    applied?: number;
+    matches?: number;
+    quarantined?: number;
+    cursor?: number;
+    nextCursor?: number;
+    total?: number;
+    done?: boolean;
+    deleted?: number;
+  };
+
+  type PublicRehearsalResetPreview = {
+    willDeleteMatches?: number;
+    willDeleteTransferEvents?: number;
+    willResetUsers?: number;
+    willResetTeams?: number;
+    willDeleteLeaderboard?: boolean;
+  };
+
+  type PublicRehearsalResetResult = {
+    deletedMatches?: number;
+    deletedTransferEvents?: number;
+    resetUsers?: number;
+    resetTeams?: number;
+    deletedLeaderboard?: boolean;
+  };
+
+  type LiveSimulatorResult = {
+    waveIndex?: number;
+    label?: string;
+    totalWaves?: number;
+    nextWave?: number;
+    done?: boolean;
+    matches?: number;
+    updated?: number;
+    quarantined?: number;
+  };
+
+  type LiveSimulatorState = {
+    nextWave: number;
+    totalWaves: number;
+    lastAppliedWave?: number | null;
+    lastLabel?: string | null;
+    done: boolean;
+    updatedAt?: string;
+    updatedBy?: string;
+  };
+
+  type FixtureReplayState = {
+    cursor: number;
+    waveSize?: number | null;
+    total?: number | null;
+    done: boolean;
+    shadowMatchCount: number;
+  };
+
+  type IngestHealthState = {
+    lastIngestAttemptAt?: string;
+    lastIngestSuccessAt?: string;
+    lastIngestErrorAt?: string;
+    lastIngestErrorMessage?: string;
+    lastRecomputeAttemptAt?: string;
+    lastRecomputeSuccessAt?: string;
+    lastRecomputeErrorAt?: string;
+    lastRecomputeErrorMessage?: string;
+    scoresDirty: boolean;
+    dirtyReason?: string | null;
+    activeProvider?: string;
+    mode?: string | null;
+  };
+
+  type ShadowLeaderboardStatus = {
+    lastUpdated?: string;
+    lastAttemptAt?: string;
+    scoringVersion?: string;
+    includeLive?: boolean;
+    rows?: LeaderboardRowStatus[];
+    updatedBy?: string;
+    rowCount?: number;
+    sourceCollection?: string;
+    target?: string;
+    lastErrorAt?: string;
+    lastErrorMessage?: string;
   };
 
   type SetLiveOpsSettingsPayload = {
-    enabled: boolean;
+    mode: LiveOpsMode;
     provider: LiveOpsProvider;
     fixtureMaxMatches: number;
     fixtureCutoffIso: string | null;
   };
+
+  function asLiveOpsMode(value: unknown): LiveOpsMode | null {
+    return value === "disabled" ||
+      value === "shadow" ||
+      value === "staging" ||
+      value === "production"
+      ? value
+      : null;
+  }
+
+  function getLiveOpsModeMeta(mode: LiveOpsMode) {
+    if (mode === "production") {
+      return {
+        badge: "PRODUCTION",
+        classes: "border-rose-500/50 bg-rose-500/15 text-rose-200",
+        description: "Writes to public matches and recomputes the public leaderboard.",
+      };
+    }
+
+    if (mode === "shadow") {
+      return {
+        badge: "SHADOW",
+        classes: "border-amber-500/50 bg-amber-500/15 text-amber-200",
+        description: "Writes to shadowMatches only. Public scores stay untouched.",
+      };
+    }
+
+    if (mode === "staging") {
+      return {
+        badge: "STAGING",
+        classes: "border-sky-500/50 bg-sky-500/15 text-sky-200",
+        description: "Uses the safe shadow write path with staging labeling for rehearsal runs.",
+      };
+    }
+
+    return {
+      badge: "DISABLED",
+      classes: "border-slate-700/70 bg-slate-900/70 text-slate-300",
+      description: "Scheduler is off and manual ingest is blocked until a mode is selected.",
+    };
+  }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
@@ -175,7 +328,7 @@ export default function FixtureIngestPage() {
   }
 
   function buildIngestAlert(state: LiveOpsState): IngestAlert {
-    if (!state.enabled) {
+    if (state.mode === "disabled") {
       return {
         level: "healthy",
         label: "Healthy",
@@ -206,7 +359,7 @@ export default function FixtureIngestPage() {
         return {
           level: "warning",
           label: "Warning",
-          message: "Automation is enabled but no scheduler run has been recorded yet.",
+          message: `Automation is in ${state.mode} mode but no scheduler run has been recorded yet.`,
           stale: true,
         };
       }
@@ -229,8 +382,6 @@ export default function FixtureIngestPage() {
     };
   }
 
-  const [uid, setUid] = useState<string | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [status, setStatus] = useState("");
   const [preview, setPreview] = useState("");
   const [resetStatus, setResetStatus] = useState("");
@@ -245,18 +396,48 @@ export default function FixtureIngestPage() {
   const [preTournamentPreviewing, setPreTournamentPreviewing] = useState(false);
   const [preTournamentStatus, setPreTournamentStatus] = useState("");
   const [preTournamentPreview, setPreTournamentPreview] = useState("");
+  const [providerContractRunning, setProviderContractRunning] = useState(false);
+  const [providerContractPreviewing, setProviderContractPreviewing] = useState(false);
+  const [providerContractStatus, setProviderContractStatus] = useState("");
+  const [providerContractPreview, setProviderContractPreview] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
-  const [leaderboardStatus, setLeaderboardStatus] = useState<{
-    lastUpdated?: string;
-    scoringVersion?: string;
-    includeLive?: boolean;
-  }>({});
+  const [replayWaveSize, setReplayWaveSize] = useState("4");
+  const [replayStatus, setReplayStatus] = useState("");
+  const [runningReplay, setRunningReplay] = useState(false);
+  const [resettingReplay, setResettingReplay] = useState(false);
+  const [resettingPublicRehearsal, setResettingPublicRehearsal] =
+    useState(false);
+  const [previewingPublicRehearsalReset, setPreviewingPublicRehearsalReset] =
+    useState(false);
+  const [publicRehearsalStatus, setPublicRehearsalStatus] = useState("");
+  const [runningLiveSimulatorWave, setRunningLiveSimulatorWave] =
+    useState(false);
+  const [liveSimulatorStatus, setLiveSimulatorStatus] = useState("");
+  const [liveSimulatorState, setLiveSimulatorState] =
+    useState<LiveSimulatorState>({
+      nextWave: 0,
+      totalWaves: 4,
+      done: false,
+    });
+  const [leaderboardStatus, setLeaderboardStatus] = useState<LeaderboardStatus>({});
+  const [shadowLeaderboardStatus, setShadowLeaderboardStatus] =
+    useState<ShadowLeaderboardStatus>({});
+  const [ingestHealth, setIngestHealth] = useState<IngestHealthState>({
+    scoresDirty: false,
+  });
+  const [fixtureReplayState, setFixtureReplayState] = useState<FixtureReplayState>({
+    cursor: 0,
+    done: false,
+    shadowMatchCount: 0,
+  });
   const [recomputeStatus, setRecomputeStatus] = useState("");
   const [recomputing, setRecomputing] = useState(false);
+  const [retryingDirtyRecompute, setRetryingDirtyRecompute] = useState(false);
+  const [recomputingShadow, setRecomputingShadow] = useState(false);
   const [liveOpsStatus, setLiveOpsStatus] = useState("");
   const [savingLiveOps, setSavingLiveOps] = useState(false);
   const [liveOps, setLiveOps] = useState<LiveOpsState>(DEFAULT_LIVE_OPS);
-  const [liveOpsEnabledInput, setLiveOpsEnabledInput] = useState(false);
+  const [liveOpsModeInput, setLiveOpsModeInput] = useState<LiveOpsMode>("disabled");
   const [liveOpsProviderInput, setLiveOpsProviderInput] =
     useState<LiveOpsProvider>("fixture");
   const [liveOpsMaxInput, setLiveOpsMaxInput] = useState("");
@@ -271,67 +452,290 @@ export default function FixtureIngestPage() {
   const [transferWindowEndsInput, setTransferWindowEndsInput] = useState("");
   const [transferWindowStatus, setTransferWindowStatus] = useState("");
   const [savingTransferWindow, setSavingTransferWindow] = useState(false);
-  const [checking, setChecking] = useState(true);
+  const [dangerConfirmed, setDangerConfirmed] = useState(false);
 
   const ingestAlert = buildIngestAlert(liveOps);
+  const liveOpsModeMeta = getLiveOpsModeMeta(liveOps.mode);
 
-  useEffect(() => {
-    const unsub = auth.onAuthStateChanged(async (user) => {
-      setUid(user?.uid ?? null);
-      setIsAdmin(false);
-      setChecking(true);
+  function readLeaderboardRows(data: Record<string, unknown>): LeaderboardRowStatus[] {
+    const rawRows = Array.isArray(data.rows) ? data.rows : [];
+    return rawRows
+      .map((row: unknown): LeaderboardRowStatus | null => {
+        if (!isRecord(row)) return null;
+        const userId =
+          typeof row.userId === "string" && row.userId.trim().length > 0
+            ? row.userId
+            : null;
+        const displayName =
+          typeof row.displayName === "string" && row.displayName.trim().length > 0
+            ? row.displayName
+            : null;
+        const totalScore =
+          typeof row.totalScore === "number" && Number.isFinite(row.totalScore)
+            ? row.totalScore
+            : null;
+        const rank =
+          typeof row.rank === "number" && Number.isFinite(row.rank)
+            ? Math.max(0, Math.floor(row.rank))
+            : null;
+        if (!userId || !displayName || totalScore === null || rank === null) {
+          return null;
+        }
+        return { userId, displayName, totalScore, rank };
+      })
+      .filter((row): row is LeaderboardRowStatus => row !== null);
+  }
 
-      if (!user) {
-        setChecking(false);
+  function buildLeaderboardDiff() {
+    const publicRows = leaderboardStatus.rows ?? [];
+    const shadowRows = shadowLeaderboardStatus.rows ?? [];
+    const publicByUser = new Map(publicRows.map((row) => [row.userId, row]));
+    const shadowByUser = new Map(shadowRows.map((row) => [row.userId, row]));
+    const userIds = new Set([...publicByUser.keys(), ...shadowByUser.keys()]);
+    const mismatches: Array<{
+      userId: string;
+      displayName: string;
+      publicRank: number | null;
+      shadowRank: number | null;
+      publicScore: number | null;
+      shadowScore: number | null;
+    }> = [];
+
+    userIds.forEach((userId) => {
+      const publicRow = publicByUser.get(userId);
+      const shadowRow = shadowByUser.get(userId);
+      const publicRank = publicRow?.rank ?? null;
+      const shadowRank = shadowRow?.rank ?? null;
+      const publicScore = publicRow?.totalScore ?? null;
+      const shadowScore = shadowRow?.totalScore ?? null;
+      if (publicRank === shadowRank && publicScore === shadowScore) {
         return;
       }
-
-      try {
-        const token = await getIdTokenResult(user, true);
-        setIsAdmin(token.claims.admin === true);
-      } catch (err) {
-        console.error(err);
-        setIsAdmin(false);
-      } finally {
-        setChecking(false);
-      }
+      mismatches.push({
+        userId,
+        displayName:
+          publicRow?.displayName ?? shadowRow?.displayName ?? userId,
+        publicRank,
+        shadowRank,
+        publicScore,
+        shadowScore,
+      });
     });
 
-    return () => unsub();
-  }, []);
+    mismatches.sort((a, b) => {
+      const aDelta = Math.abs((a.publicScore ?? 0) - (a.shadowScore ?? 0));
+      const bDelta = Math.abs((b.publicScore ?? 0) - (b.shadowScore ?? 0));
+      if (bDelta !== aDelta) return bDelta - aDelta;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    return {
+      publicCount: publicRows.length,
+      shadowCount: shadowRows.length,
+      mismatchCount: mismatches.length,
+      topMismatches: mismatches.slice(0, 5),
+    };
+  }
+
+  const leaderboardDiff = buildLeaderboardDiff();
 
   useEffect(() => {
-    if (!uid || !isAdmin) {
+    if (!uid) {
       setLeaderboardStatus({});
+      setShadowLeaderboardStatus({});
       return;
     }
 
     const ref = doc(db, "leaderboard", "current");
+    const shadowRef = doc(db, "shadowLeaderboard", "current");
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) {
         setLeaderboardStatus({});
+      } else {
+        const data = snap.data() as Record<string, unknown>;
+        const updated = toIsoOrEmpty(data.lastUpdated);
+
+        setLeaderboardStatus({
+          lastUpdated: updated,
+          scoringVersion:
+            typeof data.scoringVersion === "string" ? data.scoringVersion : undefined,
+          includeLive:
+            typeof data.includeLive === "boolean" ? data.includeLive : undefined,
+          rows: readLeaderboardRows(data),
+        });
+      }
+    });
+
+    const unsubShadow = onSnapshot(shadowRef, (snap) => {
+      if (!snap.exists()) {
+        setShadowLeaderboardStatus({});
         return;
       }
 
       const data = snap.data() as Record<string, unknown>;
-      const updated = toIsoOrEmpty(data.lastUpdated);
-
-      setLeaderboardStatus({
-        lastUpdated: updated,
+      setShadowLeaderboardStatus({
+        lastUpdated: toIsoOrString(data.lastUpdated),
+        lastAttemptAt: toIsoOrString(data.lastAttemptAt),
         scoringVersion:
           typeof data.scoringVersion === "string" ? data.scoringVersion : undefined,
         includeLive:
           typeof data.includeLive === "boolean" ? data.includeLive : undefined,
+        rows: readLeaderboardRows(data),
+        updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : undefined,
+        rowCount:
+          typeof data.rowCount === "number" && Number.isFinite(data.rowCount)
+            ? Math.max(0, Math.floor(data.rowCount))
+            : undefined,
+        sourceCollection:
+          typeof data.sourceCollection === "string"
+            ? data.sourceCollection
+            : undefined,
+        target: typeof data.target === "string" ? data.target : undefined,
+        lastErrorAt: toIsoOrString(data.lastErrorAt),
+        lastErrorMessage:
+          typeof data.lastErrorMessage === "string"
+            ? data.lastErrorMessage
+            : undefined,
+      });
+    });
+
+    return () => {
+      unsub();
+      unsubShadow();
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setIngestHealth({ scoresDirty: false });
+      return;
+    }
+
+    const ref = doc(db, "ingestHealth", "current");
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) {
+        setIngestHealth({ scoresDirty: false });
+        return;
+      }
+
+      const data = snap.data() as Record<string, unknown>;
+      setIngestHealth({
+        lastIngestAttemptAt: toIsoOrString(data.lastIngestAttemptAt),
+        lastIngestSuccessAt: toIsoOrString(data.lastIngestSuccessAt),
+        lastIngestErrorAt: toIsoOrString(data.lastIngestErrorAt),
+        lastIngestErrorMessage:
+          typeof data.lastIngestErrorMessage === "string"
+            ? data.lastIngestErrorMessage
+            : "",
+        lastRecomputeAttemptAt: toIsoOrString(data.lastRecomputeAttemptAt),
+        lastRecomputeSuccessAt: toIsoOrString(data.lastRecomputeSuccessAt),
+        lastRecomputeErrorAt: toIsoOrString(data.lastRecomputeErrorAt),
+        lastRecomputeErrorMessage:
+          typeof data.lastRecomputeErrorMessage === "string"
+            ? data.lastRecomputeErrorMessage
+            : "",
+        scoresDirty: data.scoresDirty === true,
+        dirtyReason:
+          typeof data.dirtyReason === "string" ? data.dirtyReason : null,
+        activeProvider:
+          typeof data.activeProvider === "string" ? data.activeProvider : "",
+        mode: typeof data.mode === "string" ? data.mode : null,
       });
     });
 
     return () => unsub();
-  }, [uid, isAdmin]);
+  }, [uid]);
 
   useEffect(() => {
-    if (!uid || !isAdmin) {
+    if (!uid) {
+      setFixtureReplayState({
+        cursor: 0,
+        done: false,
+        shadowMatchCount: 0,
+      });
+      return;
+    }
+
+    const replayRef = doc(db, "settings", "fixtureReplay");
+    const shadowMatchesRef = collection(db, "shadowMatches");
+
+    const unsubReplay = onSnapshot(replayRef, (snap) => {
+      const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+      setFixtureReplayState((prev) => ({
+        ...prev,
+        cursor:
+          typeof data.cursor === "number" && Number.isFinite(data.cursor)
+            ? Math.max(0, Math.floor(data.cursor))
+            : 0,
+        waveSize:
+          typeof data.waveSize === "number" && Number.isFinite(data.waveSize)
+            ? Math.max(1, Math.floor(data.waveSize))
+            : null,
+        total:
+          typeof data.total === "number" && Number.isFinite(data.total)
+            ? Math.max(0, Math.floor(data.total))
+            : null,
+        done: data.done === true,
+      }));
+    });
+
+    const unsubShadow = onSnapshot(shadowMatchesRef, (snap) => {
+      setFixtureReplayState((prev) => ({
+        ...prev,
+        shadowMatchCount: snap.size,
+      }));
+    });
+
+    return () => {
+      unsubReplay();
+      unsubShadow();
+    };
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
+      setLiveSimulatorState({
+        nextWave: 0,
+        totalWaves: 4,
+        done: false,
+      });
+      return;
+    }
+
+    const ref = doc(db, "settings", "liveSimulator");
+    const unsub = onSnapshot(ref, (snap) => {
+      const data = (snap.exists() ? snap.data() : {}) as Record<string, unknown>;
+      setLiveSimulatorState({
+        nextWave:
+          typeof data.nextWave === "number" && Number.isFinite(data.nextWave)
+            ? Math.max(0, Math.floor(data.nextWave))
+            : 0,
+        totalWaves:
+          typeof data.totalWaves === "number" && Number.isFinite(data.totalWaves)
+            ? Math.max(1, Math.floor(data.totalWaves))
+            : 4,
+        lastAppliedWave:
+          typeof data.lastAppliedWave === "number" &&
+          Number.isFinite(data.lastAppliedWave)
+            ? Math.max(0, Math.floor(data.lastAppliedWave))
+            : null,
+        lastLabel:
+          typeof data.lastLabel === "string" && data.lastLabel.trim().length > 0
+            ? data.lastLabel
+            : null,
+        done: data.done === true,
+        updatedAt: toIsoOrString(data.updatedAt),
+        updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
+      });
+    });
+
+    return () => unsub();
+  }, [uid]);
+
+  useEffect(() => {
+    if (!uid) {
       setLiveOps(DEFAULT_LIVE_OPS);
-      setLiveOpsEnabledInput(false);
+      setLiveOpsModeInput("disabled");
       setLiveOpsProviderInput("fixture");
       setLiveOpsMaxInput("");
       setLiveOpsCutoffInput("");
@@ -342,7 +746,7 @@ export default function FixtureIngestPage() {
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) {
         setLiveOps(DEFAULT_LIVE_OPS);
-        setLiveOpsEnabledInput(false);
+        setLiveOpsModeInput("disabled");
         setLiveOpsProviderInput("fixture");
         setLiveOpsMaxInput("");
         setLiveOpsCutoffInput("");
@@ -353,9 +757,16 @@ export default function FixtureIngestPage() {
       const provider =
         data.provider === "stub" ||
         data.provider === "fixture" ||
+        data.provider === "football-data" ||
+        data.provider === "sportmonks" ||
         data.provider === "provider"
           ? data.provider
           : "fixture";
+      const normalizedProvider =
+        provider === "provider" ? "football-data" : provider;
+      const mode =
+        asLiveOpsMode(data.mode) ??
+        (data.enabled === true ? "production" : "disabled");
       const maxMatches =
         typeof data.fixtureMaxMatches === "number" && data.fixtureMaxMatches > 0
           ? Math.floor(data.fixtureMaxMatches)
@@ -377,8 +788,12 @@ export default function FixtureIngestPage() {
       const lastRunProvider =
         data.lastRunProvider === "stub" ||
         data.lastRunProvider === "fixture" ||
+        data.lastRunProvider === "football-data" ||
+        data.lastRunProvider === "sportmonks" ||
         data.lastRunProvider === "provider"
-          ? data.lastRunProvider
+          ? data.lastRunProvider === "provider"
+            ? "football-data"
+            : data.lastRunProvider
           : undefined;
       const lastRunMatches = asNonNegativeInt(data.lastRunMatches);
       const lastRunUpdated = asNonNegativeInt(data.lastRunUpdated);
@@ -399,8 +814,12 @@ export default function FixtureIngestPage() {
               const provider =
                 run.provider === "stub" ||
                 run.provider === "fixture" ||
+                run.provider === "football-data" ||
+                run.provider === "sportmonks" ||
                 run.provider === "provider"
-                  ? run.provider
+                  ? run.provider === "provider"
+                    ? "football-data"
+                    : run.provider
                   : null;
               if (!at || !status || !provider) return null;
 
@@ -421,8 +840,9 @@ export default function FixtureIngestPage() {
         : [];
 
       const nextState: LiveOpsState = {
-        enabled: data.enabled === true,
-        provider,
+        enabled: mode !== "disabled",
+        mode,
+        provider: normalizedProvider,
         fixtureMaxMatches: maxMatches,
         fixtureCutoffIso: cutoffIso,
         updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
@@ -440,7 +860,7 @@ export default function FixtureIngestPage() {
       };
 
       setLiveOps(nextState);
-      setLiveOpsEnabledInput(nextState.enabled);
+      setLiveOpsModeInput(nextState.mode);
       setLiveOpsProviderInput(nextState.provider);
       setLiveOpsMaxInput(
         nextState.fixtureMaxMatches > 0 ? String(nextState.fixtureMaxMatches) : ""
@@ -449,10 +869,10 @@ export default function FixtureIngestPage() {
     });
 
     return () => unsub();
-  }, [uid, isAdmin]);
+  }, [uid]);
 
   useEffect(() => {
-    if (!uid || !isAdmin) {
+    if (!uid) {
       setTransferWindow(DEFAULT_TRANSFER_WINDOW);
       setTransferWindowEnabledInput(false);
       setTransferWindowStartsInput("");
@@ -488,7 +908,7 @@ export default function FixtureIngestPage() {
     });
 
     return () => unsub();
-  }, [uid, isAdmin]);
+  }, [uid]);
 
   function getFixtureSelection() {
     const max = Number(maxMatches);
@@ -510,10 +930,6 @@ export default function FixtureIngestPage() {
     setResetPreview("");
     if (!uid) {
       setStatus("❌ Not signed in.");
-      return;
-    }
-    if (!isAdmin) {
-      setStatus("❌ Admin access required.");
       return;
     }
 
@@ -562,10 +978,6 @@ export default function FixtureIngestPage() {
       setPreview("❌ Not signed in.");
       return;
     }
-    if (!isAdmin) {
-      setPreview("❌ Admin access required.");
-      return;
-    }
 
     setPreviewing(true);
     try {
@@ -606,10 +1018,6 @@ export default function FixtureIngestPage() {
     setStatus("");
     if (!uid) {
       setResetPreview("❌ Not signed in.");
-      return;
-    }
-    if (!isAdmin) {
-      setResetPreview("❌ Admin access required.");
       return;
     }
 
@@ -657,10 +1065,6 @@ export default function FixtureIngestPage() {
       setResetStatus("❌ Not signed in.");
       return;
     }
-    if (!isAdmin) {
-      setResetStatus("❌ Admin access required.");
-      return;
-    }
 
     const { max, hasMax, hasCutoff, trimmedCutoff, payload } =
       getFixtureSelection();
@@ -700,7 +1104,7 @@ export default function FixtureIngestPage() {
   async function previewPreTournament() {
     setPreTournamentStatus("");
     setPreTournamentPreview("");
-    if (!uid || !isAdmin) {
+    if (!uid) {
       setPreTournamentPreview("❌ Not authorized.");
       return;
     }
@@ -727,7 +1131,7 @@ export default function FixtureIngestPage() {
   async function runPreTournamentIngest() {
     setPreTournamentStatus("");
     setPreTournamentPreview("");
-    if (!uid || !isAdmin) {
+    if (!uid) {
       setPreTournamentStatus("❌ Not authorized.");
       return;
     }
@@ -764,14 +1168,100 @@ export default function FixtureIngestPage() {
     }
   }
 
+  async function previewProviderContractTest() {
+    setProviderContractStatus("");
+    setProviderContractPreview("");
+    if (!uid) {
+      setProviderContractPreview("❌ Not authorized.");
+      return;
+    }
+
+    if (liveOpsProviderInput !== "sportmonks" && liveOpsProviderInput !== "football-data") {
+      setProviderContractPreview("❌ Choose Sportmonks or football-data.org for a real-provider contract test.");
+      return;
+    }
+
+    setProviderContractPreviewing(true);
+    try {
+      const fn = httpsCallable<
+        { provider: LiveOpsProvider; maxMatches?: number; cutoffIso?: string; dryRun?: boolean },
+        IngestResult
+      >(functions, "adminContractTestProvider");
+      const { payload } = getFixtureSelection();
+      const res = await fn({
+        provider: liveOpsProviderInput,
+        maxMatches: payload.maxMatches,
+        cutoffIso: payload.cutoffIso,
+        dryRun: true,
+      });
+      const data = res.data;
+      setProviderContractPreview(
+        `Preview: provider ${data.provider ?? liveOpsProviderInput} returned ${data.matches ?? 0} mapped match(es) for shadow contract test.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setProviderContractPreview(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setProviderContractPreviewing(false);
+    }
+  }
+
+  async function runProviderContractTest() {
+    setProviderContractStatus("");
+    setProviderContractPreview("");
+    if (!uid) {
+      setProviderContractStatus("❌ Not authorized.");
+      return;
+    }
+
+    if (liveOpsProviderInput !== "sportmonks" && liveOpsProviderInput !== "football-data") {
+      setProviderContractStatus("❌ Choose Sportmonks or football-data.org for a real-provider contract test.");
+      return;
+    }
+
+    const { max, hasMax, hasCutoff, trimmedCutoff, payload } = getFixtureSelection();
+    const summary = [
+      `Run provider contract test in shadow mode for ${liveOpsProviderInput}?`,
+      "- Writes go to shadowMatches.",
+      "- Recompute writes to shadowLeaderboard/current.",
+      hasMax ? `- maxMatches: ${max}` : "- maxMatches: (provider default/all)",
+      hasCutoff ? `- cutoffIso: ${trimmedCutoff}` : "- cutoffIso: (none)",
+    ].join("\n");
+
+    if (typeof window !== "undefined" && !window.confirm(summary)) {
+      setProviderContractStatus("Cancelled.");
+      return;
+    }
+
+    setProviderContractRunning(true);
+    setProviderContractStatus("Running provider contract test into shadow mode...");
+
+    try {
+      const fn = httpsCallable<
+        { provider: LiveOpsProvider; maxMatches?: number; cutoffIso?: string; dryRun?: boolean },
+        IngestResult
+      >(functions, "adminContractTestProvider");
+      const res = await fn({
+        provider: liveOpsProviderInput,
+        maxMatches: payload.maxMatches,
+        cutoffIso: payload.cutoffIso,
+      });
+      const data = res.data;
+      setProviderContractStatus(
+        `✅ ${data.provider ?? liveOpsProviderInput} contract test mapped ${data.matches ?? 0} match(es), updated ${data.updated ?? 0}, quarantined ${data.quarantined ?? 0}, target ${data.target ?? "shadowMatches"}, leaderboard ${data.leaderboardTarget ?? "shadowLeaderboard/current"}.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setProviderContractStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setProviderContractRunning(false);
+    }
+  }
+
   async function recomputeLeaderboard() {
     setRecomputeStatus("");
     if (!uid) {
       setRecomputeStatus("❌ Not signed in.");
-      return;
-    }
-    if (!isAdmin) {
-      setRecomputeStatus("❌ Admin access required.");
       return;
     }
 
@@ -796,14 +1286,223 @@ export default function FixtureIngestPage() {
     }
   }
 
+  async function retryDirtyLeaderboard() {
+    setRecomputeStatus("");
+    if (!uid) {
+      setRecomputeStatus("❌ Not signed in.");
+      return;
+    }
+
+    setRetryingDirtyRecompute(true);
+    setRecomputeStatus("Retrying dirty leaderboard recompute...");
+
+    try {
+      const fn = httpsCallable<
+        { includeLive: boolean; scoringVersion: string },
+        RecomputeResult
+      >(functions, "retryDirtyRecompute");
+      const res = await fn({ includeLive: true, scoringVersion: "v1" });
+      const data = res.data;
+      const context = data.wasDirty
+        ? ` Dirty before retry: yes${data.dirtyReason ? ` (${data.dirtyReason})` : ""}.`
+        : " Dirty before retry: no.";
+      setRecomputeStatus(
+        `✅ Retry recomputed for ${data?.users ?? 0} users (${data?.matches ?? 0} matches).${context}`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setRecomputeStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setRetryingDirtyRecompute(false);
+    }
+  }
+
+  async function recomputeShadowLeaderboard() {
+    setRecomputeStatus("");
+    if (!uid) {
+      setRecomputeStatus("❌ Not signed in.");
+      return;
+    }
+
+    setRecomputingShadow(true);
+    setRecomputeStatus("Recomputing shadow leaderboard...");
+
+    try {
+      const fn = httpsCallable<
+        { includeLive: boolean; scoringVersion: string },
+        RecomputeResult
+      >(functions, "recomputeShadowScores");
+      const res = await fn({ includeLive: true, scoringVersion: "v1" });
+      const data = res.data;
+      setRecomputeStatus(
+        `✅ Shadow recompute processed ${data?.users ?? 0} users (${data?.matches ?? 0} matches) into ${data?.target ?? "shadow"}.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setRecomputeStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setRecomputingShadow(false);
+    }
+  }
+
+  async function previewPublicRehearsalReset() {
+    setPublicRehearsalStatus("");
+    if (!uid) {
+      setPublicRehearsalStatus("❌ Not signed in.");
+      return;
+    }
+
+    setPreviewingPublicRehearsalReset(true);
+    try {
+      const fn = httpsCallable<
+        { dryRun: true },
+        PublicRehearsalResetPreview
+      >(functions, "adminResetPublicRehearsalState");
+      const res = await fn({ dryRun: true });
+      const data = res.data;
+      setPublicRehearsalStatus(
+        `Preview: delete ${data.willDeleteMatches ?? 0} public match(es), delete ${data.willDeleteTransferEvents ?? 0} transfer event(s), reset ${data.willResetUsers ?? 0} user score(s), reset ${data.willResetTeams ?? 0} team stat row(s).`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setPublicRehearsalStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setPreviewingPublicRehearsalReset(false);
+    }
+  }
+
+  async function resetPublicRehearsalState() {
+    setPublicRehearsalStatus("");
+    if (!uid) {
+      setPublicRehearsalStatus("❌ Not signed in.");
+      return;
+    }
+
+    const summary = [
+      "Reset visible rehearsal state?",
+      "- Users and entries stay.",
+      "- Public matches and transfer events are deleted.",
+      "- Team stats and user scores return to zero.",
+      "- Public leaderboard/current is deleted.",
+    ].join("\n");
+
+    if (typeof window !== "undefined" && !window.confirm(summary)) {
+      setPublicRehearsalStatus("Cancelled.");
+      return;
+    }
+
+    setResettingPublicRehearsal(true);
+    setPublicRehearsalStatus("Resetting visible rehearsal state...");
+    try {
+      const fn = httpsCallable<Record<string, never>, PublicRehearsalResetResult>(
+        functions,
+        "adminResetPublicRehearsalState"
+      );
+      const res = await fn({});
+      const data = res.data;
+      setPublicRehearsalStatus(
+        `✅ Reset complete. Deleted ${data.deletedMatches ?? 0} match(es) and ${data.deletedTransferEvents ?? 0} transfer event(s). Reset ${data.resetUsers ?? 0} user score(s) and ${data.resetTeams ?? 0} team stat row(s).`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setPublicRehearsalStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setResettingPublicRehearsal(false);
+    }
+  }
+
+  async function runLiveSimulatorWave() {
+    setLiveSimulatorStatus("");
+    if (!uid) {
+      setLiveSimulatorStatus("❌ Not signed in.");
+      return;
+    }
+
+    setRunningLiveSimulatorWave(true);
+    setLiveSimulatorStatus("Running next visible live wave...");
+    try {
+      const fn = httpsCallable<Record<string, never>, LiveSimulatorResult>(
+        functions,
+        "adminRunLocalLiveSimulatorWave"
+      );
+      const res = await fn({});
+      const data = res.data;
+      const label = data.label ? ` (${data.label})` : "";
+      setLiveSimulatorStatus(
+        `✅ Wave ${(data.waveIndex ?? 0) + 1}/${data.totalWaves ?? 4}${label}: processed ${data.matches ?? 0}, updated ${data.updated ?? 0}, quarantined ${data.quarantined ?? 0}.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setLiveSimulatorStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setRunningLiveSimulatorWave(false);
+    }
+  }
+
+  async function runReplayWave() {
+    setReplayStatus("");
+    if (!uid) {
+      setReplayStatus("❌ Not signed in.");
+      return;
+    }
+
+    const parsed = Number(replayWaveSize);
+    const waveSize =
+      Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4;
+
+    setRunningReplay(true);
+    setReplayStatus("Running fixture replay wave into shadowMatches...");
+
+    try {
+      const fn = httpsCallable<{ waveSize: number }, ReplayResult>(
+        functions,
+        "adminReplayFixtureWave"
+      );
+      const res = await fn({ waveSize });
+      const data = res.data;
+      setReplayStatus(
+        `✅ Replay wave applied ${data.applied ?? 0} update(s), processed ${data.matches ?? 0}, quarantined ${data.quarantined ?? 0}. Cursor ${data.nextCursor ?? 0}/${data.total ?? 0}${data.done ? " (done)" : ""}.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setReplayStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setRunningReplay(false);
+    }
+  }
+
+  async function resetReplayShadow() {
+    setReplayStatus("");
+    if (!uid) {
+      setReplayStatus("❌ Not signed in.");
+      return;
+    }
+
+    setResettingReplay(true);
+    setReplayStatus("Resetting shadow replay state...");
+
+    try {
+      const fn = httpsCallable<Record<string, never>, ReplayResult>(
+        functions,
+        "adminResetFixtureReplay"
+      );
+      const res = await fn({});
+      const data = res.data;
+      setReplayStatus(
+        `✅ Replay shadow reset. Deleted ${data.deleted ?? 0} shadow match document(s). Cursor reset to 0.`
+      );
+    } catch (err: unknown) {
+      console.error(err);
+      setReplayStatus(`❌ ${asErrorMessage(err)}`);
+    } finally {
+      setResettingReplay(false);
+    }
+  }
+
   async function saveLiveOpsSettings() {
     setLiveOpsStatus("");
     if (!uid) {
       setLiveOpsStatus("❌ Not signed in.");
-      return;
-    }
-    if (!isAdmin) {
-      setLiveOpsStatus("❌ Admin access required.");
       return;
     }
 
@@ -825,13 +1524,13 @@ export default function FixtureIngestPage() {
         "setLiveOpsSettings"
       );
       await fn({
-        enabled: liveOpsEnabledInput,
+        mode: liveOpsModeInput,
         provider: liveOpsProviderInput,
         fixtureMaxMatches: maxRaw ? Math.floor(maxParsed) : 0,
         fixtureCutoffIso: cutoffTrimmed || null,
       });
       setLiveOpsStatus(
-        `✅ Automation ${liveOpsEnabledInput ? "enabled" : "disabled"} (${liveOpsProviderInput}).`
+        `✅ Automation saved: ${liveOpsModeInput} mode via ${liveOpsProviderInput}.`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -849,10 +1548,6 @@ export default function FixtureIngestPage() {
     setTransferWindowStatus("");
     if (!uid) {
       setTransferWindowStatus("❌ Not signed in.");
-      return;
-    }
-    if (!isAdmin) {
-      setTransferWindowStatus("❌ Admin access required.");
       return;
     }
 
@@ -925,36 +1620,13 @@ export default function FixtureIngestPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-3xl mx-auto p-6 space-y-6">
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.35)] space-y-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Admin · Fixture Ingest
-            </h1>
-            <a
-              href="/admin"
-              className="text-xs uppercase tracking-widest text-slate-400 hover:text-emerald-200"
-            >
-              Back to Tools
-            </a>
-          </div>
+    <>
+      <div className="text-sm text-slate-300">
+        Signed in as <strong>{uid}</strong>
+      </div>
 
-          <div className="text-sm text-slate-300">
-            Signed in: <strong>{uid ? "Yes" : "No"}</strong>{" · "}
-            Admin: <strong>{isAdmin ? "Yes" : "No"}</strong>
-          </div>
+      <LocalhostProductionWarning onConfirmedChange={setDangerConfirmed} />
 
-          {checking ? (
-            <div className="text-sm text-slate-400">Checking access…</div>
-          ) : !uid ? (
-            <div className="text-sm text-slate-400">
-              Please sign in to access admin tools.
-            </div>
-          ) : !isAdmin ? (
-            <div className="text-sm text-slate-400">Not authorized.</div>
-          ) : (
-            <>
               <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -966,17 +1638,33 @@ export default function FixtureIngestPage() {
                     </div>
                   </div>
                   <div
-                    className={`text-xs font-semibold px-2 py-1 rounded-full border ${
-                      liveOps.enabled
-                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
-                        : "border-slate-700/70 bg-slate-900/70 text-slate-300"
-                    }`}
+                    className={`text-xs font-semibold px-2 py-1 rounded-full border ${liveOpsModeMeta.classes}`}
                   >
-                    {liveOps.enabled ? "ENABLED" : "DISABLED"}
+                    {liveOpsModeMeta.badge}
                   </div>
                 </div>
 
+                <div className="text-xs text-slate-400">
+                  {liveOpsModeMeta.description}
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="block text-sm text-slate-300">
+                    Mode
+                    <select
+                      value={liveOpsModeInput}
+                      onChange={(e) =>
+                        setLiveOpsModeInput(e.target.value as LiveOpsMode)
+                      }
+                      className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                    >
+                      <option value="disabled">Disabled</option>
+                      <option value="shadow">Shadow</option>
+                      <option value="staging">Staging</option>
+                      <option value="production">Production</option>
+                    </select>
+                  </label>
+
                   <label className="block text-sm text-slate-300">
                     Provider
                     <select
@@ -987,19 +1675,10 @@ export default function FixtureIngestPage() {
                       className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
                     >
                       <option value="fixture">Fixture (safe testing)</option>
-                      <option value="provider">Provider (production)</option>
+                      <option value="sportmonks">Sportmonks (trial primary)</option>
+                      <option value="football-data">football-data.org (smoke)</option>
                       <option value="stub">Stub (no ingest)</option>
                     </select>
-                  </label>
-
-                  <label className="flex items-center gap-2 text-sm text-slate-300 mt-6 sm:mt-8">
-                    <input
-                      type="checkbox"
-                      checked={liveOpsEnabledInput}
-                      onChange={(e) => setLiveOpsEnabledInput(e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Enable scheduled ingest
                   </label>
                 </div>
 
@@ -1031,7 +1710,7 @@ export default function FixtureIngestPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <button
                     onClick={saveLiveOpsSettings}
-                    disabled={!uid || !isAdmin || savingLiveOps}
+                    disabled={!uid || savingLiveOps || !dangerConfirmed}
                     className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
                   >
                     {savingLiveOps ? "Saving..." : "Save Automation Settings"}
@@ -1041,6 +1720,53 @@ export default function FixtureIngestPage() {
                 {liveOpsStatus ? (
                   <div className="text-sm text-slate-300">{liveOpsStatus}</div>
                 ) : null}
+
+                <div className="border-t border-slate-800/60 pt-3 space-y-2">
+                  <div className="font-semibold text-slate-100">
+                    Real Provider Contract Test
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Uses the selected real provider and pushes mapped updates through
+                    validation into <code className="mx-1 text-emerald-200/90">shadowMatches</code>,
+                    then recomputes <code className="mx-1 text-emerald-200/90">shadowLeaderboard/current</code>.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={previewProviderContractTest}
+                      disabled={
+                        !uid ||
+                        providerContractRunning ||
+                        providerContractPreviewing ||
+                        !dangerConfirmed
+                      }
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl border border-sky-500/50 bg-sky-500/10 text-sky-100 font-semibold disabled:opacity-50"
+                    >
+                      {providerContractPreviewing
+                        ? "Previewing Contract Test..."
+                        : "Preview Contract Test"}
+                    </button>
+                    <button
+                      onClick={runProviderContractTest}
+                      disabled={
+                        !uid ||
+                        providerContractRunning ||
+                        providerContractPreviewing ||
+                        !dangerConfirmed
+                      }
+                      className="w-full sm:w-auto px-4 py-2 rounded-xl bg-violet-500/90 text-violet-950 font-semibold disabled:opacity-50"
+                    >
+                      {providerContractRunning
+                        ? "Running Contract Test..."
+                        : "Run Contract Test in Shadow"}
+                    </button>
+                  </div>
+                  {providerContractPreview ? (
+                    <div className="text-sm text-slate-300">{providerContractPreview}</div>
+                  ) : null}
+                  {providerContractStatus ? (
+                    <div className="text-sm text-slate-300">{providerContractStatus}</div>
+                  ) : null}
+                </div>
 
                 <div className="text-xs text-slate-400">
                   Last update: {liveOps.updatedAt || "—"}{" "}
@@ -1095,6 +1821,7 @@ export default function FixtureIngestPage() {
                   <div>
                     Last run at: {liveOps.lastRunAt || "—"}{" "}
                     {liveOps.lastRunProvider ? `• ${liveOps.lastRunProvider}` : ""}
+                    {liveOps.mode ? ` • mode ${liveOps.mode}` : ""}
                   </div>
                   <div>
                     Last run payload: matches {liveOps.lastRunMatches ?? 0}, updated{" "}
@@ -1208,21 +1935,21 @@ export default function FixtureIngestPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                   <button
                     onClick={() => void openTransferWindowNow()}
-                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    disabled={!uid || savingTransferWindow || !dangerConfirmed}
                     className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
                   >
                     Open Window Now
                   </button>
                   <button
                     onClick={() => void saveTransferWindow()}
-                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    disabled={!uid || savingTransferWindow || !dangerConfirmed}
                     className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
                   >
                     {savingTransferWindow ? "Saving..." : "Save Transfer Window"}
                   </button>
                   <button
                     onClick={() => void closeTransferWindowNow()}
-                    disabled={!uid || !isAdmin || savingTransferWindow}
+                    disabled={!uid || savingTransferWindow || !dangerConfirmed}
                     className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
                   >
                     Close Window Now
@@ -1243,6 +1970,87 @@ export default function FixtureIngestPage() {
 
               <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300">
                 Optional controls (leave blank for full fixture):
+              </div>
+
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-slate-200 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-semibold text-slate-100">
+                      Local Visible Rehearsal
+                    </div>
+                    <div className="text-xs text-emerald-100/80">
+                      Public localhost matches only. Users and entries stay.
+                    </div>
+                  </div>
+                  <div className="text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/50 bg-emerald-400/15 text-emerald-100">
+                    Wave {Math.min(liveSimulatorState.nextWave + 1, liveSimulatorState.totalWaves)}
+                    /{liveSimulatorState.totalWaves}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={previewPublicRehearsalReset}
+                    disabled={
+                      !uid ||
+                      previewingPublicRehearsalReset ||
+                      resettingPublicRehearsal
+                    }
+                    className="px-4 py-2 rounded-xl border border-emerald-400/50 bg-emerald-500/10 text-emerald-100 font-semibold disabled:opacity-50"
+                  >
+                    {previewingPublicRehearsalReset
+                      ? "Previewing..."
+                      : "Preview Reset"}
+                  </button>
+                  <button
+                    onClick={resetPublicRehearsalState}
+                    disabled={
+                      !uid ||
+                      resettingPublicRehearsal ||
+                      runningLiveSimulatorWave ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl bg-amber-500/90 text-amber-950 font-semibold disabled:opacity-50"
+                  >
+                    {resettingPublicRehearsal
+                      ? "Resetting..."
+                      : "Reset Visible Data"}
+                  </button>
+                  <button
+                    onClick={runLiveSimulatorWave}
+                    disabled={
+                      !uid ||
+                      runningLiveSimulatorWave ||
+                      resettingPublicRehearsal ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
+                  >
+                    {runningLiveSimulatorWave
+                      ? "Running Wave..."
+                      : "Run Next Live Wave"}
+                  </button>
+                  <div className="rounded-lg border border-emerald-400/20 bg-slate-950/40 px-3 py-2 text-xs text-emerald-50/90">
+                    Last:{" "}
+                    {liveSimulatorState.lastLabel
+                      ? `${liveSimulatorState.lastLabel}`
+                      : "none"}
+                    {liveSimulatorState.updatedAt
+                      ? ` • ${liveSimulatorState.updatedAt}`
+                      : ""}
+                  </div>
+                </div>
+
+                {publicRehearsalStatus ? (
+                  <div className="text-sm text-slate-200">
+                    {publicRehearsalStatus}
+                  </div>
+                ) : null}
+                {liveSimulatorStatus ? (
+                  <div className="text-sm text-slate-200">
+                    {liveSimulatorStatus}
+                  </div>
+                ) : null}
               </div>
 
               <div className="space-y-3">
@@ -1273,7 +2081,7 @@ export default function FixtureIngestPage() {
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <button
                   onClick={runFixtureIngest}
-                  disabled={!uid || !isAdmin || running || !acknowledged}
+                  disabled={!uid || running || !acknowledged || !dangerConfirmed}
                   className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
                 >
                   {running ? "Running..." : "Run Fixture Ingest"}
@@ -1281,7 +2089,7 @@ export default function FixtureIngestPage() {
 
                 <button
                   onClick={previewFixture}
-                  disabled={!uid || !isAdmin || previewing}
+                  disabled={!uid || previewing}
                   className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
                 >
                   {previewing ? "Previewing..." : "Preview Selection"}
@@ -1314,10 +2122,10 @@ export default function FixtureIngestPage() {
                     onClick={runResetFixtureIngest}
                     disabled={
                       !uid ||
-                      !isAdmin ||
                       resetRunning ||
                       running ||
-                      !acknowledged
+                      !acknowledged ||
+                      !dangerConfirmed
                     }
                     className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500/90 text-amber-950 font-semibold disabled:opacity-50"
                   >
@@ -1328,7 +2136,6 @@ export default function FixtureIngestPage() {
                     onClick={previewResetFixture}
                     disabled={
                       !uid ||
-                      !isAdmin ||
                       resetPreviewing ||
                       previewing ||
                       resetRunning
@@ -1359,7 +2166,7 @@ export default function FixtureIngestPage() {
                   <button
                     onClick={runPreTournamentIngest}
                     disabled={
-                      !uid || !isAdmin || preTournamentRunning || !acknowledged
+                      !uid || preTournamentRunning || !acknowledged || !dangerConfirmed
                     }
                     className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
                   >
@@ -1370,7 +2177,7 @@ export default function FixtureIngestPage() {
 
                   <button
                     onClick={previewPreTournament}
-                    disabled={!uid || !isAdmin || preTournamentPreviewing}
+                    disabled={!uid || preTournamentPreviewing}
                     className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
                   >
                     {preTournamentPreviewing
@@ -1391,14 +2198,111 @@ export default function FixtureIngestPage() {
                 ) : null}
               </div>
 
+              <div className="border-t border-slate-800/60 pt-4 space-y-3">
+                <div className="text-sm font-semibold text-slate-100">
+                  Fixture Replay Shadow
+                </div>
+                <p className="text-xs text-slate-400">
+                  Replays fixture waves through the same validation pipeline into
+                  <code className="mx-1 text-emerald-200/90">shadowMatches</code>
+                  without touching public match docs.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+                  <label className="block text-sm text-slate-300">
+                    Wave size
+                    <input
+                      type="number"
+                      min="1"
+                      value={replayWaveSize}
+                      onChange={(e) => setReplayWaveSize(e.target.value)}
+                      className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
+                    />
+                  </label>
+                  <button
+                    onClick={runReplayWave}
+                    disabled={
+                      !uid ||
+                      runningReplay ||
+                      resettingReplay ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl bg-violet-500/90 text-violet-950 font-semibold disabled:opacity-50"
+                  >
+                    {runningReplay ? "Running Replay..." : "Run Replay Wave"}
+                  </button>
+                  <button
+                    onClick={resetReplayShadow}
+                    disabled={
+                      !uid ||
+                      runningReplay ||
+                      resettingReplay ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl border border-violet-400/50 bg-violet-500/10 text-violet-100 font-semibold disabled:opacity-50"
+                  >
+                    {resettingReplay ? "Resetting Replay..." : "Reset Replay Shadow"}
+                  </button>
+                </div>
+                <div className="text-sm text-slate-300">
+                  Cursor: {fixtureReplayState.cursor}
+                  {fixtureReplayState.total !== null &&
+                  fixtureReplayState.total !== undefined
+                    ? ` / ${fixtureReplayState.total}`
+                    : ""}
+                  {" · "}Shadow matches: {fixtureReplayState.shadowMatchCount}
+                  {" · "}Done: {fixtureReplayState.done ? "yes" : "no"}
+                </div>
+                {replayStatus ? (
+                  <div className="text-sm text-slate-300">{replayStatus}</div>
+                ) : null}
+              </div>
+
               <div className="border-t border-slate-800/60 pt-4 space-y-2">
-                <button
-                  onClick={recomputeLeaderboard}
-                  disabled={!uid || !isAdmin || recomputing}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-100 disabled:opacity-50"
-                >
-                  {recomputing ? "Recomputing..." : "Recompute Leaderboard"}
-                </button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={recomputeLeaderboard}
+                    disabled={
+                      !uid ||
+                      recomputing ||
+                      retryingDirtyRecompute ||
+                      recomputingShadow ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl bg-slate-800 text-slate-100 disabled:opacity-50"
+                  >
+                    {recomputing ? "Recomputing..." : "Recompute Leaderboard"}
+                  </button>
+                  <button
+                    onClick={recomputeShadowLeaderboard}
+                    disabled={
+                      !uid ||
+                      recomputing ||
+                      retryingDirtyRecompute ||
+                      recomputingShadow ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl border border-violet-400/50 bg-violet-500/10 text-violet-100 disabled:opacity-50"
+                  >
+                    {recomputingShadow
+                      ? "Recomputing Shadow..."
+                      : "Recompute Shadow Leaderboard"}
+                  </button>
+                  <button
+                    onClick={retryDirtyLeaderboard}
+                    disabled={
+                      !uid ||
+                      recomputing ||
+                      retryingDirtyRecompute ||
+                      recomputingShadow ||
+                      !dangerConfirmed
+                    }
+                    className="px-4 py-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-100 disabled:opacity-50"
+                  >
+                    {retryingDirtyRecompute
+                      ? "Retrying Dirty Scores..."
+                      : "Retry Dirty Scores"}
+                  </button>
+                </div>
                 {recomputeStatus ? (
                   <div className="text-sm text-slate-300">{recomputeStatus}</div>
                 ) : null}
@@ -1426,9 +2330,141 @@ export default function FixtureIngestPage() {
                     ? String(leaderboardStatus.includeLive)
                     : "—"}
                 </div>
+                <div className="mt-3 border-t border-slate-800/60 pt-3">
+                  <div className="font-semibold mb-2 text-slate-100">
+                    Shadow Leaderboard Status
+                  </div>
+                  <div>
+                    Last updated:{" "}
+                    {shadowLeaderboardStatus.lastUpdated
+                      ? shadowLeaderboardStatus.lastUpdated
+                      : "—"}
+                  </div>
+                  <div>
+                    Last attempt:{" "}
+                    {shadowLeaderboardStatus.lastAttemptAt
+                      ? shadowLeaderboardStatus.lastAttemptAt
+                      : "—"}
+                  </div>
+                  <div>
+                    Scoring version:{" "}
+                    {shadowLeaderboardStatus.scoringVersion
+                      ? shadowLeaderboardStatus.scoringVersion
+                      : "—"}
+                  </div>
+                  <div>
+                    Include live:{" "}
+                    {typeof shadowLeaderboardStatus.includeLive === "boolean"
+                      ? String(shadowLeaderboardStatus.includeLive)
+                      : "—"}
+                  </div>
+                  <div>
+                    Source collection:{" "}
+                    {shadowLeaderboardStatus.sourceCollection || "—"}
+                  </div>
+                  <div>Target: {shadowLeaderboardStatus.target || "—"}</div>
+                  <div>
+                    Row count:{" "}
+                    {typeof shadowLeaderboardStatus.rowCount === "number"
+                      ? shadowLeaderboardStatus.rowCount
+                      : "—"}
+                  </div>
+                  <div>Updated by: {shadowLeaderboardStatus.updatedBy || "—"}</div>
+                  <div>
+                    Last error:{" "}
+                    {shadowLeaderboardStatus.lastErrorAt
+                      ? shadowLeaderboardStatus.lastErrorAt
+                      : "—"}
+                  </div>
+                  {shadowLeaderboardStatus.lastErrorMessage ? (
+                    <div className="text-rose-300">
+                      Shadow recompute error:{" "}
+                      {shadowLeaderboardStatus.lastErrorMessage}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="mt-3 border-t border-slate-800/60 pt-3">
+                  <div className="font-semibold mb-2 text-slate-100">
+                    Public vs Shadow Comparison
+                  </div>
+                  <div>Public rows: {leaderboardDiff.publicCount}</div>
+                  <div>Shadow rows: {leaderboardDiff.shadowCount}</div>
+                  <div>Detected mismatches: {leaderboardDiff.mismatchCount}</div>
+                  {leaderboardDiff.topMismatches.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      {leaderboardDiff.topMismatches.map((row) => (
+                        <div
+                          key={row.userId}
+                          className="rounded border border-slate-800/80 bg-slate-950/60 px-2 py-1"
+                        >
+                          <div className="text-slate-100">{row.displayName}</div>
+                          <div className="text-xs text-slate-400">
+                            public r{row.publicRank ?? "—"} / s{row.publicScore ?? "—"}
+                            {" · "}
+                            shadow r{row.shadowRank ?? "—"} / s{row.shadowScore ?? "—"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-emerald-300">
+                      No public-vs-shadow mismatch detected in the current rows.
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 border-t border-slate-800/60 pt-3">
+                  <div className="font-semibold mb-2 text-slate-100">
+                    Ingest / Recompute Health
+                  </div>
+                  <div>Match data updated: {ingestHealth.lastIngestSuccessAt ? "yes" : "no"}</div>
+                  <div>Leaderboard current: {ingestHealth.scoresDirty ? "no" : "yes"}</div>
+                  <div>Scores dirty: {ingestHealth.scoresDirty ? "yes" : "no"}</div>
+                  <div>Dirty reason: {ingestHealth.dirtyReason || "—"}</div>
+                  <div>Active provider: {ingestHealth.activeProvider || "—"}</div>
+                  <div>Mode: {ingestHealth.mode || "—"}</div>
+                  <div>Last ingest attempt: {ingestHealth.lastIngestAttemptAt || "—"}</div>
+                  <div>Last ingest success: {ingestHealth.lastIngestSuccessAt || "—"}</div>
+                  <div>Last ingest error: {ingestHealth.lastIngestErrorAt || "—"}</div>
+                  <div>Last recompute attempt: {ingestHealth.lastRecomputeAttemptAt || "—"}</div>
+                  <div>Last recompute: {ingestHealth.lastRecomputeSuccessAt || "—"}</div>
+                  <div>Last recompute error: {ingestHealth.lastRecomputeErrorAt || "—"}</div>
+                  {ingestHealth.lastIngestErrorMessage ? (
+                    <div className="text-rose-300">
+                      Ingest error: {ingestHealth.lastIngestErrorMessage}
+                    </div>
+                  ) : null}
+                  {ingestHealth.lastRecomputeErrorMessage ? (
+                    <div className="text-rose-300">
+                      Recompute error: {ingestHealth.lastRecomputeErrorMessage}
+                    </div>
+                  ) : null}
+                </div>
               </div>
-            </>
-          )}
+    </>
+  );
+}
+
+export default function FixtureIngestPage() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.35)] space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                Admin · Fixture Ingest
+              </h1>
+              <a
+                href="/admin"
+                className="text-xs uppercase tracking-widest text-slate-400 hover:text-emerald-200"
+              >
+                Back to Tools
+              </a>
+            </div>
+            <AdminEnvironmentBadge />
+          </div>
+
+          <AdminGate>{({ uid }) => <FixtureIngestContent uid={uid} />}</AdminGate>
         </div>
       </div>
     </div>

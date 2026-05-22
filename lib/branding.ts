@@ -1,3 +1,6 @@
+/** sRGB hex for `:root --background` (oklch(0.13 0.01 240)) — manifest + viewport `theme-color`. */
+export const themeColorHex = "#0f1218" as const;
+
 export const BRANDING = {
   appName: "GIS 2026 Featured Five Challenge",
   shortName: "Featured Five 2026",

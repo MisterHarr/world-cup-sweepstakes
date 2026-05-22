@@ -1,6 +1,6 @@
 # Build Status & Next Steps
 
-**Last Updated:** 2026-02-22
+**Last Updated:** 2026-05-22
 **Project:** GIS 2026 World Cup Sweepstakes
 **Status:** ✅ Core Features Complete | 🚧 Enhancements Available
 
@@ -51,10 +51,10 @@
 - ✅ **Admin Mock User Seeding Flow** - Added admin-only batch seeding in `/admin/users` to create auth+Firestore trial users with assigned squads and optional leaderboard recompute for load rehearsals
 - ✅ **Badge Count Hardening + Regression Test** - Added schema-resilient badge counting in `recomputeScores` and emulator regression coverage (`npm run test:badges`)
 - ✅ **Guide + Charity Module + Badge Feasibility Update** - Added `/guide` help/FAQ route, feature-flagged `/charity` payment rails, and revised badge definitions to remove criteria impossible under current data telemetry
+- ✅ **Initial Launch Scope Simplification** - Removed department and badge surfaces from the user-facing launch path without deleting their underlying files. First sign-in now goes straight to featured team selection, `/department` redirects to `/featured-team`, `/badges` redirects to `/dashboard`, and leaderboard/nav copy focuses on the core sweepstakes game.
 
 ### Core Features
 - ✅ Google Authentication with Firebase
-- ✅ Department selection (Primary/Secondary/Admin)
 - ✅ Featured team selection with tier-balanced draw
 - ✅ Dashboard with My Teams, Leaderboard, Match Center, Transfer tabs
 - ✅ Standalone leaderboard page at `/leaderboard`

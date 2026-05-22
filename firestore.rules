@@ -88,6 +88,21 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Shadow rehearsal data: admins only
+    match /shadowMatches/{matchId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /shadowLeaderboard/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Ingest health is shown on dashboard/admin pages; admins maintain it
+    match /ingestHealth/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
     // Settings (scoring, config): signed-in users can read, admins can write
     match /settings/{docId} {
       allow read: if signedIn();

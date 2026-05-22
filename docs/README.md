@@ -30,23 +30,25 @@ Located in `/docs/current/`:
    - Current priorities and roadmap
    - Quick reference for workflows
 
+2. **`AGENT-HANDOVER.md`** — **Agent takeover snapshot** (what’s done, working, broken/unverified, deploy vs repo). Path: `current/AGENT-HANDOVER.md`. Update when ownership or production reality changes.
+
 ### Core Operations
-2. **`ADMIN-TOOLS.md`** - Admin operations guide
+3. **`ADMIN-TOOLS.md`** - Admin operations guide
    - Seed teams, fixture ingest, user management
    - Safe workflows for admin tasks
 
-3. **`TOURNAMENT-RUNBOOK.md`** - Live tournament operations
+4. **`TOURNAMENT-RUNBOOK.md`** - Live tournament operations
    - Match day procedures
    - Score updates, monitoring
    - Emergency protocols
 
 ### Development
-4. **`BUILD-STATUS-NEXT-STEPS.md`** - Development roadmap
+5. **`BUILD-STATUS-NEXT-STEPS.md`** - Development roadmap
    - What's complete ✅
    - Next steps prioritized
    - Why each improvement matters
 
-5. **`BADGE-SYSTEM-DESIGN.md`** - Badge achievement system
+6. **`BADGE-SYSTEM-DESIGN.md`** - Badge achievement system
    - Badge definitions
    - Unlock criteria
    - Implementation plan
@@ -143,7 +145,7 @@ These are reference materials for visual design work. See `/archive/docs-legacy/
 
 - **Project README:** `/README.md` - Setup & getting started
 - **Legacy docs:** `/archive/docs-legacy/` - Original planning documents
-- **Tournament runbook (live):** http://localhost:3000/admin/runbook
+- **Tournament runbook (live):** http://localhost:3001/admin/runbook
 
 ---
 

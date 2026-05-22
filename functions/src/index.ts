@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { recomputeScoresCore } from "./scoring";
+import { getAdminEnvironmentLabel, recordAdminEvent } from "./adminAudit";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -388,8 +389,8 @@ export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
 
   if (candidates.length < 5) {
     throw new HttpsError(
-      "internal",
-      `Not enough teams to draw 5. Candidates=${candidates.length} TotalTeams=${allTeamIds.length}`
+      "failed-precondition",
+      `Not enough teams to draw 5. Candidates=${candidates.length} TotalTeams=${allTeamIds.length}. Seed /admin/seed-teams (Firestore teams collection).`
     );
   }
 
@@ -605,6 +606,8 @@ export const adminListUsers = onCall({ region: REGION }, async (request) => {
         email: asTrimmedString(data.email) ?? "",
         hasTeams,
         teamCount,
+        isMock: data.isMock === true,
+        mockBatchId: asTrimmedString(data.mockBatchId) ?? "",
       };
     });
 
@@ -727,7 +730,10 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
 
   const payload = isRecord(request.data) ? request.data : {};
   const count = asPositiveIntegerWithin(payload.count, 24, 1, 60);
-  const password = asTrimmedString(payload.password) ?? "Test1234!";
+  const password =
+    Math.random().toString(36).slice(2, 10) +
+    Math.random().toString(36).slice(2, 6).toUpperCase() +
+    "!";
   if (password.length < 6) {
     throw new HttpsError("invalid-argument", "password must be at least 6 characters.");
   }
@@ -736,8 +742,14 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
   const domain = sanitizeEmailDomain(asTrimmedString(payload.domain) ?? "example.test");
   const departmentMode = asSeedDepartmentMode(payload.departmentMode) ?? "round-robin";
   const recompute = payload.recompute !== false;
+  const excludeMockUsersFromLeaderboard =
+    payload.excludeMockUsersFromLeaderboard !== false;
   const batchTag =
     sanitizeSeedToken(asTrimmedString(payload.batchTag) ?? new Date().toISOString());
+  const actorUid = request.auth?.uid ?? "admin";
+  const actorEmail =
+    typeof request.auth?.token?.email === "string" ? request.auth.token.email : null;
+  const environment = getAdminEnvironmentLabel();
 
   type TeamPoolRow = {
     id: string;
@@ -823,12 +835,15 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
           remainingTransfers: 2,
           transferPenaltyPoints: 0,
           totalScore: 0,
+          isMock: true,
+          mockBatchId: batchTag,
+          createdByAdminUid: actorUid,
           entry,
           portfolio: nextPortfolio,
           mockSeed: {
             batchTag,
             index: ordinal,
-            createdBy: request.auth?.uid ?? "admin",
+            createdBy: actorUid,
           },
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -852,6 +867,16 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
   }
 
   let recomputed = false;
+  await db.collection("settings").doc("mockUsers").set(
+    {
+      excludeMockUsersFromLeaderboard,
+      lastBatchId: batchTag,
+      updatedBy: actorUid,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
   if (recompute && created.length > 0) {
     await recomputeScoresCore({
       includeLive: true,
@@ -861,6 +886,26 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
     recomputed = true;
   }
 
+  await recordAdminEvent({
+    actorUid,
+    actorEmail,
+    action: "seed-mock-users",
+    targetIds: created.map((entry) => entry.uid),
+    summary:
+      `Seeded mock users batch ${batchTag}. Created ${created.length}, failed ${failed.length}, ` +
+      `excludeFromLeaderboard=${excludeMockUsersFromLeaderboard}, environment=${environment}.`,
+    metadata: {
+      batchTag,
+      countRequested: count,
+      created: created.length,
+      failed: failed.length,
+      departmentMode,
+      excludeMockUsersFromLeaderboard,
+      recomputed,
+      environment,
+    },
+  });
+
   return {
     ok: true,
     batchTag,
@@ -869,6 +914,7 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
     failed: failed.length,
     password,
     departmentMode,
+    excludeMockUsersFromLeaderboard,
     recomputed,
     sampleUsers: created.slice(0, 12),
     errors: failed.slice(0, 12),
@@ -880,11 +926,26 @@ export { getLeaderboard } from "./getLeaderboard";
 export { getSquadDetails } from "./getSquadDetails";
 export { getTransferHistory } from "./getTransferHistory";
 export { executeTransfer } from "./transfers";
-export { adminUpsertMatch, recomputeScores } from "./scoring";
+export {
+  adminUpsertMatch,
+  recomputeScores,
+  recomputeShadowScores,
+  retryDirtyRecompute,
+} from "./scoring";
 export {
   ingestLiveScores,
   adminIngestFixture,
   adminResetFixtureIngest,
   adminIngestPreTournament,
+  adminContractTestProvider,
+  adminReplayFixtureWave,
+  adminResetFixtureReplay,
+  adminResetPublicRehearsalState,
+  adminRunLocalLiveSimulatorWave,
   setLiveOpsSettings,
 } from "./ingest";
+export {
+  adminDeleteMockUsersByBatch,
+  adminPreviewOrphanTeamDeletion,
+  adminDeleteOrphanTeamDocs,
+} from "./adminSafety";

@@ -5,22 +5,48 @@ import { onSchedule, type ScheduledEvent } from "firebase-functions/v2/scheduler
 import { defineSecret } from "firebase-functions/params";
 import fixtures from "./fixtures/worldcup2022.json";
 import preTournamentFixtures from "./fixtures/pretournament2022.json";
+import {
+  getErrorMessage,
+  markScoresDirty,
+  recordIngestAttempt,
+  recordIngestError,
+  recordIngestSuccess,
+} from "./ingestHealth";
 import { recomputeScoresCore } from "./scoring";
 import { requireAdmin } from "./auth";
+import { getFixtureReplayWave } from "./providers/fixtureReplayProvider";
+import { getLocalLiveSimulatorWave } from "./providers/localLiveSimulatorProvider";
+import {
+  loadKnownTeamIds,
+  validateMatchUpdate,
+  type ValidatedMatchUpdate,
+} from "./ingest/validateMatchUpdate";
+import type {
+  MatchStage,
+  MatchStatus,
+  NormalizedMatchProvider,
+  NormalizedMatchUpdate,
+} from "./providers/providerTypes";
 
 const REGION = "asia-southeast1";
 const SCHEDULE = "every 10 minutes";
 const FOOTBALL_DATA_BASE_DEFAULT = "https://api.football-data.org/v4";
 const FOOTBALL_DATA_COMPETITION_DEFAULT = "WC";
+const SPORTMONKS_BASE_DEFAULT = "https://api.sportmonks.com/v3/football";
+const SPORTMONKS_SEASON_ID_DEFAULT = "26618";
 const PROVIDER_TIMEOUT_MS_DEFAULT = 12_000;
 const PROVIDER_MAX_RETRIES_DEFAULT = 1;
 const TEAM_LOOKUP_TTL_MS = 5 * 60 * 1000;
 const FOOTBALL_DATA_TOKEN = defineSecret("FOOTBALL_DATA_TOKEN");
+const SPORTMONKS_TOKEN = defineSecret("SPORTMONKS_TOKEN");
 
-type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
-type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
-type LiveScoresProvider = "stub" | "fixture" | "provider";
+type LiveScoresProvider =
+  | "stub"
+  | "fixture"
+  | "football-data"
+  | "sportmonks";
 type LiveOpsRunStatus = "success" | "error";
+type LiveOpsMode = "disabled" | "shadow" | "staging" | "production";
 
 const LIVE_OPS_HISTORY_LIMIT = 12;
 
@@ -39,8 +65,23 @@ type ProviderMatch = {
   awayYellowCards: number;
 };
 
+type ApplyMatchUpdatesResult = {
+  updated: number;
+  matches: number;
+  quarantined: number;
+};
+
+type PublicRehearsalResetResult = {
+  deletedMatches: number;
+  deletedTransferEvents: number;
+  resetUsers: number;
+  resetTeams: number;
+  deletedLeaderboard: boolean;
+};
+
 type LiveOpsConfig = {
   enabled: boolean;
+  mode: LiveOpsMode;
   provider: LiveScoresProvider;
   fixtureMaxMatches: number;
   fixtureCutoffIso: string | null;
@@ -48,6 +89,7 @@ type LiveOpsConfig = {
 
 const DEFAULT_LIVE_OPS: LiveOpsConfig = {
   enabled: false,
+  mode: "disabled",
   provider: "fixture",
   fixtureMaxMatches: 0,
   fixtureCutoffIso: null,
@@ -97,7 +139,25 @@ function asStage(value: unknown): MatchStage | null {
 }
 
 function asProvider(value: unknown): LiveScoresProvider | null {
-  return value === "stub" || value === "fixture" || value === "provider"
+  if (
+    value === "stub" ||
+    value === "fixture" ||
+    value === "football-data" ||
+    value === "sportmonks"
+  ) {
+    return value;
+  }
+  if (value === "provider") {
+    return "football-data";
+  }
+  return null;
+}
+
+function asMode(value: unknown): LiveOpsMode | null {
+  return value === "disabled" ||
+    value === "shadow" ||
+    value === "staging" ||
+    value === "production"
     ? value
     : null;
 }
@@ -169,17 +229,109 @@ function toProviderStage(value: unknown): MatchStage {
   return "GROUP";
 }
 
+function toSportmonksStatus(value: unknown): MatchStatus | null {
+  const status = asString(value)?.toUpperCase();
+  if (!status) return null;
+
+  if (
+    status === "LIVE" ||
+    status.startsWith("INPLAY") ||
+    status === "HT" ||
+    status === "BREAK"
+  ) {
+    return "LIVE";
+  }
+  if (
+    status === "FT" ||
+    status === "AET" ||
+    status === "FT_PEN" ||
+    status === "AFTER_PENALTIES"
+  ) {
+    return "FINISHED";
+  }
+  if (
+    status === "NS" ||
+    status === "POSTP" ||
+    status === "SUSP" ||
+    status === "DELAYED" ||
+    status === "TBA" ||
+    status === "CANCL"
+  ) {
+    return "SCHEDULED";
+  }
+
+  return null;
+}
+
+function toSportmonksStage(value: unknown): MatchStage {
+  const stage = asString(value)?.toUpperCase();
+  if (!stage) return "GROUP";
+
+  if (stage.includes("GROUP")) return "GROUP";
+  if (stage.includes("ROUND OF 32") || stage.includes("LAST 32")) return "R32";
+  if (stage.includes("ROUND OF 16") || stage.includes("LAST 16")) return "R16";
+  if (stage.includes("QUARTER")) return "QF";
+  if (stage.includes("SEMI")) return "SF";
+  if (stage.includes("FINAL") || stage.includes("THIRD")) return "FINAL";
+
+  return "GROUP";
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeLiveOpsConfig(raw: unknown): LiveOpsConfig {
   const config = isRecord(raw) ? raw : {};
+  const mode =
+    asMode(config.mode) ??
+    (config.enabled === true ? "production" : DEFAULT_LIVE_OPS.mode);
   return {
-    enabled: config.enabled === true,
+    enabled: mode !== "disabled",
+    mode,
     provider: asProvider(config.provider) ?? DEFAULT_LIVE_OPS.provider,
     fixtureMaxMatches: asNonNegativeInteger(config.fixtureMaxMatches),
     fixtureCutoffIso: asIsoOrNull(config.fixtureCutoffIso),
+  };
+}
+
+function getLiveOpsTarget(mode: LiveOpsMode): {
+  collectionName: "matches" | "shadowMatches";
+  recompute: boolean;
+  recomputeTarget: "public" | "shadow";
+} {
+  if (mode === "shadow" || mode === "staging") {
+    return {
+      collectionName: "shadowMatches",
+      recompute: false,
+      recomputeTarget: "shadow",
+    };
+  }
+
+  return {
+    collectionName: "matches",
+    recompute: true,
+    recomputeTarget: "public",
+  };
+}
+
+function getManualIngestTargetOrThrow(mode: LiveOpsMode): {
+  collectionName: "matches" | "shadowMatches";
+  recompute: boolean;
+  recomputeTarget: "public" | "shadow";
+  label: string;
+} {
+  if (mode === "disabled") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Live ops mode is disabled. Switch to shadow, staging, or production before running manual ingest."
+    );
+  }
+
+  const target = getLiveOpsTarget(mode);
+  return {
+    ...target,
+    label: target.collectionName,
   };
 }
 
@@ -267,6 +419,32 @@ function mapProviderTeamId(
   return null;
 }
 
+function mapSportmonksParticipantId(
+  rawParticipant: unknown,
+  teamLookup: Record<string, string>
+): string | null {
+  const participant = isRecord(rawParticipant) ? rawParticipant : {};
+  const candidates = [
+    toUpperToken(participant.short_code),
+    toUpperToken(participant.name),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    const mapped = teamLookup[candidate];
+    if (mapped) return mapped;
+  }
+
+  const nameCandidates = [normalizeNameToken(participant.name)]
+    .filter((value): value is string => Boolean(value));
+
+  for (const candidate of nameCandidates) {
+    const mapped = teamLookup[candidate];
+    if (mapped) return mapped;
+  }
+
+  return null;
+}
+
 function toProviderMatch(raw: unknown): ProviderMatch | null {
   const source = isRecord(raw) ? raw : {};
   const matchId = asString(source.matchId);
@@ -319,6 +497,83 @@ function extractScore(
   }
 
   return null;
+}
+
+function extractSportmonksCurrentScore(rawScores: unknown): {
+  homeScore: number | null;
+  awayScore: number | null;
+} {
+  const scores = Array.isArray(rawScores) ? rawScores : [];
+  let homeScore: number | null = null;
+  let awayScore: number | null = null;
+
+  scores.forEach((entry) => {
+    if (!isRecord(entry)) return;
+    if (asString(entry.description)?.toUpperCase() !== "CURRENT") return;
+    const score = isRecord(entry.score) ? entry.score : {};
+    const participant = asString(score.participant)?.toLowerCase();
+    const goals = asNumberOrNull(score.goals);
+    if (participant === "home") homeScore = goals;
+    if (participant === "away") awayScore = goals;
+  });
+
+  return { homeScore, awayScore };
+}
+
+function extractSportmonksCardTotals(
+  rawEvents: unknown,
+  homeParticipantId: number | null,
+  awayParticipantId: number | null
+): {
+  homeRedCards: number;
+  awayRedCards: number;
+  homeYellowCards: number;
+  awayYellowCards: number;
+} {
+  const events = Array.isArray(rawEvents) ? rawEvents : [];
+  let homeRedCards = 0;
+  let awayRedCards = 0;
+  let homeYellowCards = 0;
+  let awayYellowCards = 0;
+
+  events.forEach((entry) => {
+    if (!isRecord(entry)) return;
+    const participantId =
+      typeof entry.participant_id === "number" && Number.isFinite(entry.participant_id)
+        ? Math.floor(entry.participant_id)
+        : null;
+    const type = isRecord(entry.type) ? entry.type : {};
+    const descriptor = [
+      asString(type.developer_name),
+      asString(type.name),
+      asString(entry.info),
+      asString(entry.addition),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join(" ")
+      .toUpperCase();
+
+    if (!descriptor) return;
+    const isRed = descriptor.includes("RED");
+    const isYellow = descriptor.includes("YELLOW");
+    if (!isRed && !isYellow) return;
+
+    if (participantId !== null && participantId === homeParticipantId) {
+      if (isRed) homeRedCards += 1;
+      if (isYellow) homeYellowCards += 1;
+    }
+    if (participantId !== null && participantId === awayParticipantId) {
+      if (isRed) awayRedCards += 1;
+      if (isYellow) awayYellowCards += 1;
+    }
+  });
+
+  return {
+    homeRedCards,
+    awayRedCards,
+    homeYellowCards,
+    awayYellowCards,
+  };
 }
 
 async function fetchJsonWithRetry(
@@ -478,6 +733,123 @@ async function getFootballDataMatches(
   return limited;
 }
 
+async function getSportmonksMatches(
+  options: { maxMatches: number; cutoffIso: string | null }
+): Promise<ProviderMatch[]> {
+  const token = asString(SPORTMONKS_TOKEN.value()) ??
+    asString(process.env.SPORTMONKS_TOKEN);
+  if (!token) {
+    console.warn("[ingest] SPORTMONKS_TOKEN missing. Skipping Sportmonks ingest.");
+    return [];
+  }
+
+  const base = asString(process.env.SPORTMONKS_API_BASE) ?? SPORTMONKS_BASE_DEFAULT;
+  const seasonId =
+    asString(process.env.SPORTMONKS_SEASON_ID) ?? SPORTMONKS_SEASON_ID_DEFAULT;
+  const timeoutMs = asNonNegativeInteger(
+    Number(process.env.PROVIDER_TIMEOUT_MS ?? PROVIDER_TIMEOUT_MS_DEFAULT)
+  ) || PROVIDER_TIMEOUT_MS_DEFAULT;
+  const maxRetries = asNonNegativeInteger(
+    Number(process.env.PROVIDER_MAX_RETRIES ?? PROVIDER_MAX_RETRIES_DEFAULT)
+  );
+  const include = [
+    "fixtures.participants",
+    "fixtures.scores",
+    "fixtures.events.type",
+    "fixtures.state",
+    "fixtures.stage",
+  ].join(";");
+
+  const baseUrl = base.replace(/\/+$/, "");
+  const url =
+    `${baseUrl}/seasons/${encodeURIComponent(seasonId)}` +
+    `?api_token=${encodeURIComponent(token)}&include=${encodeURIComponent(include)}`;
+
+  const payload = await fetchJsonWithRetry(
+    url,
+    {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+      },
+    },
+    timeoutMs,
+    maxRetries
+  );
+
+  const payloadRecord = isRecord(payload) ? payload : {};
+  const season = isRecord(payloadRecord.data) ? payloadRecord.data : {};
+  const rawMatches = Array.isArray(season.fixtures) ? season.fixtures : [];
+  if (!rawMatches.length) return [];
+
+  const teamLookup = await getTeamLookup();
+  const mapped: ProviderMatch[] = [];
+
+  rawMatches.forEach((raw: unknown) => {
+    if (!isRecord(raw)) return;
+    const participants = Array.isArray(raw.participants) ? raw.participants : [];
+    const home = participants.find((entry) =>
+      isRecord(entry) && isRecord(entry.meta) && entry.meta.location === "home"
+    );
+    const away = participants.find((entry) =>
+      isRecord(entry) && isRecord(entry.meta) && entry.meta.location === "away"
+    );
+
+    const matchId =
+      typeof raw.id === "number" || typeof raw.id === "string"
+        ? `sm-${String(raw.id)}`
+        : null;
+    const homeTeamId = mapSportmonksParticipantId(home, teamLookup);
+    const awayTeamId = mapSportmonksParticipantId(away, teamLookup);
+    const state = isRecord(raw.state) ? raw.state : {};
+    const stage = isRecord(raw.stage) ? raw.stage : {};
+    const status = toSportmonksStatus(
+      asString(state.state) ?? asString(state.short_name) ?? asString(state.name)
+    );
+    const normalizedStage = toSportmonksStage(
+      asString(stage.name) ?? asString(stage.developer_name) ?? asString(raw.name)
+    );
+    const { homeScore, awayScore } = extractSportmonksCurrentScore(raw.scores);
+    const homeParticipantId =
+      isRecord(home) && typeof home.id === "number" ? Math.floor(home.id) : null;
+    const awayParticipantId =
+      isRecord(away) && typeof away.id === "number" ? Math.floor(away.id) : null;
+    const cards = extractSportmonksCardTotals(
+      raw.events,
+      homeParticipantId,
+      awayParticipantId
+    );
+
+    if (!matchId || !homeTeamId || !awayTeamId || !status) {
+      return;
+    }
+
+    mapped.push({
+      matchId,
+      homeTeamId,
+      awayTeamId,
+      homeScore,
+      awayScore,
+      status,
+      stage: normalizedStage,
+      kickoffTime: asIsoOrNull(raw.starting_at),
+      homeRedCards: cards.homeRedCards,
+      homeYellowCards: cards.homeYellowCards,
+      awayRedCards: cards.awayRedCards,
+      awayYellowCards: cards.awayYellowCards,
+    });
+  });
+
+  const limited = filterAndLimitMatches(mapped, options);
+  console.log(
+    `[ingest] sportmonks loaded ${limited.length} mapped matches` +
+      ` (season ${seasonId})` +
+      (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
+      (options.maxMatches > 0 ? ` (max ${options.maxMatches})` : "")
+  );
+  return limited;
+}
+
 type FetchProviderOptions = {
   provider?: LiveScoresProvider;
   maxMatches?: number;
@@ -512,11 +884,20 @@ async function fetchProviderMatches(
     return getFixtureMatches({ maxMatches, cutoffIso });
   }
 
-  if (provider === "provider") {
+  if (provider === "football-data") {
     try {
       return await getFootballDataMatches({ maxMatches, cutoffIso });
     } catch (err) {
-      console.error("[ingest] provider fetch failed:", err);
+      console.error("[ingest] football-data fetch failed:", err);
+      return [];
+    }
+  }
+
+  if (provider === "sportmonks") {
+    try {
+      return await getSportmonksMatches({ maxMatches, cutoffIso });
+    } catch (err) {
+      console.error("[ingest] sportmonks fetch failed:", err);
       return [];
     }
   }
@@ -541,28 +922,8 @@ type FixtureOptions = {
   cutoffIso?: string | null;
 };
 
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message.trim().length > 0) {
-    return err.message.trim();
-  }
-
-  if (typeof err === "string" && err.trim().length > 0) {
-    return err.trim();
-  }
-
-  try {
-    const serialized = JSON.stringify(err);
-    if (serialized && serialized !== "{}") {
-      return serialized.slice(0, 1000);
-    }
-  } catch {
-    // Ignore serialization failures and use fallback.
-  }
-
-  return "Unknown ingest error.";
-}
-
 async function writeLiveOpsHealth(data: {
+  mode?: LiveOpsMode;
   provider: LiveScoresProvider;
   matches?: number;
   updated?: number;
@@ -638,6 +999,7 @@ async function writeLiveOpsHealth(data: {
         lastRunAt: now,
         lastRunAtIso: runAtIso,
         lastRunProvider: data.provider,
+        ...(data.mode ? { mode: data.mode } : {}),
         lastRunMatches: matches,
         lastRunUpdated: updated,
         lastRunStatus: status,
@@ -703,13 +1065,155 @@ function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[]
   return limited;
 }
 
+function summarizeNormalizedUpdate(update: NormalizedMatchUpdate) {
+  return {
+    provider: update.provider,
+    providerMatchId: update.providerMatchId,
+    canonicalMatchId: update.canonicalMatchId,
+    homeTeamId: update.homeTeamId,
+    awayTeamId: update.awayTeamId,
+    kickoffTime: update.kickoffTime,
+    status: update.status,
+    stage: update.stage,
+    homeScore: update.homeScore,
+    awayScore: update.awayScore,
+    homeYellowCards: update.homeYellowCards ?? 0,
+    awayYellowCards: update.awayYellowCards ?? 0,
+    homeRedCards: update.homeRedCards ?? 0,
+    awayRedCards: update.awayRedCards ?? 0,
+    providerUpdatedAt: update.providerUpdatedAt,
+    ingestReceivedAt: update.ingestReceivedAt,
+    revision: update.revision,
+  };
+}
+
+function toNormalizedProvider(source: IngestOptions["source"]): NormalizedMatchProvider {
+  if (source === "fixture") return "fixture-replay";
+  if (source === "sportmonks") return "sportmonks";
+  return "football-data";
+}
+
+function toNormalizedMatchUpdate(
+  match: ProviderMatch,
+  provider: NormalizedMatchProvider
+): NormalizedMatchUpdate {
+  const nowIso = new Date().toISOString();
+  return {
+    provider,
+    providerMatchId: match.matchId,
+    canonicalMatchId: match.matchId,
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId,
+    kickoffTime: match.kickoffTime,
+    status: match.status,
+    stage: match.stage,
+    homeScore: match.homeScore,
+    awayScore: match.awayScore,
+    homeYellowCards: match.homeYellowCards,
+    awayYellowCards: match.awayYellowCards,
+    homeRedCards: match.homeRedCards,
+    awayRedCards: match.awayRedCards,
+    providerUpdatedAt: nowIso,
+    ingestReceivedAt: nowIso,
+    revision: Date.now(),
+  };
+}
+
+async function writeProviderRawSummaries(
+  db: FirebaseFirestore.Firestore,
+  updates: NormalizedMatchUpdate[]
+): Promise<void> {
+  if (!updates.length) return;
+
+  const maxBatch = 450;
+  let batch = db.batch();
+  let writes = 0;
+
+  for (const update of updates) {
+    const ref = db
+      .collection("providerRaw")
+      .doc(update.provider)
+      .collection("updates")
+      .doc();
+
+    batch.set(ref, {
+      ...summarizeNormalizedUpdate(update),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    writes += 1;
+
+    if (writes >= maxBatch) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+  }
+
+  if (writes > 0) {
+    await batch.commit();
+  }
+}
+
+async function quarantineRejectedUpdates(
+  db: FirebaseFirestore.Firestore,
+  rejected: Array<{
+    update: NormalizedMatchUpdate;
+    reason: string;
+    message: string;
+  }>
+): Promise<void> {
+  if (!rejected.length) return;
+
+  const maxBatch = 450;
+  let batch = db.batch();
+  let writes = 0;
+
+  for (const item of rejected) {
+    const ref = db.collection("providerErrors").doc();
+    batch.set(ref, {
+      provider: item.update.provider,
+      providerMatchId: item.update.providerMatchId,
+      canonicalMatchId: item.update.canonicalMatchId,
+      reason: item.reason,
+      message: item.message,
+      payloadSummary: summarizeNormalizedUpdate(item.update),
+      createdAt: FieldValue.serverTimestamp(),
+      handled: false,
+    });
+    writes += 1;
+
+    if (writes >= maxBatch) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+  }
+
+  if (writes > 0) {
+    await batch.commit();
+  }
+}
+
 function isDifferent(
   existing: FirebaseFirestore.DocumentData | undefined,
-  incoming: ProviderMatch
+  incoming: ValidatedMatchUpdate
 ): boolean {
   if (!existing) return true;
 
-  const fields: Array<keyof ProviderMatch> = [
+  const fields: Array<
+    | "homeTeamId"
+    | "awayTeamId"
+    | "homeScore"
+    | "awayScore"
+    | "status"
+    | "stage"
+    | "kickoffTime"
+    | "homeRedCards"
+    | "homeYellowCards"
+    | "awayRedCards"
+    | "awayYellowCards"
+    | "providerRevision"
+  > = [
     "homeTeamId",
     "awayTeamId",
     "homeScore",
@@ -721,31 +1225,45 @@ function isDifferent(
     "homeYellowCards",
     "awayRedCards",
     "awayYellowCards",
+    "providerRevision",
   ];
 
   return fields.some((field) => {
     const current = existing[field];
-    const next = incoming[field];
+    const next =
+      field === "providerRevision" ? incoming.revision : incoming[field];
     return current !== next;
   });
 }
 
 type IngestOptions = {
-  source: "provider" | "fixture";
+  source: "football-data" | "sportmonks" | "fixture";
   initiatedBy: string;
+  collectionName?: "matches" | "shadowMatches";
+  recompute?: boolean;
+  recomputeTarget?: "public" | "shadow";
 };
 
-async function applyMatchUpdates(
-  matches: ProviderMatch[],
+async function applyNormalizedMatchUpdates(
+  normalizedUpdates: NormalizedMatchUpdate[],
   options: IngestOptions
-): Promise<{ updated: number; matches: number }> {
-  if (!matches.length) {
-    return { updated: 0, matches: 0 };
+): Promise<ApplyMatchUpdatesResult> {
+  if (!normalizedUpdates.length) {
+    return { updated: 0, matches: 0, quarantined: 0 };
   }
 
   const db = admin.firestore();
-  const refs = matches.map((match) => db.collection("matches").doc(match.matchId));
-  const snaps = await db.getAll(...refs);
+  const collectionName = options.collectionName ?? "matches";
+  const shouldRecompute = options.recompute !== false;
+  await writeProviderRawSummaries(db, normalizedUpdates);
+
+  const refs = normalizedUpdates.map((update) =>
+    db.collection(collectionName).doc(update.canonicalMatchId)
+  );
+  const [snaps, knownTeamIds] = await Promise.all([
+    db.getAll(...refs),
+    loadKnownTeamIds(db),
+  ]);
 
   const existingById: Record<string, FirebaseFirestore.DocumentData | undefined> =
     {};
@@ -754,27 +1272,75 @@ async function applyMatchUpdates(
     existingById[snap.id] = snap.exists ? snap.data() : undefined;
   });
 
+  const rejected: Array<{
+    update: NormalizedMatchUpdate;
+    reason: string;
+    message: string;
+  }> = [];
+  const validMatches: ValidatedMatchUpdate[] = [];
+
+  normalizedUpdates.forEach((update) => {
+    const result = validateMatchUpdate({
+      update,
+      knownTeamIds,
+      existing: existingById[update.canonicalMatchId] as Record<string, unknown> | undefined,
+    });
+
+    if (!result.ok) {
+      rejected.push({
+        update,
+        reason: result.reason,
+        message: result.message,
+      });
+      return;
+    }
+
+    validMatches.push(result.update);
+  });
+
+  await quarantineRejectedUpdates(db, rejected);
+
   const updates: Array<{
     ref: FirebaseFirestore.DocumentReference;
     data: Record<string, unknown>;
   }> = [];
 
-  matches.forEach((match) => {
-    const existing = existingById[match.matchId];
+  validMatches.forEach((match) => {
+    const existing = existingById[match.canonicalMatchId];
     if (!isDifferent(existing, match)) return;
 
     updates.push({
-      ref: db.collection("matches").doc(match.matchId),
+      ref: db.collection(collectionName).doc(match.canonicalMatchId),
       data: {
-        ...match,
+        matchId: match.canonicalMatchId,
+        homeTeamId: match.homeTeamId,
+        awayTeamId: match.awayTeamId,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+        status: match.status,
+        stage: match.stage,
+        kickoffTime: match.kickoffTime,
+        homeRedCards: match.homeRedCards,
+        homeYellowCards: match.homeYellowCards,
+        awayRedCards: match.awayRedCards,
+        awayYellowCards: match.awayYellowCards,
         source: options.source,
+        provider: match.provider,
+        providerMatchId: match.providerMatchId,
+        providerUpdatedAt: match.providerUpdatedAt,
+        ingestReceivedAt: match.ingestReceivedAt,
+        providerRevision: match.revision,
         lastUpdated: FieldValue.serverTimestamp(),
       },
     });
   });
 
   if (!updates.length) {
-    return { updated: 0, matches: matches.length };
+    return {
+      updated: 0,
+      matches: normalizedUpdates.length,
+      quarantined: rejected.length,
+    };
   }
 
   const maxBatch = 450;
@@ -793,31 +1359,64 @@ async function applyMatchUpdates(
     await batch.commit();
   }
 
-  await recomputeScoresCore({
-    includeLive: true,
-    scoringVersion: "v1",
-    initiatedBy: options.initiatedBy,
-  });
+  if (shouldRecompute) {
+    const recomputeTarget = options.recomputeTarget ?? "public";
+    try {
+      await recomputeScoresCore({
+        includeLive: true,
+        scoringVersion: "v1",
+        initiatedBy: options.initiatedBy,
+        target: recomputeTarget,
+      });
+    } catch (err) {
+      if (recomputeTarget === "public") {
+        await markScoresDirty({
+          reason: "ingest",
+          errorMessage: getErrorMessage(err),
+        });
+      }
+      throw err;
+    }
+  }
 
-  return { updated: updates.length, matches: matches.length };
+  return {
+    updated: updates.length,
+    matches: normalizedUpdates.length,
+    quarantined: rejected.length,
+  };
 }
 
-async function countFixtureMatches(): Promise<number> {
+async function applyMatchUpdates(
+  matches: ProviderMatch[],
+  options: IngestOptions
+): Promise<ApplyMatchUpdatesResult> {
+  const normalizedUpdates = matches.map((match) =>
+    toNormalizedMatchUpdate(match, toNormalizedProvider(options.source))
+  );
+
+  return applyNormalizedMatchUpdates(normalizedUpdates, options);
+}
+
+async function countFixtureMatches(
+  collectionName: "matches" | "shadowMatches" = "matches"
+): Promise<number> {
   const db = admin.firestore();
   const snap = await db
-    .collection("matches")
+    .collection(collectionName)
     .where("source", "==", "fixture")
     .get();
   return snap.size;
 }
 
-async function deleteFixtureMatches(): Promise<number> {
+async function deleteFixtureMatches(
+  collectionName: "matches" | "shadowMatches" = "matches"
+): Promise<number> {
   const db = admin.firestore();
   let deleted = 0;
 
   while (true) {
     const snap = await db
-      .collection("matches")
+      .collection(collectionName)
       .where("source", "==", "fixture")
       .limit(400)
       .get();
@@ -835,45 +1434,320 @@ async function deleteFixtureMatches(): Promise<number> {
   return deleted;
 }
 
+async function countCollectionDocs(collectionName: string): Promise<number> {
+  const db = admin.firestore();
+  const snap = await db.collection(collectionName).count().get();
+  return snap.data().count;
+}
+
+async function deleteCollectionDocs(collectionName: string): Promise<number> {
+  const db = admin.firestore();
+  let deleted = 0;
+
+  while (true) {
+    const snap = await db.collection(collectionName).limit(400).get();
+    if (snap.empty) break;
+
+    const batch = db.batch();
+    snap.docs.forEach((docSnap) => {
+      batch.delete(docSnap.ref);
+      deleted += 1;
+    });
+    await batch.commit();
+  }
+
+  return deleted;
+}
+
+async function resetPublicRehearsalState(): Promise<PublicRehearsalResetResult> {
+  const db = admin.firestore();
+  const [deletedMatches, deletedTransferEvents] = await Promise.all([
+    deleteCollectionDocs("matches"),
+    deleteCollectionDocs("transferEvents"),
+  ]);
+
+  const [usersSnap, teamsSnap, leaderboardSnap] = await Promise.all([
+    db.collection("users").get(),
+    db.collection("teams").get(),
+    db.collection("leaderboard").doc("current").get(),
+  ]);
+
+  const maxBatch = 450;
+  let batch = db.batch();
+  let writes = 0;
+  const commitIfFull = async () => {
+    if (writes < maxBatch) return;
+    await batch.commit();
+    batch = db.batch();
+    writes = 0;
+  };
+
+  for (const teamDoc of teamsSnap.docs) {
+    batch.set(
+      teamDoc.ref,
+      {
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        goalsScored: 0,
+        goalsConceded: 0,
+        cleanSheets: 0,
+        redCards: 0,
+        yellowCards: 0,
+        lastUpdated: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    writes += 1;
+    await commitIfFull();
+  }
+
+  for (const userDoc of usersSnap.docs) {
+    batch.set(
+      userDoc.ref,
+      {
+        totalScore: 0,
+        transferPenaltyPoints: 0,
+        scoreUpdatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    writes += 1;
+    await commitIfFull();
+  }
+
+  if (leaderboardSnap.exists) {
+    batch.delete(leaderboardSnap.ref);
+    writes += 1;
+    await commitIfFull();
+  }
+
+  batch.delete(db.collection("ingestHealth").doc("current"));
+  writes += 1;
+  await commitIfFull();
+
+  batch.set(
+    db.collection("settings").doc("liveSimulator"),
+    {
+      nextWave: 0,
+      totalWaves: 4,
+      lastResetAt: FieldValue.serverTimestamp(),
+      lastAppliedWave: null,
+      lastLabel: null,
+      done: false,
+    },
+    { merge: true }
+  );
+  writes += 1;
+
+  if (writes > 0) {
+    await batch.commit();
+  }
+
+  return {
+    deletedMatches,
+    deletedTransferEvents,
+    resetUsers: usersSnap.size,
+    resetTeams: teamsSnap.size,
+    deletedLeaderboard: leaderboardSnap.exists,
+  };
+}
+
+export const adminResetPublicRehearsalState = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const dryRun = request.data?.dryRun === true;
+    const [matches, transferEvents, users, teams] = await Promise.all([
+      countCollectionDocs("matches"),
+      countCollectionDocs("transferEvents"),
+      countCollectionDocs("users"),
+      countCollectionDocs("teams"),
+    ]);
+
+    if (dryRun) {
+      const leaderboardSnap = await admin
+        .firestore()
+        .collection("leaderboard")
+        .doc("current")
+        .get();
+      return {
+        ok: true,
+        dryRun: true,
+        willDeleteMatches: matches,
+        willDeleteTransferEvents: transferEvents,
+        willResetUsers: users,
+        willResetTeams: teams,
+        willDeleteLeaderboard: leaderboardSnap.exists,
+      };
+    }
+
+    const result = await resetPublicRehearsalState();
+    await writeLiveOpsHealth({
+      mode: "production",
+      provider: "fixture",
+      matches: 0,
+      updated: 0,
+      errorMessage: null,
+    });
+
+    return {
+      ok: true,
+      ...result,
+    };
+  }
+);
+
+export const adminRunLocalLiveSimulatorWave = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const db = admin.firestore();
+    const stateRef = db.collection("settings").doc("liveSimulator");
+    const stateSnap = await stateRef.get();
+    const state = (stateSnap.exists ? stateSnap.data() : {}) as Record<string, unknown>;
+    const requestedWave = Number(request.data?.waveIndex);
+    const storedNextWave =
+      typeof state.nextWave === "number" && Number.isFinite(state.nextWave)
+        ? Math.floor(state.nextWave)
+        : 0;
+    const waveIndex = Number.isFinite(requestedWave)
+      ? Math.max(0, Math.floor(requestedWave))
+      : storedNextWave;
+    const wave = getLocalLiveSimulatorWave({ waveIndex });
+
+    await recordIngestAttempt({
+      activeProvider: "local-live-sim",
+      mode: "production",
+    });
+
+    try {
+      const result = await applyNormalizedMatchUpdates(wave.updates, {
+        source: "fixture",
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: "matches",
+        recompute: true,
+        recomputeTarget: "public",
+      });
+
+      await stateRef.set(
+        {
+          nextWave: wave.done ? wave.totalWaves - 1 : wave.waveIndex + 1,
+          totalWaves: wave.totalWaves,
+          lastAppliedWave: wave.waveIndex,
+          lastLabel: wave.label,
+          done: wave.done,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: request.auth?.uid ?? "admin",
+        },
+        { merge: true }
+      );
+
+      await writeLiveOpsHealth({
+        mode: "production",
+        provider: "fixture",
+        matches: result.matches,
+        updated: result.updated,
+        errorMessage: null,
+      });
+      await recordIngestSuccess({
+        activeProvider: "local-live-sim",
+        mode: "production",
+      });
+
+      return {
+        ok: true,
+        waveIndex: wave.waveIndex,
+        label: wave.label,
+        totalWaves: wave.totalWaves,
+        done: wave.done,
+        nextWave: wave.done ? wave.totalWaves - 1 : wave.waveIndex + 1,
+        ...result,
+      };
+    } catch (err) {
+      const message = getErrorMessage(err);
+      await writeLiveOpsHealth({
+        mode: "production",
+        provider: "fixture",
+        errorMessage: message,
+      });
+      await recordIngestError({
+        activeProvider: "local-live-sim",
+        errorMessage: message,
+        mode: "production",
+      });
+      throw err;
+    }
+  }
+);
+
 export const ingestLiveScores = onSchedule(
   {
     region: REGION,
     schedule: SCHEDULE,
     timeZone: "UTC",
-    secrets: [FOOTBALL_DATA_TOKEN],
+    secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN],
   },
   async (_event: ScheduledEvent) => {
     const liveOps = await getLiveOpsConfig();
-    if (!liveOps.enabled) {
+    if (liveOps.mode === "disabled") {
       console.log("[ingest] liveOps disabled. Skipping scheduled ingest.");
       return;
     }
 
+    await recordIngestAttempt({
+      activeProvider: liveOps.provider,
+      mode: liveOps.mode,
+    });
+
     try {
+      const target = getLiveOpsTarget(liveOps.mode);
       const matches = await fetchProviderMatches({
         provider: liveOps.provider,
         maxMatches: liveOps.fixtureMaxMatches,
         cutoffIso: liveOps.fixtureCutoffIso,
       });
-      const source = liveOps.provider === "fixture" ? "fixture" : "provider";
+      const source =
+        liveOps.provider === "fixture"
+          ? "fixture"
+          : liveOps.provider === "sportmonks"
+          ? "sportmonks"
+          : "football-data";
       const result = matches.length
         ? await applyMatchUpdates(matches, {
             source,
             initiatedBy: "scheduler",
+            collectionName: target.collectionName,
+            recompute: true,
+            recomputeTarget: target.recomputeTarget,
           })
-        : { updated: 0, matches: 0 };
+        : { updated: 0, matches: 0, quarantined: 0 };
 
       await writeLiveOpsHealth({
+        mode: liveOps.mode,
         provider: liveOps.provider,
         matches: result.matches,
         updated: result.updated,
         errorMessage: null,
       });
+      await recordIngestSuccess({
+        activeProvider: liveOps.provider,
+        mode: liveOps.mode,
+      });
     } catch (err) {
       console.error("[ingest] scheduled ingest failed:", err);
+      const message = getErrorMessage(err);
       await writeLiveOpsHealth({
+        mode: liveOps.mode,
         provider: liveOps.provider,
-        errorMessage: getErrorMessage(err),
+        errorMessage: message,
+      });
+      await recordIngestError({
+        activeProvider: liveOps.provider,
+        errorMessage: message,
+        mode: liveOps.mode,
       });
     }
   }
@@ -889,25 +1763,56 @@ export const adminIngestFixture = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getFixtureMatches({ maxMatches, cutoffIso });
+    const liveOps = await getLiveOpsConfig();
 
     if (dryRun) {
+      const target =
+        liveOps.mode === "disabled" ? "disabled" : getLiveOpsTarget(liveOps.mode).collectionName;
       return {
         ok: true,
         matches: matches.length,
         updated: 0,
         dryRun: true,
+        mode: liveOps.mode,
+        target,
       };
     }
 
-    const result = await applyMatchUpdates(matches, {
-      source: "fixture",
-      initiatedBy: request.auth?.uid ?? "admin",
+    const target = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
     });
 
-    return {
-      ok: true,
-      ...result,
-    };
+    try {
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: target.collectionName,
+        recompute: true,
+        recomputeTarget: target.recomputeTarget,
+      });
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: target.label,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
   }
 );
 
@@ -921,7 +1826,12 @@ export const adminResetFixtureIngest = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getFixtureMatches({ maxMatches, cutoffIso });
-    const existingFixtureMatches = await countFixtureMatches();
+    const liveOps = await getLiveOpsConfig();
+    const target =
+      liveOps.mode === "disabled" ? null : getLiveOpsTarget(liveOps.mode);
+    const existingFixtureMatches = await countFixtureMatches(
+      target?.collectionName ?? "matches"
+    );
 
     if (dryRun) {
       return {
@@ -930,28 +1840,59 @@ export const adminResetFixtureIngest = onCall(
         existingFixtureMatches,
         willDelete: existingFixtureMatches,
         willIngest: matches.length,
+        mode: liveOps.mode,
+        target: target?.collectionName ?? "disabled",
       };
     }
 
-    const deletedFixtureMatches = await deleteFixtureMatches();
-    const result = await applyMatchUpdates(matches, {
-      source: "fixture",
-      initiatedBy: request.auth?.uid ?? "admin",
+    const manualTarget = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
     });
 
-    if (!matches.length || result.updated === 0) {
-      await recomputeScoresCore({
-        includeLive: true,
-        scoringVersion: "v1",
+    try {
+      const deletedFixtureMatches = await deleteFixtureMatches(
+        manualTarget.collectionName
+      );
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
         initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: manualTarget.collectionName,
+        recompute: true,
+        recomputeTarget: manualTarget.recomputeTarget,
       });
-    }
 
-    return {
-      ok: true,
-      deletedFixtureMatches,
-      ...result,
-    };
+      if (!matches.length || result.updated === 0) {
+        await recomputeScoresCore({
+          includeLive: true,
+          scoringVersion: "v1",
+          initiatedBy: request.auth?.uid ?? "admin",
+          target: manualTarget.recomputeTarget,
+        });
+      }
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: manualTarget.label,
+        deletedFixtureMatches,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
   }
 );
 
@@ -969,40 +1910,265 @@ export const adminIngestPreTournament = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getPreTournamentFixtures({ maxMatches, cutoffIso });
+    const liveOps = await getLiveOpsConfig();
 
     if (dryRun) {
+      const target =
+        liveOps.mode === "disabled" ? "disabled" : getLiveOpsTarget(liveOps.mode).collectionName;
       return {
         ok: true,
         matches: matches.length,
         updated: 0,
         dryRun: true,
+        mode: liveOps.mode,
+        target,
       };
     }
 
-    const result = await applyMatchUpdates(matches, {
+    const target = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
+    });
+
+    try {
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: target.collectionName,
+        recompute: true,
+        recomputeTarget: target.recomputeTarget,
+      });
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: target.label,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
+  }
+);
+
+export const adminContractTestProvider = onCall(
+  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN] },
+  async (request) => {
+    requireAdmin(request);
+
+    const provider = asProvider(request.data?.provider);
+    if (!provider || provider === "stub" || provider === "fixture") {
+      throw new HttpsError(
+        "invalid-argument",
+        "provider must be one of: football-data, sportmonks."
+      );
+    }
+
+    const maxMatches = Number(request.data?.maxMatches ?? 0);
+    const cutoffIso = asString(request.data?.cutoffIso) ?? null;
+    const dryRun = request.data?.dryRun === true;
+
+    await recordIngestAttempt({
+      activeProvider: provider,
+      mode: "shadow",
+    });
+
+    try {
+      const matches = await fetchProviderMatches({
+        provider,
+        maxMatches,
+        cutoffIso,
+      });
+
+      if (dryRun) {
+        await writeLiveOpsHealth({
+          mode: "shadow",
+          provider,
+          matches: matches.length,
+          updated: 0,
+          errorMessage: null,
+        });
+        await recordIngestSuccess({
+          activeProvider: provider,
+          mode: "shadow",
+        });
+        return {
+          ok: true,
+          provider,
+          dryRun: true,
+          matches: matches.length,
+          target: "shadowMatches",
+        };
+      }
+
+      const result = await applyMatchUpdates(matches, {
+        source: provider,
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: "shadowMatches",
+        recompute: true,
+        recomputeTarget: "shadow",
+      });
+
+      await writeLiveOpsHealth({
+        mode: "shadow",
+        provider,
+        matches: result.matches,
+        updated: result.updated,
+        errorMessage: null,
+      });
+      await recordIngestSuccess({
+        activeProvider: provider,
+        mode: "shadow",
+      });
+
+      return {
+        ok: true,
+        provider,
+        target: "shadowMatches",
+        leaderboardTarget: "shadowLeaderboard/current",
+        ...result,
+      };
+    } catch (err) {
+      const message = getErrorMessage(err);
+      await writeLiveOpsHealth({
+        mode: "shadow",
+        provider,
+        errorMessage: message,
+      });
+      await recordIngestError({
+        activeProvider: provider,
+        errorMessage: message,
+        mode: "shadow",
+      });
+      throw err;
+    }
+  }
+);
+
+export const adminReplayFixtureWave = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const db = admin.firestore();
+    const stateRef = db.collection("settings").doc("fixtureReplay");
+    const stateSnap = await stateRef.get();
+    const state = (stateSnap.exists ? stateSnap.data() : {}) as Record<string, unknown>;
+
+    const requestedCursor = Number(request.data?.cursor);
+    const cursor = Number.isFinite(requestedCursor)
+      ? Math.max(0, Math.floor(requestedCursor))
+      : typeof state.cursor === "number" && Number.isFinite(state.cursor)
+      ? Math.max(0, Math.floor(state.cursor))
+      : 0;
+
+    const requestedWaveSize = Number(request.data?.waveSize);
+    const waveSize = Number.isFinite(requestedWaveSize)
+      ? Math.max(1, Math.floor(requestedWaveSize))
+      : 4;
+
+    const wave = getFixtureReplayWave({ cursor, waveSize });
+    const result = await applyNormalizedMatchUpdates(wave.updates, {
       source: "fixture",
       initiatedBy: request.auth?.uid ?? "admin",
+      collectionName: "shadowMatches",
+      recompute: false,
     });
+
+    await stateRef.set(
+      {
+        cursor: wave.nextCursor,
+        waveSize,
+        total: wave.total,
+        done: wave.done,
+        lastRunAt: FieldValue.serverTimestamp(),
+        lastRunBy: request.auth?.uid ?? "admin",
+      },
+      { merge: true }
+    );
 
     return {
       ok: true,
-      ...result,
+      applied: result.updated,
+      matches: result.matches,
+      quarantined: result.quarantined,
+      cursor,
+      nextCursor: wave.nextCursor,
+      total: wave.total,
+      done: wave.done,
+      target: "shadowMatches",
+    };
+  }
+);
+
+export const adminResetFixtureReplay = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const db = admin.firestore();
+    let deleted = 0;
+
+    while (true) {
+      const snap = await db.collection("shadowMatches").limit(400).get();
+      if (snap.empty) break;
+
+      const batch = db.batch();
+      snap.docs.forEach((docSnap) => {
+        batch.delete(docSnap.ref);
+        deleted += 1;
+      });
+      await batch.commit();
+    }
+
+    await db.collection("settings").doc("fixtureReplay").set(
+      {
+        cursor: 0,
+        waveSize: null,
+        total: null,
+        done: false,
+        lastResetAt: FieldValue.serverTimestamp(),
+        lastResetBy: request.auth?.uid ?? "admin",
+      },
+      { merge: true }
+    );
+
+    return {
+      ok: true,
+      deleted,
+      cursor: 0,
+      target: "shadowMatches",
     };
   }
 );
 
 export const setLiveOpsSettings = onCall(
-  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN] },
+  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN] },
   async (request) => {
     const auth = requireAdmin(request);
     const payload = request.data ?? {};
 
+    const mode =
+      asMode(payload.mode) ??
+      (payload.enabled === true ? "production" : "disabled");
     const providerInput = payload.provider;
     const provider = asProvider(providerInput);
     if (!provider) {
       throw new HttpsError(
         "invalid-argument",
-        "provider must be one of: stub, fixture, provider."
+        "provider must be one of: stub, fixture, football-data, sportmonks."
       );
     }
 
@@ -1016,26 +2182,41 @@ export const setLiveOpsSettings = onCall(
       );
     }
 
-    const enabled = payload.enabled === true;
+    const enabled = mode !== "disabled";
 
-    if (
-      enabled &&
-      provider === "provider" &&
-      !(
-        asString(FOOTBALL_DATA_TOKEN.value()) ??
-        asString(process.env.FOOTBALL_DATA_TOKEN)
-      )
-    ) {
-      throw new HttpsError(
-        "failed-precondition",
-        "FOOTBALL_DATA_TOKEN is required before enabling provider automation."
-      );
+    if (mode !== "disabled" && provider === "football-data") {
+      if (
+        !(
+          asString(FOOTBALL_DATA_TOKEN.value()) ??
+          asString(process.env.FOOTBALL_DATA_TOKEN)
+        )
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "FOOTBALL_DATA_TOKEN is required before enabling football-data automation."
+        );
+      }
+    }
+
+    if (mode !== "disabled" && provider === "sportmonks") {
+      if (
+        !(
+          asString(SPORTMONKS_TOKEN.value()) ??
+          asString(process.env.SPORTMONKS_TOKEN)
+        )
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "SPORTMONKS_TOKEN is required before enabling Sportmonks automation."
+        );
+      }
     }
 
     const db = admin.firestore();
     await db.collection("settings").doc("liveOps").set(
       {
         enabled,
+        mode,
         provider,
         fixtureMaxMatches,
         fixtureCutoffIso,
@@ -1048,6 +2229,7 @@ export const setLiveOpsSettings = onCall(
     return {
       ok: true,
       enabled,
+      mode,
       provider,
       fixtureMaxMatches,
       fixtureCutoffIso,

@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
+import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import { AppShellV0 } from "@/components/app-shell-v0";
 import { Button } from "@/components/ui/button";
 import { BRANDING } from "@/lib/branding";
@@ -41,10 +44,12 @@ function buildRails(): PaymentRail[] {
 }
 
 export default function CharityPageClient() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [authBusy, setAuthBusy] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [redirecting, setRedirecting] = useState(false);
 
   const rails = buildRails();
 
@@ -55,6 +60,13 @@ export default function CharityPageClient() {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    if (user) return;
+    setRedirecting(true);
+    router.replace("/");
+  }, [loading, user, router]);
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
@@ -91,7 +103,7 @@ export default function CharityPageClient() {
     onSignOut: handleSignOut,
   });
 
-  if (loading) {
+  if (loading || redirecting) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-primary" />
@@ -101,33 +113,23 @@ export default function CharityPageClient() {
 
   return (
     <AppShellV0 navItems={navItems} activeId="charity">
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-8">
-        <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-6xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
+      <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
+        <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+          <div className="pt-safe">
+            <FeaturedFiveTopBar
+              className="mx-auto max-w-6xl px-4 pr-14 sm:pr-4"
+              brand={
+                <AppBrandBlock
+                  variant="ff-chrome"
+                  title={BRANDING.shortName}
+                  tagline={BRANDING.tagline}
                 />
-              </div>
-              <h1 className="font-bold text-lg tracking-tight">Charity Pot</h1>
-            </div>
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
-              {user ? (
-                user.displayName ? (
-                  <>
-                    <span className="sm:hidden">{user.displayName}</span>
-                    <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
-                  </>
-                ) : (
-                  "Signed in"
-                )
-              ) : (
-                "Signed out"
-              )}
-            </div>
+              }
+              liveCount={0}
+              userDisplayName={user?.displayName ?? null}
+              userEmail={auth.currentUser?.email ?? null}
+              showUserTile={Boolean(user)}
+            />
           </div>
         </header>
 

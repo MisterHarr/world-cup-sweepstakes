@@ -1,82 +1,91 @@
-# User Guide & FAQ
+# User Guide & FAQ (Plain Language)
 
-**Last Updated:** 2026-02-22  
-**In-App Route:** `/guide`
+**Last Updated:** 2026-05-22  
+**In-App Page:** `/guide`
 
-## Quick Start
+## What This Game Is
 
-1. Sign in on `/` with Google or email/password.
-2. Select your department on `/department`.
-3. Choose one Featured Team on `/featured-team`.
-4. Confirm and reveal your 5 random teams on `/reveal`.
-5. Use `/dashboard` for squad management and score tracking.
-6. Use `/leaderboard` to compare rank and open squad details.
+- You choose 1 team yourself (your **Star Team**).
+- The app gives you 5 extra teams at random.
+- You earn points from how those 6 teams perform in real matches.
+- You can swap teams later using transfers (when transfer window is open).
 
-## Navigation
+You do **not** need football knowledge to play.
 
-- `My Teams`: portfolio and score summary.
-- `Leaderboard`: ranks by points or by badges.
-- `Live`: match-center bracket/status view.
-- `Badges`: all achievements (locked + unlocked states).
-- `Guide`: how to use the app and scoring logic.
-- `Transfer`: squad swap flow (only when transfer window is open).
-- `Charity` (optional): visible only if charity feature flag is enabled.
+## Simple Words (No Jargon)
 
-## Scoring Transparency
+- **Star Team**: the team you choose; its points are doubled.
+- **Drawn Teams**: the 5 random teams assigned to you.
+- **Transfer**: swapping one drawn team for another.
+- **Clean Sheet**: a team does not let in any goals.
+- **Yellow/Red Card**: penalties that reduce points.
 
-### Team Points
+## First Time: What To Click
 
-Each team’s points are calculated as:
+1. Sign in.
+2. Pick your Star Team.
+3. Confirm and reveal your 5 random teams.
+4. Open `My Teams` to see your points.
+5. Open `Leaderboard` to see your rank.
 
-`wins*3 + draws*1 + goalsScored*1 + cleanSheets*1 - redCards*1 - yellowCards*0.5`
+## Main Tabs
 
-### User Total Score
+- `My Teams`: your full squad and score.
+- `Leaderboard`: your rank vs everyone else.
+- `Live`: match updates.
+- `Guide`: this help page.
+- `Transfer`: swap teams (when open).
+- `Charity` (optional): appears only if organisers enable it.
 
-User score is calculated as:
+## How Points Work (Easy Version)
 
-`featuredTeamPoints*2 + sum(drawnTeamPoints) - transferPenaltyPoints`
+- Win = +3
+- Draw = +1
+- Goal scored = +1
+- Clean sheet = +1
+- Yellow card = -0.5
+- Red card = -1
+- Star Team points are doubled
 
-### Transfer Penalty
+Your total score = all your team points (with Star Team doubled) minus transfer costs.
 
-Transfer cost (penalty points) is:
+## How Transfers Work
 
-`max(5, 10 + upgradeSteps*15 - downgradeSteps*3)`
+- You cannot transfer your Star Team.
+- You can only transfer your drawn teams.
+- Transfers cost points.
+- Bigger upgrades usually cost more points.
+- If transfer window is closed, transfer button is locked.
 
-- Upgrading to better tiers costs more.
-- Downgrading to weaker tiers is discounted.
-- Every transfer records an audit event in `transferEvents`.
+## Fairness Rules
 
-## Random Team Assignment Logic
-
-- Featured Team is chosen by the user.
-- Drawn teams are generated server-side, not client-side.
-- Featured Team is excluded from draw pool.
-- Draws enforce unique team IDs (no duplicates).
-- `confirmFeaturedTeam` uses a tier-balanced draw target:
-  - 1 from Tier 1
-  - 1 from Tier 2
-  - 2 from Tier 3
-  - 1 from Tier 4
+- Random teams are assigned by the server.
+- Your Star Team is excluded from random draw.
+- Duplicate teams are blocked.
+- Transfer actions are logged for audit and trust.
 
 ## FAQ
 
+### I don’t understand football. Can I still play?
+
+Yes. The app handles scoring for you. You only need to choose one Star Team.
+
+### Why is my Star Team important?
+
+It gives double points, so it has the biggest impact on your score.
+
 ### Why can’t I transfer now?
 
-Transfer window is controlled by admin in `/admin/fixtures`. If closed, transfers are blocked.
+Because transfer window is closed. Admin controls when it opens.
 
-### Can I transfer my Featured Team?
+### Why did my score go down after transfer?
 
-No. Featured Team is locked after confirmation.
+Transfers have a points cost (penalty), especially for stronger upgrades.
 
-### Why did my points change after transfer?
+### Why did my rank change even though I didn’t do anything?
 
-Transfers incur penalty points and trigger a recompute cycle. Your total score updates after recompute.
+Other players’ scores may have changed, and rankings update after score recalculation.
 
-### Why does my rank change if I didn’t transfer?
+### Why can’t I see Charity tab?
 
-Other users can change scores, and ingest/recompute updates the full leaderboard ranking.
-
-### Are badges trustworthy?
-
-Badge display reads directly from user badge fields and leaderboard badge counts are recomputed from stored badge state. See `/docs/current/BADGES-TEST-PLAN.md` for regression coverage.
-
+Charity module is optional. If your organisers disable it, tab and page are hidden.

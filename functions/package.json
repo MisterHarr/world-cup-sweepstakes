@@ -8,6 +8,10 @@
     "test:emulator:transfer-closed": "node scripts/test-transfer-window-closed.cjs",
     "test:emulator:squad-authz": "node scripts/test-squad-authz.cjs",
     "test:emulator:badges": "node scripts/test-badge-count-regression.cjs",
+    "test:emulator:ingest-validation": "node scripts/test-ingest-validation-quarantine.cjs",
+    "test:emulator:shadow-routing": "node scripts/test-shadow-mode-routing.cjs",
+    "test:emulator:dirty-retry": "node scripts/test-dirty-recompute-retry.cjs",
+    "create-local-admin": "node create-local-admin.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
@@ -17,10 +21,14 @@
   "engines": {
     "node": "24"
   },
+  "overrides": {
+    "protobufjs": "7.5.8",
+    "path-to-regexp": "0.1.13"
+  },
   "main": "lib/index.js",
   "dependencies": {
-    "firebase-admin": "^13.6.0",
-    "firebase-functions": "^7.0.0"
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.12.0",

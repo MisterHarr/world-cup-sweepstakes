@@ -336,7 +336,7 @@ export default function TeamRevealPage() {
           </div>
 
           {revealComplete ? (
-            <div className="fixed inset-x-0 bottom-4 z-40 px-4">
+            <div className="fixed inset-x-0 z-40 px-4 bottom-[calc(1rem+env(safe-area-inset-bottom))]">
               <div className="mx-auto max-w-sm">
                 <Button
                   size="lg"

@@ -4,7 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { AppBrandBlock } from "@/components/AppBrandBlock";
 import { AppShellV0 } from "@/components/app-shell-v0";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import type {
   LBUser,
   SquadTeamVM,
@@ -23,7 +25,6 @@ import {
   type BracketStage as Stage,
 } from "@/lib/bracketUtils";
 import { BRANDING } from "@/lib/branding";
-import { normalizeDepartment, type Department } from "@/lib/departments";
 import { auth, db, functions } from "@/lib/firebase";
 import { fetchTeamsByIds } from "@/lib/dashboardData";
 import { signInWithGoogle } from "@/lib/googleAuth";
@@ -90,6 +91,37 @@ function TabPanelLoading() {
   );
 }
 
+/** Full-route placeholder while `useSearchParams` resolves (root Suspense boundary). */
+function DashboardSuspenseFallback() {
+  return (
+    <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20">
+      <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+        <div className="pt-safe">
+          <FeaturedFiveTopBar
+            className="mx-auto max-w-4xl px-4 pr-14 sm:pr-4"
+            brand={
+              <AppBrandBlock
+                variant="ff-chrome"
+                title={BRANDING.shortName}
+                tagline={BRANDING.tagline}
+              />
+            }
+            liveCount={0}
+            showUserTile={false}
+          />
+        </div>
+      </header>
+      <main
+        className="max-w-4xl mx-auto p-4 md:p-8"
+        aria-busy="true"
+        aria-label="Loading dashboard"
+      >
+        <TabPanelLoading />
+      </main>
+    </div>
+  );
+}
+
 type DashboardTab = "portfolio" | "leaderboard" | "bracket" | "market";
 
 function parseDashboardTab(tabParam: string | null): DashboardTab {
@@ -139,6 +171,11 @@ type TeamRecord = {
   bestFinish?: string;
   countryCode?: string;
   [key: string]: unknown;
+};
+
+type IngestHealthRecord = {
+  scoresDirty: boolean;
+  dirtyReason?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -216,12 +253,30 @@ function calculateTeamPoints(
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
   if (!err || typeof err !== "object") return fallback;
+  const code =
+    typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : "";
+  if (code === "permission-denied") {
+    return "You don't have permission to view this.";
+  }
+  if (code === "unavailable") {
+    return "Service temporarily unavailable. Try again shortly.";
+  }
+  if (code === "auth/network-request-failed") {
+    return "Network error. Check your connection.";
+  }
   const raw =
     typeof (err as { message?: unknown }).message === "string"
       ? (err as { message: string }).message
       : "";
   if (!raw) return fallback;
-  return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
+  const cleaned = raw.replace(/^FirebaseError:\s*/i, "").trim();
+  if (!cleaned) return fallback;
+  if (process.env.NODE_ENV === "production") {
+    return fallback;
+  }
+  return cleaned;
 }
 
 function normalizeStageId(value: unknown): string {
@@ -310,9 +365,6 @@ function DashboardPageContent() {
   // ✅ Leaderboard state (now from Firestore snapshot)
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
-  const [departmentByUserId, setDepartmentByUserId] = useState<
-    Record<string, Department | null>
-  >({});
 
   // ✅ Match Center state (live from Firestore)
   const [bracketStages, setBracketStages] = useState<Stage[]>([]);
@@ -331,6 +383,9 @@ function DashboardPageContent() {
   const pendingTeamIdsRef = useRef<Set<string>>(new Set());
   const [selectedStageId, setSelectedStageId] = useState<string>("");
   const [lastMatchUpdate, setLastMatchUpdate] = useState<string>("");
+  const [ingestHealth, setIngestHealth] = useState<IngestHealthRecord>({
+    scoresDirty: false,
+  });
   const [marketTeamsById, setMarketTeamsById] = useState<Record<string, TeamRecord>>({});
   const [loadingMarketTeams, setLoadingMarketTeams] = useState(false);
   const [transferNowMs, setTransferNowMs] = useState(() => Date.now());
@@ -352,7 +407,10 @@ function DashboardPageContent() {
     () => (isRecord(userDoc) ? userDoc : {}),
     [userDoc]
   );
-  const department = normalizeDepartment(userDocData.department);
+  const remainingTransfers = Math.max(
+    0,
+    Number(userDocData.remainingTransfers ?? 0)
+  );
 
   const activeNavId = useMemo(() => {
     if (activeTab === "portfolio") return "portfolio";
@@ -362,21 +420,15 @@ function DashboardPageContent() {
     return "portfolio";
   }, [activeTab]);
 
-  const navItems = buildMainNavItems({
-    signedIn,
-    authBusy: checkingAuth || authBusy,
-    onSignIn: handleGoogleSignIn,
-    onSignOut: handleSignOut,
-    onPortfolio: () => {
-      setActiveTab("portfolio");
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+  const liveMatchCount = useMemo(() => {
+    let n = 0;
+    for (const matches of Object.values(bracketMatches)) {
+      for (const m of matches) {
+        if (m.isLive) n += 1;
       }
-    },
-    onTransfer: () => setActiveTab("market"),
-    onLeaderboard: () => setActiveTab("leaderboard"),
-    onLive: () => setActiveTab("bracket"),
-  });
+    }
+    return n;
+  }, [bracketMatches]);
 
   useEffect(() => {
     matchTeamNamesRef.current = matchTeamNames;
@@ -466,7 +518,6 @@ function DashboardPageContent() {
       setUserDoc(null);
       setTeamsById({});
       setLeaderboardData([]);
-      setDepartmentByUserId({});
       setError("");
       setStatus("");
 
@@ -479,7 +530,7 @@ function DashboardPageContent() {
         else setUserDoc(null);
       } catch (e: unknown) {
         console.error(e);
-        setError(`[users] ${friendlyErrorMessage(e, "Failed to load your entry.")}`);
+        setError(friendlyErrorMessage(e, "Failed to load your entry."));
       } finally {
         setLoadingUser(false);
       }
@@ -487,52 +538,6 @@ function DashboardPageContent() {
 
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setDepartmentByUserId({});
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadDepartmentMap() {
-      try {
-        const fn = httpsCallable(functions, "getLeaderboard");
-        const res = await fn({ limit: 500 });
-        const payload = isRecord(res.data) ? res.data : {};
-        const rows = Array.isArray(payload.rows) ? payload.rows : [];
-
-        const map: Record<string, Department | null> = {};
-        rows.forEach((row: unknown) => {
-          const rowData = isRecord(row) ? row : {};
-          const id = resolveLeaderboardUserId(rowData);
-          if (!id) return;
-          map[id] = normalizeDepartment(rowData.department);
-        });
-
-        if (!cancelled) {
-          setDepartmentByUserId(map);
-        }
-      } catch (err: unknown) {
-        console.error(err);
-      }
-    }
-
-    loadDepartmentMap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [signedIn]);
-
-  // Department gate (same behaviour you already tested)
-  useEffect(() => {
-    if (!signedIn) return;
-    if (loadingUser) return;
-    if (error) return;
-    if (!department) router.replace("/department?next=/dashboard");
-  }, [signedIn, loadingUser, error, department, router]);
 
   // Reveal gate - redirect to reveal screen if user hasn't seen it yet
   useEffect(() => {
@@ -580,7 +585,7 @@ function DashboardPageContent() {
       } catch (e: unknown) {
         console.error(e);
         if (!cancelled)
-          setError(`[teams] ${friendlyErrorMessage(e, "Failed to load team details.")}`);
+          setError(friendlyErrorMessage(e, "Failed to load team details."));
       } finally {
         if (!cancelled) setLoadingTeams(false);
       }
@@ -615,19 +620,11 @@ function DashboardPageContent() {
           .map((r: unknown, idx: number) => {
             const row = isRecord(r) ? r : {};
             const id = resolveLeaderboardUserId(row);
-            const department =
-              normalizeDepartment(row.department) ??
-              normalizeDepartment(row.dept) ??
-              departmentByUserId[id] ??
-              null;
             return {
               id,
               rank: Number(row.rank ?? idx + 1),
               name: String(row.displayName ?? row.name ?? "Anonymous"),
               totalScore: Number(row.totalScore ?? 0),
-              badgeCount: Number(row.badgeCount ?? 0),
-              department,
-              dept: department,
               teams: [], // drawer is hydrated via getSquadDetails
             };
           })
@@ -644,9 +641,7 @@ function DashboardPageContent() {
           return;
         }
         console.error(err);
-        setError(
-          `[leaderboard] ${err?.message ?? "Failed to load leaderboard."}`
-        );
+        setError(friendlyErrorMessage(err, "Failed to load leaderboard."));
         setLoadingLeaderboard(false);
       }
     );
@@ -654,7 +649,7 @@ function DashboardPageContent() {
     return () => {
       unsub();
     };
-  }, [departmentByUserId, signedIn]);
+  }, [signedIn]);
 
   // ✅ Live Match Center via Firestore snapshot
   useEffect(() => {
@@ -705,6 +700,12 @@ function DashboardPageContent() {
           const impact = statusCode === "LIVE" ? "Match live" : undefined;
           const impactType = statusCode === "LIVE" ? "high" : undefined;
 
+          const groupRaw = data.group ?? data.groupId ?? data.groupCode;
+          const group =
+            typeof groupRaw === "string" && groupRaw.trim().length
+              ? groupRaw.trim()
+              : undefined;
+
           const match: Match = {
             id: docSnap.id,
             t1: home,
@@ -717,6 +718,7 @@ function DashboardPageContent() {
             kickoffTime,
             updatedAt,
             isLive: statusCode === "LIVE",
+            group,
           };
 
           if (!grouped[stage]) grouped[stage] = [];
@@ -799,7 +801,7 @@ function DashboardPageContent() {
           return;
         }
         console.error(err);
-        setError(`[matches] ${err?.message ?? "Failed to load matches."}`);
+        setError(friendlyErrorMessage(err, "Failed to load live matches."));
         setLoadingMatches(false);
       }
     );
@@ -808,6 +810,36 @@ function DashboardPageContent() {
       cancelled = true;
       unsub();
     };
+  }, [signedIn]);
+
+  useEffect(() => {
+    if (!signedIn) {
+      setIngestHealth({ scoresDirty: false });
+      return;
+    }
+
+    const ref = doc(db, "ingestHealth", "current");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) {
+          setIngestHealth({ scoresDirty: false });
+          return;
+        }
+
+        const data = snap.data() as Record<string, unknown>;
+        setIngestHealth({
+          scoresDirty: data.scoresDirty === true,
+          dirtyReason:
+            typeof data.dirtyReason === "string" ? data.dirtyReason : null,
+        });
+      },
+      () => {
+        setIngestHealth({ scoresDirty: false });
+      }
+    );
+
+    return () => unsub();
   }, [signedIn]);
 
   useEffect(() => {
@@ -853,7 +885,7 @@ function DashboardPageContent() {
 
         console.error(err);
         setError(
-          `[transfer-window] ${err?.message ?? "Failed to load transfer window."}`
+          friendlyErrorMessage(err, "Failed to load transfer window settings.")
         );
       }
     );
@@ -892,7 +924,9 @@ function DashboardPageContent() {
         }
 
         console.error(err);
-        setTransferError(`[market] ${err?.message ?? "Failed to load market teams."}`);
+        setTransferError(
+          friendlyErrorMessage(err, "Failed to load transfer market.")
+        );
         setLoadingMarketTeams(false);
       }
     );
@@ -957,6 +991,34 @@ function DashboardPageContent() {
     }
   }
 
+  const navItems = buildMainNavItems({
+    signedIn,
+    authBusy: checkingAuth || authBusy,
+    onSignIn: handleGoogleSignIn,
+    onSignOut: handleSignOut,
+    onPortfolio: () => {
+      setActiveTab("portfolio");
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    onTransfer: () => setActiveTab("market"),
+    onLeaderboard: () => setActiveTab("leaderboard"),
+    onLive: () => setActiveTab("bracket"),
+  }).map((item) => {
+    if (item.id === "live") {
+      return { ...item, badge: String(liveMatchCount), badgeVariant: "live" as const };
+    }
+    if (item.id === "transfer" && remainingTransfers > 0) {
+      return {
+        ...item,
+        badge: String(remainingTransfers),
+        badgeVariant: "amber" as const,
+      };
+    }
+    return item;
+  });
+
   // ✅ Drawer hydration: fetch a user's squad via callable (safe cross-user access)
   async function fetchSquadDetails(
     userId: string,
@@ -973,7 +1035,7 @@ function DashboardPageContent() {
     const featured: SquadTeamVM | null = featuredRaw
       ? {
           id: String(featuredRaw.id ?? featuredRaw.teamId ?? ""),
-          name: String(featuredRaw.name ?? "Featured"),
+          name: String(featuredRaw.name ?? "Star Team"),
           group: String(featuredRaw.group ?? ""),
           tier: Number(featuredRaw.tier ?? 4),
           flagUrl: String(featuredRaw.flagUrl ?? ""),
@@ -1124,11 +1186,6 @@ function DashboardPageContent() {
     };
   }, [uid, leaderboardData, userDocData, localDerivedScore]);
 
-  const remainingTransfers = Math.max(
-    0,
-    Number(userDocData.remainingTransfers ?? 0)
-  );
-
   const transferWindowOpen = useMemo(() => {
     if (!transferWindowConfig.enabled) return false;
     if (
@@ -1204,6 +1261,10 @@ function DashboardPageContent() {
           status: team?.isEliminated === true ? "eliminated" : "active",
           trend: "stable",
           points: calculateTeamPoints(team),
+          flagUrl:
+            typeof team?.flagUrl === "string" && team.flagUrl.trim().length > 0
+              ? team.flagUrl
+              : undefined,
         };
       }),
     [drawnTeamIds, marketTeamsById, teamsById]
@@ -1220,6 +1281,10 @@ function DashboardPageContent() {
         status: "available" as const,
         trend: "stable" as const,
         points: calculateTeamPoints(team),
+        flagUrl:
+          typeof team?.flagUrl === "string" && team.flagUrl.trim().length > 0
+            ? team.flagUrl
+            : undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [marketTeamsById, userTeamIds]);
@@ -1270,7 +1335,9 @@ function DashboardPageContent() {
       }
 
       setTransferSuccess(
-        `Transfer completed. ${nextTransfers} transfer${nextTransfers === 1 ? "" : "s"} remaining.`
+        payload.leaderboardRecomputed === false
+          ? `Transfer completed. ${nextTransfers} transfer${nextTransfers === 1 ? "" : "s"} remaining. Leaderboard refresh pending.`
+          : `Transfer completed. ${nextTransfers} transfer${nextTransfers === 1 ? "" : "s"} remaining.`
       );
 
       return { ok: true };
@@ -1285,38 +1352,32 @@ function DashboardPageContent() {
 
   return (
     <AppShellV0 navItems={navItems} activeId={activeNavId}>
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-20 md:pb-0">
+      <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
+        {ingestHealth.scoresDirty && (
+          <div className="mx-auto max-w-4xl px-4 pt-4 md:px-8">
+            <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+              Live scores updated. Leaderboard refresh pending.
+              {ingestHealth.dirtyReason ? ` (${ingestHealth.dirtyReason})` : ""}
+            </div>
+          </div>
+        )}
         {/* Sticky Header */}
-        <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-4xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
-                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                    e.currentTarget.style.display = "none";
-                  }}
+        <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+          <div className="pt-safe">
+            <FeaturedFiveTopBar
+              className="mx-auto max-w-4xl px-4 pr-14 sm:pr-4"
+              brand={
+                <AppBrandBlock
+                  variant="ff-chrome"
+                  title={BRANDING.shortName}
+                  tagline={BRANDING.tagline}
                 />
-              </div>
-              <h1 className="font-bold text-lg tracking-tight">{BRANDING.appName}</h1>
-            </div>
-
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
-              {signedIn ? (
-                displayName ? (
-                  <>
-                    <span className="sm:hidden">{displayName}</span>
-                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
-                  </>
-                ) : (
-                  "Signed in"
-                )
-              ) : (
-                "Signed out"
-              )}
-            </div>
+              }
+              liveCount={liveMatchCount}
+              userDisplayName={signedIn ? displayName || null : null}
+              userEmail={auth.currentUser?.email ?? null}
+              showUserTile={signedIn}
+            />
           </div>
         </header>
 
@@ -1329,7 +1390,7 @@ function DashboardPageContent() {
           </div>
         )}
         {status && (
-          <div className="mb-4 text-sm text-foreground/90">{status}</div>
+          <div className="mb-4 text-sm text-[var(--ff-fg-secondary)]">{status}</div>
         )}
 
         {/* Portfolio View - Show when on "My Teams" tab */}
@@ -1357,7 +1418,6 @@ function DashboardPageContent() {
               isLoading={loadingLeaderboard}
               fetchSquad={fetchSquadDetails}
               currentUserId={uid}
-              modeLabel="v0 layout active"
             />
           )}
           {activeTab === "bracket" && (
@@ -1401,13 +1461,7 @@ function DashboardPageContent() {
 
 export default function DashboardPage() {
   return (
-    <React.Suspense
-      fallback={
-        <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-          Loading dashboard...
-        </div>
-      }
-    >
+    <React.Suspense fallback={<DashboardSuspenseFallback />}>
       <DashboardPageContent />
     </React.Suspense>
   );

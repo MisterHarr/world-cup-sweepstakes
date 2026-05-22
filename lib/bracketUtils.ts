@@ -12,6 +12,8 @@ export type BracketMatch = {
   kickoffTime?: string;
   updatedAt?: string;
   isLive?: boolean;
+  /** Group letter/code when stage is GROUP (optional; from match doc). */
+  group?: string;
 };
 
 export const STAGE_ORDER = ["GROUP", "R32", "R16", "QF", "SF", "FINAL"] as const;

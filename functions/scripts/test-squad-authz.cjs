@@ -104,11 +104,12 @@ async function callGetSquadDetails(idToken, userId) {
 async function seedUsers(db, users) {
   const batch = db.batch();
   users.forEach((user, index) => {
+    const isTarget = index === 1;
     batch.set(
       db.collection("users").doc(user.uid),
       {
         email: user.email,
-        displayName: `Squad User ${index + 1}`,
+        ...(isTarget ? {} : { displayName: `Squad User ${index + 1}` }),
         remainingTransfers: 3,
         totalScore: 0,
         entry: {
@@ -155,11 +156,21 @@ async function main() {
   const target = await signUpAuthUser("target");
   await seedUsers(db, [caller, target]);
 
-  const denied = await callGetSquadDetails(caller.idToken, target.uid);
-  assert(denied.ok === false, "Expected non-admin cross-user read to fail");
+  const publicRead = await callGetSquadDetails(caller.idToken, target.uid);
+  assert(publicRead.ok === true, "Expected cross-user squad read to succeed");
+  assert(publicRead.data?.ok === true, "Callable payload missing ok=true");
   assert(
-    denied.status === "PERMISSION_DENIED",
-    `Expected PERMISSION_DENIED, got ${denied.status}`
+    publicRead.data?.userId === target.uid,
+    `Expected userId=${target.uid}, got ${publicRead.data?.userId}`
+  );
+  assert(
+    publicRead.data?.displayName !== target.email,
+    "Expected squad displayName to avoid raw email fallback"
+  );
+  assert(
+    typeof publicRead.data?.displayName === "string" &&
+      /^[A-Z0-9]{2}$/.test(publicRead.data.displayName),
+    `Expected 2-character initials fallback, got ${publicRead.data?.displayName}`
   );
 
   await admin.auth().setCustomUserClaims(caller.uid, { admin: true });
@@ -172,8 +183,13 @@ async function main() {
     allowed.data?.userId === target.uid,
     `Expected userId=${target.uid}, got ${allowed.data?.userId}`
   );
+  assert(
+    typeof allowed.data?.displayName === "string" &&
+      /^[A-Z0-9]{2}$/.test(allowed.data.displayName),
+    `Expected 2-character initials fallback, got ${allowed.data?.displayName}`
+  );
 
-  console.log("PASS: getSquadDetails authz regression test succeeded.");
+  console.log("PASS: getSquadDetails public visibility + privacy regression test succeeded.");
 }
 
 main().catch((err) => {

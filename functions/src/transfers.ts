@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requireAuth } from "./auth";
+import { getErrorMessage, markScoresDirty } from "./ingestHealth";
 import { recomputeScoresCore } from "./scoring";
 
 const REGION = "asia-southeast1";
@@ -322,6 +323,10 @@ export const executeTransfer = onCall({ region: REGION }, async (request) => {
     leaderboardRecomputed = true;
   } catch (err) {
     console.error("[transfer] recompute after transfer failed:", err);
+    await markScoresDirty({
+      reason: "transfer",
+      errorMessage: getErrorMessage(err),
+    });
   }
 
   return {

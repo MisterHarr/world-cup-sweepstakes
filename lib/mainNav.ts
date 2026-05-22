@@ -1,7 +1,6 @@
 import type { AppShellNavItem } from "@/components/app-shell-v0";
 import {
   ArrowLeftRight,
-  Award,
   BookOpen,
   Briefcase,
   HandHeart,
@@ -65,13 +64,11 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       href: "/dashboard?tab=bracket",
       onClick: onLive,
     },
-    {
-      id: "badges",
-      label: "Badges",
-      icon: Award,
-      href: "/badges",
-    },
   ];
+
+  if (!signedIn) {
+    return navItems;
+  }
 
   if (FEATURES.userGuide) {
     navItems.push({

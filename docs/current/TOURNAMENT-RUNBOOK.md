@@ -12,6 +12,16 @@ This runbook is for admin operation of live score updates and leaderboard refres
 
 When automation is `DISABLED`, scheduled ingestion does not run. This is the recommended default outside tournament live windows.
 
+## 1.1) Roster vs fixture JSON (after a `TEAMS_SEED` change)
+
+Bundled rehearsal files **`functions/src/fixtures/worldcup2022.json`** and **`pretournament2022.json`** reference **2022** participants. The live **`teams`** collection is seeded from **`lib/seed/teamsSeed.ts` (2026)**. Any `homeTeamId` / `awayTeamId` in fixtures **without** a matching `teams/{id}` document can produce **zero points** or odd leaderboard behaviour for that match.
+
+**Operator checklist after roster / seed changes:**
+
+1. **`/admin/seed-teams`** → **Seed Teams**, then **Remove orphan team docs** if ids were retired.
+2. From repo root: **`npm run audit:fixture-teams`** — lists fixture ids not in the current 2026 seed (expected to be many for 2022 JSON). Use **`--strict`** only when you have aligned fixture files and want CI to fail on drift.
+3. Before a **2022 replay** rehearsal: either accept partial coverage, **trim** fixture JSON to 2026 nations only, or maintain **extra** `teams` docs for rehearsal-only ids (not recommended for production).
+
 ## 2) Before Tournament Start
 
 1. Sign in as admin and open `/admin/fixtures`.
@@ -38,6 +48,7 @@ Use staged ingest to simulate tournament progression instead of dumping all fixt
 Important current dataset note:
 - `functions/src/fixtures/worldcup2022.json` currently contains **12 group-stage matches** (opening slice), not full knockout coverage.
 - This section replays that group slice in **3 waves**.
+- Those matches still reference **2022** `teamId`s; cross-check against your Firestore **`teams`** set (see **§1.1**).
 
 One-time setup:
 1. Open `/admin/users` as admin.
@@ -73,12 +84,42 @@ For each wave:
 If/when full 2022 fixtures are added:
 - Continue the same staged method with additional knockout cutoffs (R16, QF, SF, Final) rather than one-shot ingest.
 
+## 2.2) Local Visible Fabricated-Live Rehearsal
+
+Use this when you want the normal app UI to visibly change before the real tournament starts.
+
+Purpose:
+
+- Preserve local users and their team selections.
+- Clear public game state back to zero.
+- Apply fabricated 2026-team match waves to public `matches`.
+- Verify dashboard, leaderboard, ingest health, and recompute health all move together.
+
+Steps:
+
+1. Open `/admin/fixtures`.
+2. Confirm the localhost-production warning if required.
+3. In `Local Visible Rehearsal`, click `Preview Reset`.
+4. Click `Reset Visible Data`.
+5. Verify users still exist and can sign in.
+6. Click `Run Next Live Wave`.
+7. Open `/dashboard` and `/leaderboard` in another tab.
+8. Repeat `Run Next Live Wave` through the live and final waves.
+9. Confirm:
+   - match status moves from scheduled to live/finished
+   - public leaderboard updates
+   - user/team scores change from zero
+   - `Ingest / Recompute Health` shows fresh success timestamps
+
+This rehearsal is local/public by design. It is not a shadow test. Use it in the emulator or another non-production target where visible score changes are expected.
+
 ## 3) Go-Live Switch (Tournament)
 
 Use this only when real provider integration is ready and tested.
 
 1. In `/admin/fixtures` > `Live Automation (Scheduler)`:
-   - Set provider to `Provider (production)`.
+   - Set provider to `football-data.org (smoke)` for the practical current path.
+   - Use `Sportmonks (trial primary)` only as an optional high-cost trial path.
    - Enable `Enable scheduled ingest`.
 2. Click `Save Automation Settings`.
 3. Confirm message:
@@ -141,7 +182,7 @@ If scores/leaderboard stop updating:
   - Provider `Fixture (safe testing)` or `Stub (no ingest)`
 - Tournament production:
   - Automation `ENABLED`
-  - Provider `Provider (production)`
+  - Provider `football-data.org (smoke)` unless a different real provider has passed shadow proof and been deliberately selected
 - After tournament:
   - Automation `DISABLED`
 
@@ -160,12 +201,78 @@ Use this as the final sign-off before enabling production automation.
 ### Live Ingest Guardrails
 
 - [ ] `Live Automation (Scheduler)` default is `DISABLED` outside live windows.
-- [ ] Provider mode cannot be enabled without `FOOTBALL_DATA_TOKEN`.
+- [ ] `football-data.org` mode cannot be enabled without `FOOTBALL_DATA_TOKEN`.
+- [ ] `Sportmonks` mode cannot be enabled without `SPORTMONKS_TOKEN`.
+
+## Sportmonks contract-test steps
+
+Use this before declaring Sportmonks the selected provider.
+
+1. Create `functions/.secret.local` from [`functions/.secret.local.example`](/Users/harrison.j/world-cup-sweepstakes-clean/functions/.secret.local.example).
+2. Set:
+   - `SPORTMONKS_TOKEN`
+   - `SPORTMONKS_SEASON_ID`
+3. Start the emulators and open `/admin/fixtures`.
+4. In Live Automation:
+   - set provider to `Sportmonks (trial primary)`
+   - keep mode on `shadow` or `staging`
+5. In `Real Provider Contract Test`:
+   - run preview first
+   - run shadow contract test
+6. Verify:
+   - mapped match count is non-zero
+   - quarantine count is acceptable and explainable
+   - `shadowMatches` updates
+   - `shadowLeaderboard/current` updates
+   - no public `matches` or `leaderboard/current` pollution
+7. Record findings in [`docs/current/PROVIDER-SELECTION-MATRIX.md`](/Users/harrison.j/world-cup-sweepstakes-clean/docs/current/PROVIDER-SELECTION-MATRIX.md).
+- [ ] `football-data.org` practical proof has been run and recorded before any launch-provider decision.
+- [ ] `Sportmonks` is treated as optional trial-only unless budget approval changes.
 - [ ] `Ingest Health` panel in `/admin/fixtures` shows:
   - `Last success`
   - `Last error`
   - `Error message`
 - [ ] Fallback path validated: `Run Fixture Ingest` + `Recompute Leaderboard`.
+
+## football-data.org contract-test steps
+
+Use this before declaring `football-data.org` the selected provider.
+
+1. Start local services with persistence:
+   - `npm run emulators:start`
+   - `npm run dev`
+2. Create `functions/.secret.local` from [`functions/.secret.local.example`](/Users/harrison.j/world-cup-sweepstakes-clean/functions/.secret.local.example).
+2. Set:
+   - `FOOTBALL_DATA_TOKEN`
+3. Open `/admin/fixtures`.
+4. In Live Automation:
+   - set provider to `football-data.org (smoke)`
+   - keep mode on `shadow` or `staging`
+5. In `Real Provider Contract Test`:
+   - run preview first
+   - run shadow contract test
+6. Verify:
+   - mapped match count is non-zero
+   - quarantine count is acceptable and explainable
+   - `shadowMatches` updates
+   - `shadowLeaderboard/current` updates
+   - no public `matches` or `leaderboard/current` pollution
+7. Record findings in [`docs/current/PROVIDER-SELECTION-MATRIX.md`](/Users/harrison.j/world-cup-sweepstakes-clean/docs/current/PROVIDER-SELECTION-MATRIX.md).
+
+## Local admin persistence note
+
+- Use `npm run emulators:start` for day-to-day local work.
+- That command imports and exports emulator state from `.local/firebase-emulators/`, so local email/password accounts, admin claims, and Firestore docs survive normal restarts.
+- If you start emulators some other way without the import/export flags, local auth users and claims can disappear on restart.
+- After this persistence setup was added on 2026-05-15, one final re-creation of your local admin account/claim may still be needed because earlier emulator restarts were ephemeral.
+- If the local Auth Emulator has no accounts, create or repair a local admin in one step:
+
+```bash
+cd functions
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 npm run create-local-admin -- you@example.com "Test1234!" "Your Name"
+```
+
+- Local Google sign-in is not a reliable emulator login path. Use local email/password for emulator testing; use Google sign-in in the real Firebase Auth environment.
 
 ### Transfer Reliability
 
@@ -178,8 +285,9 @@ Use this as the final sign-off before enabling production automation.
 
 ### UX and Ops Consistency
 
-- [ ] Dashboard and Badges share same nav labels/order:
-  - `Sign in/Sign out`, `My Teams`, `Transfer`, `Leaderboard`, `Live`, `Badges`
+- [ ] Launch nav uses the simplified game scope:
+  - `Sign in/Sign out`, `My Teams`, `Leaderboard`, `Live`, `Transfer`, plus optional `Guide` / `Charity`
+- [ ] Department and Badges are not visible in user-facing launch nav or onboarding.
 - [ ] No duplicate auth buttons or nav overlap in desktop layout.
 - [ ] Mobile nav menu shows same items/order as desktop.
 

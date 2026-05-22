@@ -3,6 +3,13 @@ import { db, functions } from "@/lib/firebase";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
+export type BootstrapPath = "callable" | "clientFallback" | "profileOnlyFallback";
+
+export type EnsureUserDocResult = {
+  created: boolean;
+  bootstrapPath: BootstrapPath;
+};
+
 function readErrorCode(err: unknown): string {
   if (!err || typeof err !== "object") return "";
   const maybeCode = (err as { code?: unknown }).code;
@@ -32,7 +39,7 @@ export async function ensureUserDoc(params: {
   displayName: string;
   email: string;
   photoURL?: string | null;
-}) {
+}): Promise<EnsureUserDocResult> {
   const { uid, displayName, email, photoURL } = params;
 
   try {
@@ -43,7 +50,10 @@ export async function ensureUserDoc(params: {
       photoURL: photoURL ?? null,
     });
     const payload = (res?.data ?? {}) as { created?: boolean };
-    return { created: payload.created === true };
+    return {
+      created: payload.created === true,
+      bootstrapPath: "callable",
+    };
   } catch (err) {
     if (!shouldFallbackToClientWrite(err)) {
       throw err;
@@ -75,7 +85,7 @@ export async function ensureUserDoc(params: {
         fullCreatePayload,
         { merge: true }
       );
-      return { created: true };
+      return { created: true, bootstrapPath: "clientFallback" };
     }
 
     const existing = snap.data() as Record<string, unknown>;
@@ -115,7 +125,7 @@ export async function ensureUserDoc(params: {
       profilePatch,
       { merge: true }
     );
-    return { created: false };
+    return { created: false, bootstrapPath: "clientFallback" };
   } catch (fallbackErr) {
     if (isPermissionDenied(fallbackErr)) {
       try {
@@ -130,12 +140,12 @@ export async function ensureUserDoc(params: {
           },
           { merge: true }
         );
-      } catch (profileOnlyErr) {
+        } catch (profileOnlyErr) {
         if (!isPermissionDenied(profileOnlyErr)) {
           throw profileOnlyErr;
         }
       }
-      return { created: false };
+      return { created: false, bootstrapPath: "profileOnlyFallback" };
     }
     throw fallbackErr;
   }

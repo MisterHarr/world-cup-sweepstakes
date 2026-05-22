@@ -61,20 +61,10 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
   return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
 }
 
-const DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
-type Department = (typeof DEPARTMENTS)[number];
-
 type PortfolioItem = {
   role?: string;
   teamId?: string;
 };
-
-function normalizeDepartment(value: unknown): Department | null {
-  return typeof value === "string" &&
-    (DEPARTMENTS as readonly string[]).includes(value)
-    ? (value as Department)
-    : null;
-}
 
 function readPortfolioItems(value: unknown): PortfolioItem[] {
   if (!Array.isArray(value)) return [];
@@ -228,12 +218,6 @@ export default function FeaturedTeamPage() {
         const rawData = snap.exists() ? snap.data() : null;
         const data = isRecord(rawData) ? rawData : null;
 
-        const dept = normalizeDepartment(data?.department);
-        if (!dept) {
-          router.replace("/department?next=/featured-team");
-          return;
-        }
-
         const portfolio = readPortfolioItems(data?.portfolio);
         const existingFeatured =
           portfolio.find((p) => p.role === "featured")?.teamId ?? null;
@@ -271,6 +255,8 @@ export default function FeaturedTeamPage() {
 
   // Load teams
   useEffect(() => {
+    if (checking || !uid) return;
+
     (async () => {
       try {
         const q = query(collection(db, "teams"), orderBy("group"), orderBy("name"));
@@ -298,7 +284,7 @@ export default function FeaturedTeamPage() {
         setError(friendlyErrorMessage(e, "Failed to load teams."));
       }
     })();
-  }, []);
+  }, [checking, uid]);
 
   const selectedTeam = useMemo(
     () => teams.find((t) => t.id === selectedTeamId) ?? null,

@@ -1,8 +1,16 @@
 // lib/firebase.ts
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
-import { getAuth, type Auth } from "firebase/auth";
-import { getFunctions, type Functions } from "firebase/functions";
+import {
+  connectFirestoreEmulator,
+  getFirestore,
+  type Firestore,
+} from "firebase/firestore";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import {
+  connectFunctionsEmulator,
+  getFunctions,
+  type Functions,
+} from "firebase/functions";
 
 type FirebaseSingleton = {
   app: FirebaseApp | null;
@@ -29,6 +37,15 @@ function missingKeys(cfg: Record<string, string>) {
 }
 
 let singleton: FirebaseSingleton | null = null;
+let emulatorsConnected = false;
+
+function shouldUseFirebaseEmulators() {
+  if (typeof window === "undefined") return false;
+  if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS !== "true") return false;
+
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
 
 export function getFirebase(): FirebaseSingleton {
   if (singleton) return singleton;
@@ -56,6 +73,15 @@ export function getFirebase(): FirebaseSingleton {
     functions: getFunctions(app, "asia-southeast1"),
     initError: null,
   };
+
+  if (shouldUseFirebaseEmulators() && !emulatorsConnected) {
+    connectFirestoreEmulator(singleton.db!, "127.0.0.1", 8080);
+    connectFunctionsEmulator(singleton.functions!, "127.0.0.1", 5001);
+    connectAuthEmulator(singleton.auth!, "http://127.0.0.1:9099", {
+      disableWarnings: true,
+    });
+    emulatorsConnected = true;
+  }
 
   return singleton;
 }

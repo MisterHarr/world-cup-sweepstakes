@@ -279,7 +279,7 @@ lib/
 ### Run Development Server
 ```bash
 npm run dev
-# Access at http://localhost:3000
+# Access at http://localhost:3001
 ```
 
 ### Build & Verify
@@ -314,12 +314,12 @@ firebase deploy
 
 **Seed teams:**
 ```
-http://localhost:3000/admin/seed-teams
+http://localhost:3001/admin/seed-teams
 ```
 
 **Ingest fixtures:**
 ```
-http://localhost:3000/admin/fixtures
+http://localhost:3001/admin/fixtures
 ```
 
 ---
