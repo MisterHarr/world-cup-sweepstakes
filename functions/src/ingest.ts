@@ -17,6 +17,8 @@ import { getFootballDataMatches } from "./providers/footballDataProvider";
 import {
   FOOTBALL_DATA_TOKEN,
   filterAndLimitMatches,
+  isRecord,
+  asString,
 } from "./providers/providerUtils";
 import {
   loadKnownTeamIds,
@@ -64,16 +66,6 @@ const DEFAULT_LIVE_OPS: LiveOpsConfig = {
   fixtureMaxMatches: 0,
   fixtureCutoffIso: null,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : null;
-}
 
 function asNumberOrNull(value: unknown): number | null {
   if (value === null) return null;
@@ -404,10 +396,6 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
   return limited;
 }
 
-/**
- * Load pre-tournament matches from fixture file
- * Used to provide match history before tournament starts
- */
 function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[] {
   const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
   const cutoffIso = asIsoOrNull(options.cutoffIso);
@@ -1007,10 +995,6 @@ export const adminResetFixtureIngest = onCall(
   }
 );
 
-/**
- * Import pre-tournament match data (friendlies and qualifiers)
- * Provides match history from tournament start
- */
 export const adminIngestPreTournament = onCall(
   { region: REGION },
   async (request) => {

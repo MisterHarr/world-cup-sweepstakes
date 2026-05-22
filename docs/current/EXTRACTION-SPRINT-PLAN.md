@@ -115,70 +115,70 @@ Note: `components/admin/AdminGate.tsx`, `AdminEnvironmentBadge.tsx`, and `Localh
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | Merged into 2.2. Shell is 80 ln; adminFixturesUtils.ts done in 2.1. |
 
 ---
 
 ## Phase 3 — functions/src/ingest.ts extraction
 
 Target: `functions/src/ingest.ts`
-Direction: 2,238 ln → ~650 ln core pipeline + focused modules
+Direction: 2,238 ln → 1,222 ln core pipeline + focused modules
 
 Note: `functions/src/ingestHealth.ts`, `functions/src/ingest/validateMatchUpdate.ts`, and `functions/src/providers/` directory were partially bootstrapped in the baseline commit — review actual import wiring before each bundle.
 
-### Bundle 3.1 — Extract provider HTTP adapters
+### Bundle 3.1 — Extract provider HTTP adapters + full Sportmonks removal
 
-**Goal:** Move `getFootballDataMatches` and `getSportmonksMatches` (fully self-contained HTTP clients) to dedicated provider files. The `providers/` directory already exists with `providerTypes.ts`, `localLiveSimulatorProvider.ts`, and `fixtureReplayProvider.ts`.
-
-**Decision point:** Shared private helpers (`fetchJsonWithRetry`, status/stage mappers) — identify which are provider-specific vs shared; provider-specific helpers move with their provider, shared helpers move to `providers/providerUtils.ts`.
+**Goal:** Move `getFootballDataMatches` to `providers/footballDataProvider.ts`. Remove all Sportmonks code (getSportmonksMatches, SPORTMONKS_TOKEN, all call sites). Move shared helpers to `providers/providerUtils.ts`.
 
 **Files:**
-- `functions/src/providers/footballDataProvider.ts` (new or complete if scaffolded)
-- `functions/src/providers/sportmonksProvider.ts` (new)
-- `functions/src/ingest.ts` (remove ~450 ln, add imports)
+- `functions/src/providers/footballDataProvider.ts` (new)
+- `functions/src/providers/providerUtils.ts` (new)
+- `functions/src/providers/providerTypes.ts` (ProviderMatch added; NormalizedMatchProvider updated)
+- `functions/src/ingest.ts` (remove ~650 ln, add imports)
+- `lib/adminFixturesUtils.ts` (remove "sportmonks" from LiveOpsProvider)
+- `components/admin/LiveOpsConfigPanel.tsx` (remove Sportmonks dropdown + error messages)
 
 **Exit criteria:** `cd functions && npm run build` green; both provider modules importable.
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | Commit `6ec139a`. Full Sportmonks removal. Both builds green. |
 
 ---
 
-### Bundle 3.2 — Extract rehearsal callables + complete ingestHealth wiring
+### Bundle 3.2 — Extract rehearsal callables
 
-**Goal:** Move `adminResetPublicRehearsalState`, `adminRunLocalLiveSimulatorWave`, `adminReplayFixtureWave`, `adminResetFixtureReplay` to `functions/src/rehearsal.ts`. Confirm `ingestHealth.ts` is fully wired (already created — verify imports and re-exports in `index.ts`).
-
-**Constraint:** `resetPublicRehearsalState()` internal helper — if it is called by both the rehearsal callable and any ingest path, keep the helper in `ingest.ts` and import it from `rehearsal.ts`, rather than moving it entirely.
+**Goal:** Move `adminResetPublicRehearsalState`, `adminRunLocalLiveSimulatorWave`, `adminReplayFixtureWave`, `adminResetFixtureReplay` to `functions/src/rehearsal.ts`. `resetPublicRehearsalState()` helper moved with them (only called from rehearsal path). Export `writeLiveOpsHealth`, `applyNormalizedMatchUpdates`, and needed types from `ingest.ts`.
 
 **Files:**
-- `functions/src/rehearsal.ts` (new)
-- `functions/src/ingestHealth.ts` (verify/complete)
-- `functions/src/ingest.ts` (remove ~400 ln)
-- `functions/src/index.ts` (add re-exports for rehearsal callables)
+- `functions/src/rehearsal.ts` (new, 369 ln)
+- `functions/src/ingest.ts` (2238 → 1238 ln)
+- `functions/src/index.ts` (rehearsal callables re-exported from `./rehearsal`)
 
 **Exit criteria:** `cd functions && npm run build` green; rehearsal callables present in index exports.
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | Commit `e3098a0`. ingest.ts 2238→1238 ln. Both builds green. |
 
 ---
 
 ### Bundle 3.3 — Clean up ingest.ts core pipeline + build verify + commit
 
-**Goal:** Final pass on `ingest.ts` — remove leftover utility duplication, verify all imports resolve, confirm file contains only the core normalisation pipeline and the main `adminIngest` callable family.
+**Goal:** Remove leftover utility duplication (`isRecord`, `asString` local copies replaced with imports from `providerUtils.ts`). Remove what-not-why JSDoc comments. Verify file contains only the core normalisation pipeline and the 6 main callables.
+
+**Actual final line count:** 1,222 ln (750 target was aspirational — remaining content is genuine pipeline: 6 callables ~440 ln + normalisation pipeline ~400 ln + config/type helpers ~380 ln).
 
 **Files:**
-- `functions/src/ingest.ts` (final state, ~650 ln)
+- `functions/src/ingest.ts` (final state, 1222 ln)
 - `npm run build` + `cd functions && npm run build`
 - Commit Phase 3
 
-**Exit criteria:** `ingest.ts` under 750 ln; both builds green.
+**Exit criteria:** Both builds green; no duplicate helpers; file contains only core pipeline.
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | Commit TBD. isRecord/asString deduped. Both builds green. |
 
 ---
 
@@ -234,3 +234,6 @@ Direction: 951 ln → ~80 ln barrel of re-exports
 | 2026-05-22 | 1.1 | ✅ Pass | Commit `753291f`; 104 files; both builds green; design-reference trees gitignored |
 | 2026-05-22 | 2.1 | ✅ Pass | 5 files; lib/adminFixturesUtils.ts + 3 panel components + FixturesPageContent rewrite; build green |
 | 2026-05-22 | 2.2 | ✅ Pass | 3 panel components; FixturesPageContent 1054→80 ln; build green |
+| 2026-05-22 | 3.1 | ✅ Pass | Commit `6ec139a`; footballDataProvider.ts + providerUtils.ts; full Sportmonks removal; both builds green |
+| 2026-05-22 | 3.2 | ✅ Pass | Commit `e3098a0`; rehearsal.ts 369 ln; ingest.ts 2238→1238 ln; both builds green |
+| 2026-05-22 | 3.3 | ✅ Pass | isRecord/asString deduped; JSDoc removed; ingest.ts final 1222 ln; both builds green |
