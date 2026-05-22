@@ -187,43 +187,21 @@ Note: `functions/src/ingestHealth.ts`, `functions/src/ingest/validateMatchUpdate
 Target: `functions/src/index.ts`
 Direction: 951 ln → ~80 ln barrel of re-exports
 
-### Bundle 4.1 — Extract onboarding.ts + adminUsers.ts
+### Bundle 4.1 + 4.2 — Extract onboarding.ts + adminUsers.ts + barrel cleanup (merged)
 
-**Goal:** Move the full callable implementations out of `index.ts`:
-- `functions/src/onboarding.ts` — `ensureUserProfile`, `assignDrawnTeams`, `confirmFeaturedTeam`, `setDepartment` (~460 ln)
-- `functions/src/adminUsers.ts` — `adminListUsers`, `adminAssignTeamsToUser`, `adminSeedMockUsers` (~350 ln)
-
-**Shared helpers in index.ts to resolve first:** `drawTierBalanced`, `buildUserBootstrapPatch`, `sanitizeSeedToken`, type guards — determine which belong to `onboarding.ts`, which to `adminUsers.ts`, and which are shared enough to warrant `functions/src/functionUtils.ts`.
+**Goal:** Move the full callable implementations out of `index.ts`. Bundled 4.1 and 4.2 into a single pass.
 
 **Files:**
-- `functions/src/onboarding.ts` (new)
-- `functions/src/adminUsers.ts` (new)
-- `functions/src/index.ts` (implementations replaced by re-exports)
+- `functions/src/functionUtils.ts` (new, 60 ln) — `shuffle`, `uniqueByTeamId`, `drawTierBalanced`, `asTrimmedString`, `TeamSeedRow` shared by both modules
+- `functions/src/onboarding.ts` (new, ~290 ln) — `ensureUserProfile`, `assignDrawnTeams`, `confirmFeaturedTeam`, `setDepartment` + local helpers
+- `functions/src/adminUsers.ts` (new, ~290 ln) — `adminListUsers`, `adminAssignTeamsToUser`, `adminSeedMockUsers` + local helpers
+- `functions/src/index.ts` (final, 36 ln) — `admin.initializeApp()` + pure barrel of re-exports
 
-**Exit criteria:** `cd functions && npm run build` green; no implementation code left in `index.ts`.
+**Exit criteria:** Both builds green; `index.ts` under 100 ln; all callables present in exports.
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
-
----
-
-### Bundle 4.2 — Final index.ts barrel cleanup + full build verify + commit
-
-**Goal:** Confirm `index.ts` is ~80 ln of re-exports only. Remove any dead imports or helpers. Run both builds. Commit the completed extraction sprint.
-
-**Final check:** Confirm all callable names are still present in `index.ts` exports so `firebase deploy --only functions` picks them all up.
-
-**Files:**
-- `functions/src/index.ts` (final state, ~80 ln)
-- `npm run build` (root) + `cd functions && npm run build`
-- Commit Phase 4 + sprint closeout
-
-**Exit criteria:** Both builds green; `index.ts` under 100 ln; extraction sprint closed.
-
-| Status | Date | Notes |
-|---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | index.ts 953→36 ln. Both builds green. Sprint complete. |
 
 ---
 
@@ -237,3 +215,4 @@ Direction: 951 ln → ~80 ln barrel of re-exports
 | 2026-05-22 | 3.1 | ✅ Pass | Commit `6ec139a`; footballDataProvider.ts + providerUtils.ts; full Sportmonks removal; both builds green |
 | 2026-05-22 | 3.2 | ✅ Pass | Commit `e3098a0`; rehearsal.ts 369 ln; ingest.ts 2238→1238 ln; both builds green |
 | 2026-05-22 | 3.3 | ✅ Pass | isRecord/asString deduped; JSDoc removed; ingest.ts final 1222 ln; both builds green |
+| 2026-05-22 | 4.1+4.2 | ✅ Pass | functionUtils.ts + onboarding.ts + adminUsers.ts; index.ts 953→36 ln; both builds green |
