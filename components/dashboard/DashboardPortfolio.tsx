@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import {
   ChevronRight,
   Clock,
@@ -632,12 +631,6 @@ export default function DashboardPortfolio({
             className="mb-1 h-px min-w-[1rem] flex-1 bg-[rgba(255,255,255,0.05)]"
             aria-hidden
           />
-          <Link
-            href="/dashboard?tab=portfolio"
-            className="font-ff-ui shrink-0 text-[11px] font-semibold text-[var(--ff-accent-text)] hover:underline"
-          >
-            Manage
-          </Link>
         </div>
 
         {featuredDisplay ? (

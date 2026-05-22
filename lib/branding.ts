@@ -2,11 +2,11 @@
 export const themeColorHex = "#0f1218" as const;
 
 export const BRANDING = {
-  appName: "GIS 2026 Featured Five Challenge",
-  shortName: "Featured Five 2026",
-  tagline: "Pick 1. Draw 5. Chase the Cup.",
+  appName: "Cup Draw 2026",
+  shortName: "Cup Draw 2026",
+  tagline: "Pick one. Draw five. Chase the cup.",
   logoSrc: "/branding/featured-five-2026-mark.svg",
-  logoAlt: "Featured Five 2026 cup mark",
+  logoAlt: "Cup Draw 2026 mark",
 } as const;
 
 export type BrandingConfig = typeof BRANDING;
