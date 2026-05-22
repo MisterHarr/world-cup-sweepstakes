@@ -2,7 +2,6 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule, type ScheduledEvent } from "firebase-functions/v2/scheduler";
-import { defineSecret } from "firebase-functions/params";
 import fixtures from "./fixtures/worldcup2022.json";
 import preTournamentFixtures from "./fixtures/pretournament2022.json";
 import {
@@ -16,6 +15,11 @@ import { recomputeScoresCore } from "./scoring";
 import { requireAdmin } from "./auth";
 import { getFixtureReplayWave } from "./providers/fixtureReplayProvider";
 import { getLocalLiveSimulatorWave } from "./providers/localLiveSimulatorProvider";
+import { getFootballDataMatches } from "./providers/footballDataProvider";
+import {
+  FOOTBALL_DATA_TOKEN,
+  filterAndLimitMatches,
+} from "./providers/providerUtils";
 import {
   loadKnownTeamIds,
   validateMatchUpdate,
@@ -26,44 +30,20 @@ import type {
   MatchStatus,
   NormalizedMatchProvider,
   NormalizedMatchUpdate,
+  ProviderMatch,
 } from "./providers/providerTypes";
 
 const REGION = "asia-southeast1";
 const SCHEDULE = "every 10 minutes";
-const FOOTBALL_DATA_BASE_DEFAULT = "https://api.football-data.org/v4";
-const FOOTBALL_DATA_COMPETITION_DEFAULT = "WC";
-const SPORTMONKS_BASE_DEFAULT = "https://api.sportmonks.com/v3/football";
-const SPORTMONKS_SEASON_ID_DEFAULT = "26618";
-const PROVIDER_TIMEOUT_MS_DEFAULT = 12_000;
-const PROVIDER_MAX_RETRIES_DEFAULT = 1;
-const TEAM_LOOKUP_TTL_MS = 5 * 60 * 1000;
-const FOOTBALL_DATA_TOKEN = defineSecret("FOOTBALL_DATA_TOKEN");
-const SPORTMONKS_TOKEN = defineSecret("SPORTMONKS_TOKEN");
 
 type LiveScoresProvider =
   | "stub"
   | "fixture"
-  | "football-data"
-  | "sportmonks";
+  | "football-data";
 type LiveOpsRunStatus = "success" | "error";
 type LiveOpsMode = "disabled" | "shadow" | "staging" | "production";
 
 const LIVE_OPS_HISTORY_LIMIT = 12;
-
-type ProviderMatch = {
-  matchId: string;
-  homeTeamId: string;
-  awayTeamId: string;
-  homeScore: number | null;
-  awayScore: number | null;
-  status: MatchStatus;
-  stage: MatchStage;
-  kickoffTime: string | null;
-  homeRedCards: number;
-  homeYellowCards: number;
-  awayRedCards: number;
-  awayYellowCards: number;
-};
 
 type ApplyMatchUpdatesResult = {
   updated: number;
@@ -94,10 +74,6 @@ const DEFAULT_LIVE_OPS: LiveOpsConfig = {
   fixtureMaxMatches: 0,
   fixtureCutoffIso: null,
 };
-
-let teamLookupCache:
-  | { expiresAt: number; lookup: Record<string, string> }
-  | null = null;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -142,8 +118,7 @@ function asProvider(value: unknown): LiveScoresProvider | null {
   if (
     value === "stub" ||
     value === "fixture" ||
-    value === "football-data" ||
-    value === "sportmonks"
+    value === "football-data"
   ) {
     return value;
   }
@@ -172,113 +147,6 @@ function asIsoOrNull(value: unknown): string | null {
   const raw = asString(value);
   if (!raw) return null;
   return Number.isNaN(Date.parse(raw)) ? null : raw;
-}
-
-function toUpperToken(value: unknown): string | null {
-  const raw = asString(value);
-  if (!raw) return null;
-  const token = raw.toUpperCase().replace(/[^A-Z0-9_]/g, "");
-  return token.length ? token : null;
-}
-
-function normalizeNameToken(value: unknown): string | null {
-  const raw = asString(value);
-  if (!raw) return null;
-  const token = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return token.length ? token : null;
-}
-
-function toProviderStatus(value: unknown): MatchStatus | null {
-  const status = asString(value)?.toUpperCase();
-  if (!status) return null;
-
-  if (status === "IN_PLAY" || status === "PAUSED" || status === "LIVE") {
-    return "LIVE";
-  }
-  if (
-    status === "FINISHED" ||
-    status === "AWARDED" ||
-    status === "AFTER_EXTRA_TIME" ||
-    status === "PENALTY_SHOOTOUT"
-  ) {
-    return "FINISHED";
-  }
-  if (
-    status === "SCHEDULED" ||
-    status === "TIMED" ||
-    status === "POSTPONED" ||
-    status === "SUSPENDED"
-  ) {
-    return "SCHEDULED";
-  }
-
-  return null;
-}
-
-function toProviderStage(value: unknown): MatchStage {
-  const stage = asString(value)?.toUpperCase();
-  if (!stage) return "GROUP";
-
-  if (stage === "LAST_32" || stage === "ROUND_OF_32") return "R32";
-  if (stage === "LAST_16" || stage === "ROUND_OF_16") return "R16";
-  if (stage === "QUARTER_FINALS") return "QF";
-  if (stage === "SEMI_FINALS") return "SF";
-  if (stage === "FINAL" || stage === "THIRD_PLACE") return "FINAL";
-  if (stage === "GROUP_STAGE") return "GROUP";
-
-  return "GROUP";
-}
-
-function toSportmonksStatus(value: unknown): MatchStatus | null {
-  const status = asString(value)?.toUpperCase();
-  if (!status) return null;
-
-  if (
-    status === "LIVE" ||
-    status.startsWith("INPLAY") ||
-    status === "HT" ||
-    status === "BREAK"
-  ) {
-    return "LIVE";
-  }
-  if (
-    status === "FT" ||
-    status === "AET" ||
-    status === "FT_PEN" ||
-    status === "AFTER_PENALTIES"
-  ) {
-    return "FINISHED";
-  }
-  if (
-    status === "NS" ||
-    status === "POSTP" ||
-    status === "SUSP" ||
-    status === "DELAYED" ||
-    status === "TBA" ||
-    status === "CANCL"
-  ) {
-    return "SCHEDULED";
-  }
-
-  return null;
-}
-
-function toSportmonksStage(value: unknown): MatchStage {
-  const stage = asString(value)?.toUpperCase();
-  if (!stage) return "GROUP";
-
-  if (stage.includes("GROUP")) return "GROUP";
-  if (stage.includes("ROUND OF 32") || stage.includes("LAST 32")) return "R32";
-  if (stage.includes("ROUND OF 16") || stage.includes("LAST 16")) return "R16";
-  if (stage.includes("QUARTER")) return "QF";
-  if (stage.includes("SEMI")) return "SF";
-  if (stage.includes("FINAL") || stage.includes("THIRD")) return "FINAL";
-
-  return "GROUP";
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function normalizeLiveOpsConfig(raw: unknown): LiveOpsConfig {
@@ -335,116 +203,6 @@ function getManualIngestTargetOrThrow(mode: LiveOpsMode): {
   };
 }
 
-const TEAM_NAME_ALIASES: Record<string, string> = {
-  CROATIA: "HRV",
-  UNITEDSTATES: "USA",
-  USA: "USA",
-  KOREAREPUBLIC: "KOR",
-  REPUBLICOFKOREA: "KOR",
-  COTEDIVOIRE: "CIV",
-  IVORYCOAST: "CIV",
-};
-
-function addAlias(
-  lookup: Record<string, string>,
-  key: string | null,
-  teamId: string
-) {
-  if (!key) return;
-  if (!lookup[key]) lookup[key] = teamId;
-}
-
-async function buildTeamLookup(): Promise<Record<string, string>> {
-  const db = admin.firestore();
-  const snap = await db.collection("teams").get();
-  const lookup: Record<string, string> = {};
-
-  snap.docs.forEach((docSnap) => {
-    const data = docSnap.data() as Record<string, unknown>;
-    const teamId =
-      toUpperToken(data.id) ?? toUpperToken(docSnap.id);
-    if (!teamId) return;
-
-    addAlias(lookup, teamId, teamId);
-    addAlias(lookup, normalizeNameToken(data.name), teamId);
-  });
-
-  Object.entries(TEAM_NAME_ALIASES).forEach(([alias, teamId]) => {
-    addAlias(lookup, alias, teamId);
-  });
-
-  return lookup;
-}
-
-async function getTeamLookup(): Promise<Record<string, string>> {
-  const now = Date.now();
-  if (teamLookupCache && teamLookupCache.expiresAt > now) {
-    return teamLookupCache.lookup;
-  }
-
-  const lookup = await buildTeamLookup();
-  teamLookupCache = {
-    lookup,
-    expiresAt: now + TEAM_LOOKUP_TTL_MS,
-  };
-  return lookup;
-}
-
-function mapProviderTeamId(
-  rawTeam: unknown,
-  teamLookup: Record<string, string>
-): string | null {
-  const team = isRecord(rawTeam) ? rawTeam : {};
-  const codeCandidates = [
-    toUpperToken(team.tla),
-    toUpperToken(team.shortName),
-    toUpperToken(team.name),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidate of codeCandidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
-  }
-
-  const nameCandidates = [
-    normalizeNameToken(team.name),
-    normalizeNameToken(team.shortName),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidate of nameCandidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
-  }
-
-  return null;
-}
-
-function mapSportmonksParticipantId(
-  rawParticipant: unknown,
-  teamLookup: Record<string, string>
-): string | null {
-  const participant = isRecord(rawParticipant) ? rawParticipant : {};
-  const candidates = [
-    toUpperToken(participant.short_code),
-    toUpperToken(participant.name),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidate of candidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
-  }
-
-  const nameCandidates = [normalizeNameToken(participant.name)]
-    .filter((value): value is string => Boolean(value));
-
-  for (const candidate of nameCandidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
-  }
-
-  return null;
-}
-
 function toProviderMatch(raw: unknown): ProviderMatch | null {
   const source = isRecord(raw) ? raw : {};
   const matchId = asString(source.matchId);
@@ -472,382 +230,6 @@ function toProviderMatch(raw: unknown): ProviderMatch | null {
     awayRedCards: asNonNegativeNumber(source.awayRedCards),
     awayYellowCards: asNonNegativeNumber(source.awayYellowCards),
   };
-}
-
-function extractScore(
-  score: unknown,
-  side: "home" | "away"
-): number | null {
-  const scoreRecord = isRecord(score) ? score : {};
-  const fullTime = isRecord(scoreRecord.fullTime) ? scoreRecord.fullTime : {};
-  const regularTime = isRecord(scoreRecord.regularTime) ? scoreRecord.regularTime : {};
-  const extraTime = isRecord(scoreRecord.extraTime) ? scoreRecord.extraTime : {};
-  const halfTime = isRecord(scoreRecord.halfTime) ? scoreRecord.halfTime : {};
-
-  const candidates = [
-    fullTime[side],
-    regularTime[side],
-    extraTime[side],
-    halfTime[side],
-  ];
-
-  for (const value of candidates) {
-    const parsed = asNumberOrNull(value);
-    if (parsed !== null) return parsed;
-  }
-
-  return null;
-}
-
-function extractSportmonksCurrentScore(rawScores: unknown): {
-  homeScore: number | null;
-  awayScore: number | null;
-} {
-  const scores = Array.isArray(rawScores) ? rawScores : [];
-  let homeScore: number | null = null;
-  let awayScore: number | null = null;
-
-  scores.forEach((entry) => {
-    if (!isRecord(entry)) return;
-    if (asString(entry.description)?.toUpperCase() !== "CURRENT") return;
-    const score = isRecord(entry.score) ? entry.score : {};
-    const participant = asString(score.participant)?.toLowerCase();
-    const goals = asNumberOrNull(score.goals);
-    if (participant === "home") homeScore = goals;
-    if (participant === "away") awayScore = goals;
-  });
-
-  return { homeScore, awayScore };
-}
-
-function extractSportmonksCardTotals(
-  rawEvents: unknown,
-  homeParticipantId: number | null,
-  awayParticipantId: number | null
-): {
-  homeRedCards: number;
-  awayRedCards: number;
-  homeYellowCards: number;
-  awayYellowCards: number;
-} {
-  const events = Array.isArray(rawEvents) ? rawEvents : [];
-  let homeRedCards = 0;
-  let awayRedCards = 0;
-  let homeYellowCards = 0;
-  let awayYellowCards = 0;
-
-  events.forEach((entry) => {
-    if (!isRecord(entry)) return;
-    const participantId =
-      typeof entry.participant_id === "number" && Number.isFinite(entry.participant_id)
-        ? Math.floor(entry.participant_id)
-        : null;
-    const type = isRecord(entry.type) ? entry.type : {};
-    const descriptor = [
-      asString(type.developer_name),
-      asString(type.name),
-      asString(entry.info),
-      asString(entry.addition),
-    ]
-      .filter((value): value is string => Boolean(value))
-      .join(" ")
-      .toUpperCase();
-
-    if (!descriptor) return;
-    const isRed = descriptor.includes("RED");
-    const isYellow = descriptor.includes("YELLOW");
-    if (!isRed && !isYellow) return;
-
-    if (participantId !== null && participantId === homeParticipantId) {
-      if (isRed) homeRedCards += 1;
-      if (isYellow) homeYellowCards += 1;
-    }
-    if (participantId !== null && participantId === awayParticipantId) {
-      if (isRed) awayRedCards += 1;
-      if (isYellow) awayYellowCards += 1;
-    }
-  });
-
-  return {
-    homeRedCards,
-    awayRedCards,
-    homeYellowCards,
-    awayYellowCards,
-  };
-}
-
-async function fetchJsonWithRetry(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-  maxRetries: number
-): Promise<unknown> {
-  let lastError: unknown = null;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const response = await fetch(url, {
-        ...init,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (response.ok) {
-        return await response.json();
-      }
-
-      const retryable = response.status === 429 || response.status >= 500;
-      const bodyText = await response.text();
-      const message = `[ingest] provider request failed (${response.status}): ${bodyText.slice(0, 240)}`;
-
-      if (retryable && attempt < maxRetries) {
-        await sleep((attempt + 1) * 1000);
-        continue;
-      }
-
-      throw new Error(message);
-    } catch (err) {
-      clearTimeout(timeout);
-      lastError = err;
-      if (attempt >= maxRetries) break;
-      await sleep((attempt + 1) * 1000);
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("[ingest] provider request failed.");
-}
-
-function filterAndLimitMatches(
-  matches: ProviderMatch[],
-  options: { maxMatches: number; cutoffIso: string | null }
-): ProviderMatch[] {
-  const cutoffIso = options.cutoffIso;
-  const filteredByCutoff = cutoffIso
-    ? matches.filter((match) => {
-        if (!match.kickoffTime) return false;
-        return match.kickoffTime <= cutoffIso;
-      })
-    : matches;
-
-  const sorted = [...filteredByCutoff].sort((a, b) =>
-    (a.kickoffTime ?? "").localeCompare(b.kickoffTime ?? "")
-  );
-
-  return options.maxMatches > 0
-    ? sorted.slice(0, options.maxMatches)
-    : sorted;
-}
-
-async function getFootballDataMatches(
-  options: { maxMatches: number; cutoffIso: string | null }
-): Promise<ProviderMatch[]> {
-  const token = asString(FOOTBALL_DATA_TOKEN.value()) ??
-    asString(process.env.FOOTBALL_DATA_TOKEN);
-  if (!token) {
-    console.warn("[ingest] FOOTBALL_DATA_TOKEN missing. Skipping provider ingest.");
-    return [];
-  }
-
-  const base = asString(process.env.FOOTBALL_DATA_API_BASE) ??
-    FOOTBALL_DATA_BASE_DEFAULT;
-  const competition = asString(process.env.FOOTBALL_DATA_COMPETITION) ??
-    FOOTBALL_DATA_COMPETITION_DEFAULT;
-  const statuses = asString(process.env.FOOTBALL_DATA_STATUSES) ??
-    "SCHEDULED,TIMED,IN_PLAY,PAUSED,FINISHED";
-  const timeoutMs = asNonNegativeInteger(
-    Number(process.env.PROVIDER_TIMEOUT_MS ?? PROVIDER_TIMEOUT_MS_DEFAULT)
-  ) || PROVIDER_TIMEOUT_MS_DEFAULT;
-  const maxRetries = asNonNegativeInteger(
-    Number(process.env.PROVIDER_MAX_RETRIES ?? PROVIDER_MAX_RETRIES_DEFAULT)
-  );
-
-  const baseUrl = base.replace(/\/+$/, "");
-  const url = `${baseUrl}/competitions/${encodeURIComponent(competition)}/matches?status=${encodeURIComponent(statuses)}`;
-
-  const payload = await fetchJsonWithRetry(
-    url,
-    {
-      method: "GET",
-      headers: {
-        "X-Auth-Token": token,
-        "Accept": "application/json",
-      },
-    },
-    timeoutMs,
-    maxRetries
-  );
-
-  const payloadRecord = isRecord(payload) ? payload : {};
-  const rawMatches = Array.isArray(payloadRecord.matches)
-    ? payloadRecord.matches
-    : [];
-  if (!rawMatches.length) return [];
-
-  const teamLookup = await getTeamLookup();
-  const mapped: ProviderMatch[] = [];
-
-  rawMatches.forEach((raw: unknown) => {
-    if (!isRecord(raw)) return;
-    const rawId = raw.id;
-    const matchId =
-      typeof rawId === "number" || typeof rawId === "string"
-        ? `fd-${String(rawId)}`
-        : null;
-    const homeTeamId = mapProviderTeamId(raw.homeTeam, teamLookup);
-    const awayTeamId = mapProviderTeamId(raw.awayTeam, teamLookup);
-    const status = toProviderStatus(raw.status);
-    const stage = toProviderStage(raw.stage);
-
-    if (!matchId || !homeTeamId || !awayTeamId || !status) {
-      return;
-    }
-
-    mapped.push({
-      matchId,
-      homeTeamId,
-      awayTeamId,
-      homeScore: extractScore(raw.score, "home"),
-      awayScore: extractScore(raw.score, "away"),
-      status,
-      stage,
-      kickoffTime: asIsoOrNull(raw.utcDate),
-      homeRedCards: 0,
-      homeYellowCards: 0,
-      awayRedCards: 0,
-      awayYellowCards: 0,
-    });
-  });
-
-  const limited = filterAndLimitMatches(mapped, options);
-  console.log(
-    `[ingest] provider loaded ${limited.length} mapped matches` +
-      ` (competition ${competition})` +
-      (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
-      (options.maxMatches > 0 ? ` (max ${options.maxMatches})` : "")
-  );
-  return limited;
-}
-
-async function getSportmonksMatches(
-  options: { maxMatches: number; cutoffIso: string | null }
-): Promise<ProviderMatch[]> {
-  const token = asString(SPORTMONKS_TOKEN.value()) ??
-    asString(process.env.SPORTMONKS_TOKEN);
-  if (!token) {
-    console.warn("[ingest] SPORTMONKS_TOKEN missing. Skipping Sportmonks ingest.");
-    return [];
-  }
-
-  const base = asString(process.env.SPORTMONKS_API_BASE) ?? SPORTMONKS_BASE_DEFAULT;
-  const seasonId =
-    asString(process.env.SPORTMONKS_SEASON_ID) ?? SPORTMONKS_SEASON_ID_DEFAULT;
-  const timeoutMs = asNonNegativeInteger(
-    Number(process.env.PROVIDER_TIMEOUT_MS ?? PROVIDER_TIMEOUT_MS_DEFAULT)
-  ) || PROVIDER_TIMEOUT_MS_DEFAULT;
-  const maxRetries = asNonNegativeInteger(
-    Number(process.env.PROVIDER_MAX_RETRIES ?? PROVIDER_MAX_RETRIES_DEFAULT)
-  );
-  const include = [
-    "fixtures.participants",
-    "fixtures.scores",
-    "fixtures.events.type",
-    "fixtures.state",
-    "fixtures.stage",
-  ].join(";");
-
-  const baseUrl = base.replace(/\/+$/, "");
-  const url =
-    `${baseUrl}/seasons/${encodeURIComponent(seasonId)}` +
-    `?api_token=${encodeURIComponent(token)}&include=${encodeURIComponent(include)}`;
-
-  const payload = await fetchJsonWithRetry(
-    url,
-    {
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-      },
-    },
-    timeoutMs,
-    maxRetries
-  );
-
-  const payloadRecord = isRecord(payload) ? payload : {};
-  const season = isRecord(payloadRecord.data) ? payloadRecord.data : {};
-  const rawMatches = Array.isArray(season.fixtures) ? season.fixtures : [];
-  if (!rawMatches.length) return [];
-
-  const teamLookup = await getTeamLookup();
-  const mapped: ProviderMatch[] = [];
-
-  rawMatches.forEach((raw: unknown) => {
-    if (!isRecord(raw)) return;
-    const participants = Array.isArray(raw.participants) ? raw.participants : [];
-    const home = participants.find((entry) =>
-      isRecord(entry) && isRecord(entry.meta) && entry.meta.location === "home"
-    );
-    const away = participants.find((entry) =>
-      isRecord(entry) && isRecord(entry.meta) && entry.meta.location === "away"
-    );
-
-    const matchId =
-      typeof raw.id === "number" || typeof raw.id === "string"
-        ? `sm-${String(raw.id)}`
-        : null;
-    const homeTeamId = mapSportmonksParticipantId(home, teamLookup);
-    const awayTeamId = mapSportmonksParticipantId(away, teamLookup);
-    const state = isRecord(raw.state) ? raw.state : {};
-    const stage = isRecord(raw.stage) ? raw.stage : {};
-    const status = toSportmonksStatus(
-      asString(state.state) ?? asString(state.short_name) ?? asString(state.name)
-    );
-    const normalizedStage = toSportmonksStage(
-      asString(stage.name) ?? asString(stage.developer_name) ?? asString(raw.name)
-    );
-    const { homeScore, awayScore } = extractSportmonksCurrentScore(raw.scores);
-    const homeParticipantId =
-      isRecord(home) && typeof home.id === "number" ? Math.floor(home.id) : null;
-    const awayParticipantId =
-      isRecord(away) && typeof away.id === "number" ? Math.floor(away.id) : null;
-    const cards = extractSportmonksCardTotals(
-      raw.events,
-      homeParticipantId,
-      awayParticipantId
-    );
-
-    if (!matchId || !homeTeamId || !awayTeamId || !status) {
-      return;
-    }
-
-    mapped.push({
-      matchId,
-      homeTeamId,
-      awayTeamId,
-      homeScore,
-      awayScore,
-      status,
-      stage: normalizedStage,
-      kickoffTime: asIsoOrNull(raw.starting_at),
-      homeRedCards: cards.homeRedCards,
-      homeYellowCards: cards.homeYellowCards,
-      awayRedCards: cards.awayRedCards,
-      awayYellowCards: cards.awayYellowCards,
-    });
-  });
-
-  const limited = filterAndLimitMatches(mapped, options);
-  console.log(
-    `[ingest] sportmonks loaded ${limited.length} mapped matches` +
-      ` (season ${seasonId})` +
-      (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
-      (options.maxMatches > 0 ? ` (max ${options.maxMatches})` : "")
-  );
-  return limited;
 }
 
 type FetchProviderOptions = {
@@ -889,15 +271,6 @@ async function fetchProviderMatches(
       return await getFootballDataMatches({ maxMatches, cutoffIso });
     } catch (err) {
       console.error("[ingest] football-data fetch failed:", err);
-      return [];
-    }
-  }
-
-  if (provider === "sportmonks") {
-    try {
-      return await getSportmonksMatches({ maxMatches, cutoffIso });
-    } catch (err) {
-      console.error("[ingest] sportmonks fetch failed:", err);
       return [];
     }
   }
@@ -1089,7 +462,6 @@ function summarizeNormalizedUpdate(update: NormalizedMatchUpdate) {
 
 function toNormalizedProvider(source: IngestOptions["source"]): NormalizedMatchProvider {
   if (source === "fixture") return "fixture-replay";
-  if (source === "sportmonks") return "sportmonks";
   return "football-data";
 }
 
@@ -1237,7 +609,7 @@ function isDifferent(
 }
 
 type IngestOptions = {
-  source: "football-data" | "sportmonks" | "fixture";
+  source: "football-data" | "fixture";
   initiatedBy: string;
   collectionName?: "matches" | "shadowMatches";
   recompute?: boolean;
@@ -1688,7 +1060,7 @@ export const ingestLiveScores = onSchedule(
     region: REGION,
     schedule: SCHEDULE,
     timeZone: "UTC",
-    secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN],
+    secrets: [FOOTBALL_DATA_TOKEN],
   },
   async (_event: ScheduledEvent) => {
     const liveOps = await getLiveOpsConfig();
@@ -1712,8 +1084,6 @@ export const ingestLiveScores = onSchedule(
       const source =
         liveOps.provider === "fixture"
           ? "fixture"
-          : liveOps.provider === "sportmonks"
-          ? "sportmonks"
           : "football-data";
       const result = matches.length
         ? await applyMatchUpdates(matches, {
@@ -1964,7 +1334,7 @@ export const adminIngestPreTournament = onCall(
 );
 
 export const adminContractTestProvider = onCall(
-  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN] },
+  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN] },
   async (request) => {
     requireAdmin(request);
 
@@ -1972,7 +1342,7 @@ export const adminContractTestProvider = onCall(
     if (!provider || provider === "stub" || provider === "fixture") {
       throw new HttpsError(
         "invalid-argument",
-        "provider must be one of: football-data, sportmonks."
+        "provider must be: football-data."
       );
     }
 
@@ -2155,7 +1525,7 @@ export const adminResetFixtureReplay = onCall(
 );
 
 export const setLiveOpsSettings = onCall(
-  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN, SPORTMONKS_TOKEN] },
+  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN] },
   async (request) => {
     const auth = requireAdmin(request);
     const payload = request.data ?? {};
@@ -2168,7 +1538,7 @@ export const setLiveOpsSettings = onCall(
     if (!provider) {
       throw new HttpsError(
         "invalid-argument",
-        "provider must be one of: stub, fixture, football-data, sportmonks."
+        "provider must be one of: stub, fixture, football-data."
       );
     }
 
@@ -2194,20 +1564,6 @@ export const setLiveOpsSettings = onCall(
         throw new HttpsError(
           "failed-precondition",
           "FOOTBALL_DATA_TOKEN is required before enabling football-data automation."
-        );
-      }
-    }
-
-    if (mode !== "disabled" && provider === "sportmonks") {
-      if (
-        !(
-          asString(SPORTMONKS_TOKEN.value()) ??
-          asString(process.env.SPORTMONKS_TOKEN)
-        )
-      ) {
-        throw new HttpsError(
-          "failed-precondition",
-          "SPORTMONKS_TOKEN is required before enabling Sportmonks automation."
         );
       }
     }

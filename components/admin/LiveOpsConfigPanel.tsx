@@ -79,7 +79,6 @@ export function LiveOpsConfigPanel({
         data.provider === "stub" ||
         data.provider === "fixture" ||
         data.provider === "football-data" ||
-        data.provider === "sportmonks" ||
         data.provider === "provider"
           ? data.provider
           : "fixture";
@@ -110,7 +109,6 @@ export function LiveOpsConfigPanel({
         data.lastRunProvider === "stub" ||
         data.lastRunProvider === "fixture" ||
         data.lastRunProvider === "football-data" ||
-        data.lastRunProvider === "sportmonks" ||
         data.lastRunProvider === "provider"
           ? data.lastRunProvider === "provider"
             ? "football-data"
@@ -136,7 +134,6 @@ export function LiveOpsConfigPanel({
                 run.provider === "stub" ||
                 run.provider === "fixture" ||
                 run.provider === "football-data" ||
-                run.provider === "sportmonks" ||
                 run.provider === "provider"
                   ? run.provider === "provider"
                     ? "football-data"
@@ -240,12 +237,9 @@ export function LiveOpsConfigPanel({
       return;
     }
 
-    if (
-      liveOpsProviderInput !== "sportmonks" &&
-      liveOpsProviderInput !== "football-data"
-    ) {
+    if (liveOpsProviderInput !== "football-data") {
       setProviderContractPreview(
-        "❌ Choose Sportmonks or football-data.org for a real-provider contract test."
+        "❌ Choose football-data.org for a real-provider contract test."
       );
       return;
     }
@@ -283,12 +277,9 @@ export function LiveOpsConfigPanel({
       return;
     }
 
-    if (
-      liveOpsProviderInput !== "sportmonks" &&
-      liveOpsProviderInput !== "football-data"
-    ) {
+    if (liveOpsProviderInput !== "football-data") {
       setProviderContractStatus(
-        "❌ Choose Sportmonks or football-data.org for a real-provider contract test."
+        "❌ Choose football-data.org for a real-provider contract test."
       );
       return;
     }
@@ -380,8 +371,7 @@ export function LiveOpsConfigPanel({
             className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
           >
             <option value="fixture">Fixture (safe testing)</option>
-            <option value="sportmonks">Sportmonks (trial primary)</option>
-            <option value="football-data">football-data.org (smoke)</option>
+            <option value="football-data">football-data.org (primary)</option>
             <option value="stub">Stub (no ingest)</option>
           </select>
         </label>

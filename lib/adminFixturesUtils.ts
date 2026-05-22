@@ -69,7 +69,7 @@ export function asNonNegativeInt(value: unknown): number {
 
 // ─── Live ops ─────────────────────────────────────────────────────────────────
 
-export type LiveOpsProvider = "stub" | "fixture" | "football-data" | "sportmonks";
+export type LiveOpsProvider = "stub" | "fixture" | "football-data";
 export type LiveOpsMode = "disabled" | "shadow" | "staging" | "production";
 
 export type LiveOpsRun = {

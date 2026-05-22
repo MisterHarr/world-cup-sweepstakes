@@ -1,11 +1,25 @@
 export type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
 export type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
 
+export type ProviderMatch = {
+  matchId: string;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  status: MatchStatus;
+  stage: MatchStage;
+  kickoffTime: string | null;
+  homeRedCards: number;
+  homeYellowCards: number;
+  awayRedCards: number;
+  awayYellowCards: number;
+};
+
 export type NormalizedMatchProvider =
   | "fixture-replay"
   | "local-live-sim"
   | "football-data"
-  | "sportmonks"
   | "manual";
 
 export type NormalizedMatchEvent = {
