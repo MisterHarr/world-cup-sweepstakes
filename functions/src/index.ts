@@ -938,12 +938,14 @@ export {
   adminResetFixtureIngest,
   adminIngestPreTournament,
   adminContractTestProvider,
-  adminReplayFixtureWave,
-  adminResetFixtureReplay,
-  adminResetPublicRehearsalState,
-  adminRunLocalLiveSimulatorWave,
   setLiveOpsSettings,
 } from "./ingest";
+export {
+  adminResetPublicRehearsalState,
+  adminRunLocalLiveSimulatorWave,
+  adminReplayFixtureWave,
+  adminResetFixtureReplay,
+} from "./rehearsal";
 export {
   adminDeleteMockUsersByBatch,
   adminPreviewOrphanTeamDeletion,
