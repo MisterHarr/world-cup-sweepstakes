@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 
-import { getAdminEnvironmentInfo } from "@/components/admin/adminEnvironment";
+import {
+  type AdminEnvironmentInfo,
+  getAdminEnvironmentInfo,
+} from "@/components/admin/adminEnvironment";
 
 const LABEL_STYLES = {
   LOCAL: "border-amber-500/50 bg-amber-500/15 text-amber-100",
@@ -11,12 +14,13 @@ const LABEL_STYLES = {
 } as const;
 
 export function AdminEnvironmentBadge() {
-  const info = useMemo(() => {
-    if (typeof window === "undefined") {
-      return getAdminEnvironmentInfo();
-    }
-    return getAdminEnvironmentInfo(window.location.hostname);
+  const [info, setInfo] = useState<AdminEnvironmentInfo | null>(null);
+
+  useEffect(() => {
+    setInfo(getAdminEnvironmentInfo(window.location.hostname));
   }, []);
+
+  if (!info) return null;
 
   return (
     <div className="rounded-xl border border-slate-800/70 bg-slate-950/70 px-3 py-2 text-right">

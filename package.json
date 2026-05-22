@@ -14,6 +14,7 @@
     "validate:teams-seed": "npx tsx scripts/validate-teams-seed.ts",
     "audit:fixture-teams": "npx tsx scripts/audit-fixture-team-ids.ts",
     "seed:teams:local": "npx tsx scripts/seed-local-emulator-teams.ts",
+    "admin:set-claim": "GCLOUD_PROJECT=worldcup-sweepstake-2026 npx tsx scripts/set-admin-claim.ts",
     "test:badge-feasibility": "npx tsx scripts/audit-badge-feasibility.ts",
     "test:provider:football-data": "npx tsx scripts/test-football-data-shadow-proof.ts",
     "rehearse:provider:football-data:local": "npx tsx scripts/rehearse-football-data-local.ts",

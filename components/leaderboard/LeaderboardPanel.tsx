@@ -350,14 +350,16 @@ export default function LeaderboardPanel({
               </div>
             </div>
 
-            {currentUserId && currentUserRow ? (
+            {currentUserId ? (
               <button
                 type="button"
-                onClick={() => openDrawerFor(currentUserRow)}
+                onClick={() => currentUserRow && openDrawerFor(currentUserRow)}
+                disabled={!currentUserRow}
                 className={cn(
                   "order-1 flex w-full min-h-[44px] shrink-0 flex-col justify-center gap-2 rounded-xl border border-zinc-600 bg-zinc-950 p-3 text-left font-ff-ui text-zinc-50 outline-none transition-[opacity,transform] duration-300 ease-out motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950 lg:order-2 lg:w-[min(100%,240px)]",
                   podiumIn ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
-                  youOnPodium
+                  !currentUserRow && "cursor-default opacity-70",
+                  currentUserRow && youOnPodium
                     ? currentUserRow.viewRank === 1
                       ? "border-l-[3px] border-l-amber-400"
                       : currentUserRow.viewRank === 2
@@ -369,16 +371,20 @@ export default function LeaderboardPanel({
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-zinc-300">
-                      {youOnPodium ? "On the podium" : "Your position"}
+                      {currentUserRow
+                        ? youOnPodium
+                          ? "On the podium"
+                          : "Your position"
+                        : "Not yet ranked"}
                     </p>
                     <p className="mt-0.5 font-ff-display text-3xl font-bold leading-none tracking-tight text-white">
-                      #{currentUserRow.viewRank}
+                      {currentUserRow ? `#${currentUserRow.viewRank}` : "—"}
                     </p>
                   </div>
                   <div
                     className={cn(
                       "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-ff-ui text-xs font-bold text-white",
-                      youOnPodium
+                      currentUserRow && youOnPodium
                         ? currentUserRow.viewRank === 1
                           ? "border-amber-400 bg-amber-950"
                           : currentUserRow.viewRank === 2
@@ -388,41 +394,35 @@ export default function LeaderboardPanel({
                     )}
                     aria-hidden
                   >
-                    {nameInitials(currentUserRow.name)}
+                    {currentUserRow ? nameInitials(currentUserRow.name) : "—"}
                   </div>
                 </div>
-                <p className="truncate text-xs font-semibold leading-snug text-zinc-100">
-                  {currentUserRow.name}
-                </p>
-                <div className="flex items-center justify-between gap-2 border-t border-zinc-700 pt-2">
-                  <p className="text-[11px] leading-snug text-zinc-400">
-                    {youOnPodium ? "Squad details" : "Standings below"}
+                {currentUserRow ? (
+                  <>
+                    <p className="truncate text-xs font-semibold leading-snug text-zinc-100">
+                      {currentUserRow.name}
+                    </p>
+                    <div className="flex items-center justify-between gap-2 border-t border-zinc-700 pt-2">
+                      <p className="text-[11px] leading-snug text-zinc-400">
+                        {youOnPodium ? "Squad details" : "Standings below"}
+                      </p>
+                      <p className="shrink-0 font-ff-display text-lg font-bold tabular-nums leading-none text-white">
+                        {Number(currentUserRow.totalScore ?? 0).toLocaleString()}
+                        <span className="ml-1 font-ff-ui text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                          pts
+                        </span>
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[11px] leading-snug text-zinc-500">
+                    Scores update once matches begin
                   </p>
-                  <p className="shrink-0 font-ff-display text-lg font-bold tabular-nums leading-none text-white">
-                    {Number(currentUserRow.totalScore ?? 0).toLocaleString()}
-                    <span className="ml-1 font-ff-ui text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
-                      pts
-                    </span>
-                  </p>
-                </div>
+                )}
               </button>
             ) : null}
           </div>
 
-          <div className="no-scrollbar mb-3.5 flex gap-1.5 overflow-x-auto pb-0.5">
-            <button
-              type="button"
-                onClick={() => {
-                setCurrentPage(1);
-              }}
-              className={cn(
-                "inline-flex shrink-0 items-center rounded-[20px] border px-3 py-1 font-ff-ui text-[11px] transition-colors motion-reduce:transition-none",
-                "border-[var(--ff-accent-text)] bg-[var(--ff-accent-dim)] font-semibold text-[var(--ff-accent-text)]"
-              )}
-            >
-              Overall
-            </button>
-          </div>
 
           <div className="flex flex-col">
             {filteredList.length > 0
