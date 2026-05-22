@@ -44,7 +44,7 @@ After each bundle:
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | Commit `753291f`. Both builds green. |
 
 ---
 
@@ -75,7 +75,7 @@ Note: `components/admin/AdminGate.tsx`, `AdminEnvironmentBadge.tsx`, and `Localh
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | 5 files created/rewritten. Build green (21 routes, TypeScript clean). |
 
 ---
 
@@ -231,4 +231,5 @@ Direction: 951 ln → ~80 ln barrel of re-exports
 
 | Date | Bundle | Result | Notes |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-05-22 | 1.1 | ✅ Pass | Commit `753291f`; 104 files; both builds green; design-reference trees gitignored |
+| 2026-05-22 | 2.1 | ✅ Pass | 5 files; lib/adminFixturesUtils.ts + 3 panel components + FixturesPageContent rewrite; build green |
