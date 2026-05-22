@@ -99,7 +99,7 @@ Note: `components/admin/AdminGate.tsx`, `AdminEnvironmentBadge.tsx`, and `Localh
 
 | Status | Date | Notes |
 |---|---|---|
-| ☐ Pending | — | — |
+| ✅ Done | 2026-05-22 | 3 panel components + FixturesPageContent reduced to 80 ln. Build green. |
 
 ---
 
@@ -233,3 +233,4 @@ Direction: 951 ln → ~80 ln barrel of re-exports
 |---|---|---|---|
 | 2026-05-22 | 1.1 | ✅ Pass | Commit `753291f`; 104 files; both builds green; design-reference trees gitignored |
 | 2026-05-22 | 2.1 | ✅ Pass | 5 files; lib/adminFixturesUtils.ts + 3 panel components + FixturesPageContent rewrite; build green |
+| 2026-05-22 | 2.2 | ✅ Pass | 3 panel components; FixturesPageContent 1054→80 ln; build green |
