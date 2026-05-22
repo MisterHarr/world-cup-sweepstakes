@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronRight,
-  Clock,
-  Crown,
-} from "lucide-react";
+import { ChevronRight, Clock } from "lucide-react";
 
 import { TierPill } from "@/components/tier/TierPill";
 import { cn } from "@/lib/utils";
@@ -309,11 +305,6 @@ function PortfolioTeamCard({
                       alt={team.name}
                       className="h-full w-full object-cover"
                     />
-                  ) : null}
-                  {isFeatured ? (
-                    <div className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-[var(--ff-accent)] text-[var(--ff-fg-primary)]">
-                      <Crown className="size-3" />
-                    </div>
                   ) : null}
                 </div>
 
