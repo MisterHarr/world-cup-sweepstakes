@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
-import { AppShellV0 } from "@/components/app-shell-v0";
+import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
 import LeaderboardPanel, {
   type LBUser,
   type SquadTeamVM,
@@ -270,18 +270,18 @@ export default function StandaloneLeaderboardPage() {
         <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
           <div className="pt-safe">
             <FeaturedFiveTopBar
-              className="mx-auto max-w-4xl px-4 pr-14 sm:pr-4"
+              className="mx-auto max-w-4xl px-4"
               brand={
                 <AppBrandBlock
                   variant="ff-chrome"
                   title={BRANDING.shortName}
-                  tagline={BRANDING.tagline}
                 />
               }
               liveCount={0}
               userDisplayName={signedIn ? displayName || null : null}
               userEmail={auth.currentUser?.email ?? null}
               showUserTile={signedIn}
+              trailing={<AppOverflowMenuButton />}
             />
           </div>
         </header>

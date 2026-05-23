@@ -14,6 +14,8 @@ export type BracketMatch = {
   isLive?: boolean;
   /** Group letter/code when stage is GROUP (optional; from match doc). */
   group?: string;
+  /** Stage this match belongs to — populated when flattening cross-stage results. */
+  stageId?: string;
 };
 
 export const STAGE_ORDER = ["GROUP", "R32", "R16", "QF", "SF", "FINAL"] as const;

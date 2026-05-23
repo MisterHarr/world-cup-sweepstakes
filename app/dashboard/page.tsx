@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
-import { AppShellV0 } from "@/components/app-shell-v0";
+import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import type {
   LBUser,
@@ -98,12 +98,11 @@ function DashboardSuspenseFallback() {
       <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
         <div className="pt-safe">
           <FeaturedFiveTopBar
-            className="mx-auto max-w-4xl px-4 pr-14 sm:pr-4"
+            className="mx-auto max-w-6xl px-4"
             brand={
               <AppBrandBlock
                 variant="ff-chrome"
                 title={BRANDING.shortName}
-                tagline={BRANDING.tagline}
               />
             }
             liveCount={0}
@@ -112,7 +111,7 @@ function DashboardSuspenseFallback() {
         </div>
       </header>
       <main
-        className="max-w-4xl mx-auto p-4 md:p-8"
+        className="max-w-6xl mx-auto p-4 md:p-8"
         aria-busy="true"
         aria-label="Loading dashboard"
       >
@@ -744,7 +743,7 @@ function DashboardPageContent() {
             .sort((a, b) =>
               (a.kickoffTime || "").localeCompare(b.kickoffTime || "")
             )
-            .map((item) => item.match);
+            .map((item) => ({ ...item.match, stageId: stage }));
         });
 
         setBracketStages([...orderedStages, ...extraStages]);
@@ -1265,6 +1264,7 @@ function DashboardPageContent() {
             typeof team?.flagUrl === "string" && team.flagUrl.trim().length > 0
               ? team.flagUrl
               : undefined,
+          tier: typeof team?.tier === "number" ? team.tier : undefined,
         };
       }),
     [drawnTeamIds, marketTeamsById, teamsById]
@@ -1285,6 +1285,7 @@ function DashboardPageContent() {
           typeof team?.flagUrl === "string" && team.flagUrl.trim().length > 0
             ? team.flagUrl
             : undefined,
+        tier: typeof team?.tier === "number" ? team.tier : undefined,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [marketTeamsById, userTeamIds]);
@@ -1354,7 +1355,7 @@ function DashboardPageContent() {
     <AppShellV0 navItems={navItems} activeId={activeNavId}>
       <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
         {ingestHealth.scoresDirty && (
-          <div className="mx-auto max-w-4xl px-4 pt-4 md:px-8">
+          <div className="mx-auto max-w-6xl px-4 pt-4 md:px-8">
             <div className="rounded-2xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
               Live scores updated. Leaderboard refresh pending.
               {ingestHealth.dirtyReason ? ` (${ingestHealth.dirtyReason})` : ""}
@@ -1365,24 +1366,24 @@ function DashboardPageContent() {
         <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
           <div className="pt-safe">
             <FeaturedFiveTopBar
-              className="mx-auto max-w-4xl px-4 pr-14 sm:pr-4"
+              className="mx-auto max-w-6xl px-4"
               brand={
                 <AppBrandBlock
                   variant="ff-chrome"
                   title={BRANDING.shortName}
-                  tagline={BRANDING.tagline}
                 />
               }
               liveCount={liveMatchCount}
               userDisplayName={signedIn ? displayName || null : null}
               userEmail={auth.currentUser?.email ?? null}
               showUserTile={signedIn}
+              trailing={<AppOverflowMenuButton />}
             />
           </div>
         </header>
 
         {/* Main */}
-        <main className="max-w-4xl mx-auto p-4 md:p-8">
+        <main className="max-w-6xl mx-auto p-4 md:p-8">
         {/* Status / errors */}
         {error && (
           <div className="mb-4 p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
@@ -1405,6 +1406,7 @@ function DashboardPageContent() {
             expandedTeam={expandedTeam}
             teamMatchData={teamMatchData}
             teamsById={teamsById}
+            allTeamNames={matchTeamNames}
             onTeamExpand={handleTeamExpand}
             calculateTeamPoints={calculateTeamPoints}
           />

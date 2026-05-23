@@ -210,6 +210,21 @@ export default function LeaderboardPanel({
     currentUserRow && topIds.has(currentUserRow.id)
   );
 
+  // Rank movement — compare current rank with last stored rank
+  const rankDelta = useMemo(() => {
+    if (typeof window === "undefined" || !currentUserId || !currentUserRow) return null;
+    const key = `lb:rank:${currentUserId}`;
+    const raw = window.localStorage.getItem(key);
+    const prev = raw ? Number(raw) : NaN;
+    if (!Number.isFinite(prev)) return null;
+    return prev - currentUserRow.viewRank; // positive = moved up, negative = moved down
+  }, [currentUserId, currentUserRow]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !currentUserId || !currentUserRow) return;
+    window.localStorage.setItem(`lb:rank:${currentUserId}`, String(currentUserRow.viewRank));
+  }, [currentUserId, currentUserRow]);
+
   return (
     <main className="relative min-h-[500px] max-w-full overflow-x-hidden">
       <span className="sr-only">{modeLabel}</span>
@@ -381,39 +396,53 @@ export default function LeaderboardPanel({
                       {currentUserRow ? `#${currentUserRow.viewRank}` : "—"}
                     </p>
                   </div>
-                  <div
-                    className={cn(
-                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-ff-ui text-xs font-bold text-white",
-                      currentUserRow && youOnPodium
-                        ? currentUserRow.viewRank === 1
-                          ? "border-amber-400 bg-amber-950"
-                          : currentUserRow.viewRank === 2
-                            ? "border-zinc-400 bg-zinc-900"
-                            : "border-orange-400 bg-orange-950"
-                        : "border-emerald-400 bg-emerald-950"
-                    )}
-                    aria-hidden
-                  >
-                    {currentUserRow ? nameInitials(currentUserRow.name) : "—"}
-                  </div>
+                  {/* Rank movement indicator — replaces initials avatar */}
+                  {currentUserRow && (
+                    <div
+                      className={cn(
+                        "flex h-9 w-9 shrink-0 flex-col items-center justify-center rounded-lg border",
+                        rankDelta === null || rankDelta === 0
+                          ? "border-zinc-600 bg-zinc-900"
+                          : rankDelta > 0
+                            ? "border-emerald-500/60 bg-emerald-950"
+                            : "border-red-500/60 bg-red-950"
+                      )}
+                      aria-label={
+                        rankDelta === null || rankDelta === 0
+                          ? "No change"
+                          : rankDelta > 0
+                            ? `Up ${rankDelta} place${rankDelta !== 1 ? "s" : ""}`
+                            : `Down ${Math.abs(rankDelta)} place${Math.abs(rankDelta) !== 1 ? "s" : ""}`
+                      }
+                    >
+                      {rankDelta === null || rankDelta === 0 ? (
+                        <span className="font-ff-ui text-[11px] font-bold text-zinc-500">—</span>
+                      ) : rankDelta > 0 ? (
+                        <>
+                          <span className="text-[10px] leading-none text-emerald-400">▲</span>
+                          <span className="font-ff-ui text-[9px] font-bold leading-none text-emerald-400">{rankDelta}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] leading-none text-red-400">▼</span>
+                          <span className="font-ff-ui text-[9px] font-bold leading-none text-red-400">{Math.abs(rankDelta)}</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {currentUserRow ? (
-                  <>
-                    <p className="truncate text-xs font-semibold leading-snug text-zinc-100">
-                      {currentUserRow.name}
+                  <div className="flex items-center justify-between gap-2 border-t border-zinc-700 pt-2">
+                    <p className="text-[11px] leading-snug text-zinc-400">
+                      Tap to view squad
                     </p>
-                    <div className="flex items-center justify-between gap-2 border-t border-zinc-700 pt-2">
-                      <p className="text-[11px] leading-snug text-zinc-400">
-                        {youOnPodium ? "Squad details" : "Standings below"}
-                      </p>
-                      <p className="shrink-0 font-ff-display text-lg font-bold tabular-nums leading-none text-white">
-                        {Number(currentUserRow.totalScore ?? 0).toLocaleString()}
-                        <span className="ml-1 font-ff-ui text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
-                          pts
-                        </span>
-                      </p>
-                    </div>
-                  </>
+                    <p className="shrink-0 font-ff-display text-lg font-bold tabular-nums leading-none text-white">
+                      {Number(currentUserRow.totalScore ?? 0).toLocaleString()}
+                      <span className="ml-1 font-ff-ui text-[10px] font-semibold uppercase tracking-wide text-zinc-300">
+                        pts
+                      </span>
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-[11px] leading-snug text-zinc-500">
                     Scores update once matches begin
@@ -608,66 +637,88 @@ export default function LeaderboardPanel({
               )}
 
               {!loadingSquad && (
-                <div className="grid grid-cols-2 gap-2 sm:gap-5">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
                   {squadTeams.length > 0 ? (
-                    squadTeams.map((team) => {
+                    squadTeams.filter((team) => !String(team.id ?? "").startsWith("PO_")).map((team) => {
                       const isStarTeam = team.role === "featured";
-                      const tier = Number(team.tier ?? 0);
+                      const tier = Number(team.tier ?? 0) || 4;
                       const teamId = String(team.id ?? "-");
                       const flagUrl = String(team.flagUrl ?? "");
+                      const points = Number(team.contribution ?? 0);
+                      const initials = teamId.slice(0, 3).toUpperCase();
+
+                      const tierLabel =
+                        tier === 1 ? "Elite" :
+                        tier === 2 ? "Strong" :
+                        tier === 3 ? "Competitive" :
+                        "Underdog";
+
+                      const tierChipColors =
+                        tier === 1
+                          ? "bg-amber-400/25 text-amber-200 border-amber-400/50"
+                          : tier === 2
+                            ? "bg-slate-300/20 text-slate-200 border-slate-300/50"
+                            : tier === 3
+                              ? "bg-orange-500/20 text-orange-200 border-orange-400/50"
+                              : "bg-zinc-500/20 text-zinc-300 border-zinc-400/40";
 
                       return (
                         <div
                           key={`${team.role}:${teamId}`}
                           className={[
-                            "relative p-3 sm:p-4 rounded-2xl min-h-[148px] sm:min-h-[186px]",
-                            "bg-card border border-white/10",
-                            "shadow-[0_12px_30px_rgba(0,0,0,0.10)] transition-colors",
+                            "relative overflow-hidden rounded-xl border border-white/10",
+                            "aspect-[4/3]",
+                            "shadow-[0_8px_20px_rgba(0,0,0,0.28)]",
+                            isStarTeam ? "ring-1 ring-orange-400/50" : "",
                           ].join(" ")}
                         >
-                          {isStarTeam && (
-                            <div className="absolute -top-3 -right-2 bg-orange-500 border border-orange-300 text-zinc-950 text-[10px] font-black px-3 py-1 rounded-full flex items-center gap-1.5 shadow-md z-10">
-                              <Crown size={12} className="fill-current" aria-hidden="true" />
-                              Star Team · 2x
+                          {/* Flag — full-bleed background */}
+                          {flagUrl ? (
+                            <img
+                              src={flagUrl}
+                              alt={team.name}
+                              className="absolute inset-0 w-full h-full object-cover opacity-60"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-white/5 flex items-center justify-center">
+                              <span className="text-xl font-black text-white/15 tracking-tight">{initials}</span>
                             </div>
                           )}
 
-                          <div className="grid grid-cols-[1fr_auto] gap-3 items-start">
-                            <div className="min-w-0 flex flex-col items-start gap-2">
-                              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border border-white/15 bg-black/20 flex items-center justify-center">
-                                {flagUrl ? (
-                                  <img
-                                    src={flagUrl}
-                                    alt={team.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                ) : (
-                                  <span className="text-[10px] text-muted-foreground/70">
-                                    -
-                                  </span>
-                                )}
-                              </div>
+                          {/* Deep gradient — covers bottom 65% so score dominates */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
 
-                              <div className="min-w-0">
-                                <div className="font-black text-sm sm:text-base text-foreground tracking-tight leading-tight line-clamp-2">
-                                  {team.name}
-                                </div>
-                                <div className="mt-1 inline-flex rounded-md border border-white/15 bg-black/20 px-2 py-0.5 text-[10px] sm:text-xs font-mono text-foreground/90">
-                                  {teamId}
-                                </div>
+                          {/* Star team badge — top left, compact */}
+                          {isStarTeam && (
+                            <div className="absolute top-1.5 left-1.5 z-20">
+                              <div className="bg-orange-500 border border-orange-300/60 text-zinc-950 text-[8px] font-black px-2 py-[2px] rounded-full flex items-center gap-1 shadow-md whitespace-nowrap">
+                                <Crown size={8} className="fill-current shrink-0" aria-hidden="true" />
+                                Star · 2x
                               </div>
                             </div>
+                          )}
 
-                            <div className="flex flex-col items-end gap-2">
-                              <TierPill tier={tier || 4} />
-                              <div className="rounded-xl border border-white/15 bg-black/35 px-3 py-2 text-right min-w-[98px]">
-                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-                                  Points
-                                </div>
-                                <div className="text-lg sm:text-xl font-black text-foreground leading-none mt-1">
-                                  {Number(team.contribution ?? 0)}
-                                </div>
-                              </div>
+                          {/* Bottom content */}
+                          <div className="absolute bottom-0 inset-x-0 z-10 px-2.5 pb-2 pt-1">
+                            {/* Name + tier on one line */}
+                            <div className="flex items-center justify-between gap-1 mb-0.5">
+                              <span className="font-bold text-[12px] text-white leading-none truncate">
+                                {team.name}
+                              </span>
+                              <span className={[
+                                "shrink-0 rounded border px-1 py-px text-[8px] font-bold leading-tight whitespace-nowrap",
+                                tierChipColors,
+                              ].join(" ")}>
+                                T{tier}
+                              </span>
+                            </div>
+
+                            {/* Points — big */}
+                            <div className="flex items-baseline justify-between gap-1">
+                              <span className="text-[8px] uppercase tracking-wider text-white/65 font-semibold">pts</span>
+                              <span className="text-4xl font-black text-white leading-none tabular-nums tracking-tight">
+                                {points}
+                              </span>
                             </div>
                           </div>
                         </div>

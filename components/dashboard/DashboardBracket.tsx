@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, BellOff } from "lucide-react";
 import {
   stageLabel,
   type BracketMatch,
@@ -49,11 +48,11 @@ const DashboardBracket = ({
   const [activeTab, setActiveTab] = useState<
     "live" | "upcoming" | "results"
   >("live");
-  const [notifyMap, setNotifyMap] = useState<Record<string, boolean>>({});
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [matchRowVisible, setMatchRowVisible] = useState<Record<number, boolean>>(
     {}
   );
+  const [fixtureSearch, setFixtureSearch] = useState("");
 
   const stagesToUse = useMemo<BracketStage[]>(
     () => (stages.length > 0 ? stages : [{ id: "EMPTY_STAGE", name: "Match Center" }]),
@@ -101,7 +100,26 @@ const DashboardBracket = ({
     onStageChange(stage.id);
   }, [activeStageId, onStageChange, safeStageIndex, stagesToUse]);
 
-  const visibleMatches = filterMatchesForTab(currentMatches, activeTab);
+  // All matches across every stage — used for global fixture search
+  const allMatches = useMemo(
+    () => Object.values(matches).flat(),
+    [matches]
+  );
+
+  const visibleMatches = useMemo(() => {
+    // When searching upcoming fixtures, span the entire tournament (all stages)
+    if (activeTab === "upcoming" && fixtureSearch.trim()) {
+      const q = fixtureSearch.trim().toLowerCase();
+      return filterMatchesForTab(allMatches, "upcoming").filter((m) => {
+        const t1 = (teamNames[m.t1 ?? ""] ?? m.t1 ?? "").toLowerCase();
+        const t2 = (teamNames[m.t2 ?? ""] ?? m.t2 ?? "").toLowerCase();
+        const grp = (m.group ?? "").toLowerCase();
+        const stage = (m.stageId ?? "").toLowerCase();
+        return t1.includes(q) || t2.includes(q) || grp.includes(q) || stage.includes(q);
+      });
+    }
+    return filterMatchesForTab(currentMatches, activeTab);
+  }, [allMatches, currentMatches, activeTab, fixtureSearch, teamNames]);
   const visibleMatchIds = visibleMatches.map((m) => m.id).join(",");
 
   useEffect(() => {
@@ -142,10 +160,6 @@ const DashboardBracket = ({
     visibleMatchIds,
   ]);
 
-  const toggleNotify = (matchId: string) => {
-    setNotifyMap((prev) => ({ ...prev, [matchId]: !prev[matchId] }));
-  };
-
   const stageTitle =
     activeStage?.name ?? stageLabel(activeStage?.id ?? "");
 
@@ -157,12 +171,14 @@ const DashboardBracket = ({
 
   const matchCardEyebrow = (match: BracketMatch, tab: typeof activeTab) => {
     const mid = headerMid(match, tab);
-    const stageId = activeStage?.id ?? "";
-    if (stageId === "GROUP") {
+    // When searching across stages, use the match's own stageId for the label
+    const resolvedStageId = (fixtureSearch.trim() && match.stageId) ? match.stageId : (activeStage?.id ?? "");
+    const resolvedStageTitle = stageLabel(resolvedStageId);
+    if (resolvedStageId === "GROUP") {
       const g = match.group?.trim();
       return g ? `GROUP ${g.toUpperCase()} · ${mid}` : `GROUP · ${mid}`;
     }
-    return `${stageTitle} · ${mid}`;
+    return `${resolvedStageTitle} · ${mid}`;
   };
 
   const renderFfMatchCard = (
@@ -195,7 +211,7 @@ const DashboardBracket = ({
         ) : null}
         <div
           className={cn(
-            "mb-2.5 font-ff-ui text-[9px] font-semibold uppercase tracking-[0.1em] text-[#3d4a58]",
+            "mb-2.5 font-ff-ui text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]",
             yourTeam && "pl-2"
           )}
         >
@@ -208,8 +224,8 @@ const DashboardBracket = ({
             yourTeam && "pl-2"
           )}
         >
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="relative h-[26px] w-[26px] shrink-0 overflow-hidden rounded-sm border border-[var(--ff-hairline)] bg-black/20">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
               {resolveFlag(match.t1) ? (
                 <img
                   src={resolveFlag(match.t1)}
@@ -223,7 +239,7 @@ const DashboardBracket = ({
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[13px] font-semibold text-[var(--ff-fg-tertiary)]">
+              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
                 {t1Name}
               </div>
               {isUserTeam(match.t1) ? (
@@ -234,10 +250,10 @@ const DashboardBracket = ({
             </div>
           </div>
 
-          <div className="min-w-[52px] shrink-0 text-center">
+          <div className="min-w-[64px] shrink-0 text-center">
             {tab === "upcoming" ? (
               <>
-                <div className="font-ff-display text-xl font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
+                <div className="font-ff-display text-base font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
                   {match.kickoffTime ? formatKickoff(match.kickoffTime) : "TBD"}
                 </div>
                 <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
@@ -246,7 +262,7 @@ const DashboardBracket = ({
               </>
             ) : (
               <>
-                <div className="font-ff-display text-[28px] font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
+                <div className="font-ff-display text-[32px] font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
                   {scoreLine}
                 </div>
                 <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
@@ -256,8 +272,8 @@ const DashboardBracket = ({
             )}
           </div>
 
-          <div className="flex min-w-0 flex-row-reverse items-center gap-2 text-right">
-            <div className="relative h-[26px] w-[26px] shrink-0 overflow-hidden rounded-sm border border-[var(--ff-hairline)] bg-black/20">
+          <div className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right">
+            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
               {resolveFlag(match.t2) ? (
                 <img
                   src={resolveFlag(match.t2)}
@@ -271,7 +287,7 @@ const DashboardBracket = ({
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[13px] font-semibold text-[var(--ff-fg-tertiary)]">
+              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
                 {t2Name}
               </div>
               {isUserTeam(match.t2) ? (
@@ -283,27 +299,6 @@ const DashboardBracket = ({
           </div>
         </div>
 
-        {tab === "upcoming" ? (
-          <div className="mt-3 flex justify-end border-t border-[var(--ff-hairline-muted)] pt-2">
-            <button
-              type="button"
-              onClick={() => toggleNotify(match.id)}
-              className="inline-flex items-center gap-1 font-ff-ui text-[11px] text-[var(--ff-fg-quieter)] transition-colors hover:text-[var(--ff-fg-secondary)]"
-            >
-              {notifyMap[match.id] ? (
-                <>
-                  <Bell className="size-3.5 fill-[var(--ff-accent-text)] text-[var(--ff-accent-text)]" />
-                  <span>On</span>
-                </>
-              ) : (
-                <>
-                  <BellOff className="size-3.5" />
-                  <span>Notify</span>
-                </>
-              )}
-            </button>
-          </div>
-        ) : null}
 
         {match.impact && tab === "live" ? (
           <p className="mt-2 text-center font-ff-ui text-xs font-semibold text-[var(--ff-accent-text)]">
@@ -317,7 +312,7 @@ const DashboardBracket = ({
   return (
     <div className="flex h-full flex-col gap-4 font-ff-ui text-[var(--ff-fg-primary)]">
       <div>
-        <div className="mb-2 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[#3d4a58]">
+        <div className="mb-2 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
           Tournament stage
         </div>
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
@@ -355,7 +350,7 @@ const DashboardBracket = ({
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => { setActiveTab(tab); setFixtureSearch(""); }}
               className={cn(
                 "relative -mb-px flex min-h-[44px] items-center gap-2 border-b-2 bg-transparent px-4 py-2 font-ff-ui text-[13px] transition-colors",
                 activeTab === tab
@@ -378,7 +373,28 @@ const DashboardBracket = ({
         })}
       </div>
 
-      <div className="flex flex-col gap-2 pt-1">
+      {activeTab === "upcoming" && (
+        <div className="relative">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ff-fg-faint)]"
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search fixtures…"
+            value={fixtureSearch}
+            onChange={(e) => setFixtureSearch(e.target.value)}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.08)] bg-[var(--ff-bg-card)] py-2.5 pl-9 pr-4 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)] placeholder:text-[var(--ff-fg-faint)] focus:border-[var(--ff-accent-border)] focus:outline-none"
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2">
         {isLoading ? (
           <div className="py-10 text-center font-ff-ui text-sm text-[var(--ff-fg-quiet)]">
             Loading matches…
@@ -388,40 +404,22 @@ const DashboardBracket = ({
             renderFfMatchCard(match, index, activeTab)
           )
         ) : activeTab === "live" ? (
-          <div className="px-2 pb-6 pt-10 text-center">
-            <div className="mb-3 text-[42px] leading-none" aria-hidden>
-              ⚽
-            </div>
-            <p className="font-ff-display text-2xl font-bold text-[#3d4a58]">
-              No Live Matches
-            </p>
-            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">
-              Check Upcoming for next fixtures
-            </p>
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">No Live Matches</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">Check Upcoming for next fixtures</p>
           </div>
         ) : activeTab === "upcoming" ? (
-          <div className="px-2 pb-6 pt-10 text-center">
-            <div className="mb-3 text-[42px] leading-none" aria-hidden>
-              ⚽
-            </div>
-            <p className="font-ff-display text-2xl font-bold text-[#3d4a58]">
-              No Upcoming Matches
-            </p>
-            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">
-              Fixtures will appear here when scheduled
-            </p>
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">{fixtureSearch.trim() ? "No matches found" : "No Upcoming Matches"}</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">{fixtureSearch.trim() ? "Try a different team name or group" : "Fixtures will appear here when scheduled"}</p>
           </div>
         ) : (
-          <div className="px-2 pb-6 pt-10 text-center">
-            <div className="mb-3 text-[42px] leading-none" aria-hidden>
-              ⚽
-            </div>
-            <p className="font-ff-display text-2xl font-bold text-[#3d4a58]">
-              No Results Yet
-            </p>
-            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">
-              Results appear here after matches finish
-            </p>
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">No Results Yet</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">Results appear here after matches finish</p>
           </div>
         )}
       </div>

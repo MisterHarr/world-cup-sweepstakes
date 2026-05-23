@@ -112,13 +112,65 @@ function normalizeNameToken(value: unknown): string | null {
 }
 
 const TEAM_NAME_ALIASES: Record<string, string> = {
+  // ── football-data.org TLA overrides (their code → our internal ID) ──────────
+  // These fire first via toUpperToken(team.tla) in mapProviderTeamId,
+  // so add the fd.org TLA as key and our ID as value where they differ.
+  RSA: "ZAF",   // South Africa  (fd: RSA  → internal: ZAF)
+  IRI: "IRN",   // IR Iran       (fd: IRI  → internal: IRN)
+  SWI: "SUI",   // Switzerland   (fd: SWI  → internal: SUI)
+  PAR: "PRY",   // Paraguay      (fd: PAR  → internal: PRY)
+  HAI: "HTI",   // Haiti         (fd: HAI  → internal: HTI)
+  HON: "HND",   // Honduras      (fd: HON  → internal: HND)
+  TRI: "TTO",   // Trinidad      (fd: TRI  → internal: TTO)
+  URU: "URY",   // Uruguay       (fd: URU  → internal: URY)
+  BOL: "BOL",   // Bolivia       (keep same)
+  VEN: "VEN",   // Venezuela
+  CHI: "CHL",   // Chile         (fd: CHI  → internal: CHL)
+  COL: "COL",   // Colombia
+  PER: "PER",   // Peru
+  ALG: "DZA",   // Algeria       (fd: ALG  → internal: DZA)
+  CMR: "CMR",   // Cameroon
+  GHA: "GHA",   // Ghana
+  NGA: "NGA",   // Nigeria
+  SEN: "SEN",   // Senegal
+  CIV: "CIV",   // Côte d'Ivoire
+  CAP: "CPV",   // Cabo Verde    (fd: CAP  → internal: CPV)
+  CPV: "CPV",
+  KSA: "SAU",   // Saudi Arabia  (fd: KSA  → internal: SAU)
+  SAU: "SAU",
+  UAE: "ARE",   // UAE           (fd: UAE  → internal: ARE)
+  JOR: "JOR",   // Jordan
+  OMA: "OMN",   // Oman          (fd: OMA  → internal: OMN)
+  BHR: "BHR",   // Bahrain
+  PHI: "PHL",   // Philippines   (fd: PHI  → internal: PHL)
+  THA: "THA",   // Thailand
+  VIE: "VNM",   // Vietnam       (fd: VIE  → internal: VNM)
+  IND: "IND",   // India
+  // ── name-based aliases (normalised, no spaces/punctuation) ──────────────────
   CROATIA: "HRV",
   UNITEDSTATES: "USA",
   USA: "USA",
   KOREAREPUBLIC: "KOR",
   REPUBLICOFKOREA: "KOR",
+  SOUTHKOREA: "KOR",
   COTEDIVOIRE: "CIV",
   IVORYCOAST: "CIV",
+  SOUTHAFRICA: "ZAF",
+  SWITZERLAND: "SUI",
+  PARAGUAY: "PRY",
+  HAITI: "HTI",
+  IRAN: "IRN",
+  IRINIRAN: "IRN",
+  CABOVERDE: "CPV",
+  TURKIYE: "TUR",
+  TURKEY: "TUR",
+  NETHERLANDS: "NED",
+  HOLLAND: "NED",
+  BOSNIAANDHERZEGOVINA: "BIH",
+  NEWZEALAND: "NZL",
+  CURACAO: "CUW",
+  ECUADOR: "ECU",
+  SAUDIARABIA: "SAU",
 };
 
 function addAlias(

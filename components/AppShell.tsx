@@ -29,12 +29,11 @@ export function AppShell({ children, user, showAuth = true }: AppShellProps) {
       <header className="sticky top-0 z-40 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
         <div className="pt-safe">
           <FeaturedFiveTopBar
-            className="container mx-auto max-w-4xl px-4"
+            className="container mx-auto max-w-6xl px-4"
             brand={
               <AppBrandBlock
                 variant="ff-chrome"
                 title={BRANDING.shortName}
-                tagline={BRANDING.tagline}
                 logoTone="elevated"
               />
             }

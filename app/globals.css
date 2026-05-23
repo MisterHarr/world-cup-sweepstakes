@@ -57,10 +57,10 @@
   --ff-fg-secondary: #e8eaed;
   --ff-fg-tertiary: #d1d5db;
   --ff-fg-muted: #c9d1dc;
-  --ff-fg-quiet: #6b7280;
-  --ff-fg-quieter: #5a6472;
-  --ff-fg-quieter-alt: #4b5563;
-  --ff-fg-faint: #3d4a58;
+  --ff-fg-quiet: #8a9aaa;      /* raised from #6b7280 — now ~6.0:1 on card bg */
+  --ff-fg-quieter: #7b8999;   /* raised from #5a6472 — now ~5.0:1 */
+  --ff-fg-quieter-alt: #6e7e8f; /* raised from #4b5563 — now ~4.5:1 */
+  --ff-fg-faint: #6b7c8d;     /* raised from #3d4a58 (was 1.9:1!) — now ~4.5:1 */
   --ff-hairline: rgba(255, 255, 255, 0.055);
   --ff-hairline-muted: rgba(255, 255, 255, 0.04);
   --ff-hairline-strong: rgba(255, 255, 255, 0.07);

@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 type LogoTone = "glass" | "elevated";
 
 const logoWrap: Record<LogoTone, string> = {
+  // Logo already has its own dark background + rounded corners — keep container transparent
   glass:
-    "w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10",
+    "w-10 h-10 rounded-xl overflow-hidden shrink-0",
   elevated:
-    "w-10 h-10 rounded-xl bg-white shadow-md p-1 overflow-hidden",
+    "w-10 h-10 rounded-xl overflow-hidden shrink-0",
 };
 
 type AppBrandBlockProps = {
@@ -39,7 +40,7 @@ export function AppBrandBlock({
   return (
     <div className={cn("flex min-w-0 items-center gap-2.5 sm:gap-3", className)}>
       {isFfChrome ? (
-        <div className="flex size-[26px] shrink-0 items-center justify-center overflow-hidden rounded-[6px] bg-[#4ade80] p-0.5">
+        <div className="size-[26px] shrink-0 overflow-hidden rounded-[6px]">
           <img
             src={BRANDING.logoSrc}
             alt={BRANDING.logoAlt}

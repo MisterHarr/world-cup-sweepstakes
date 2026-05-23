@@ -1,12 +1,36 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { createContext, useCallback, useContext, useState } from "react";
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { Menu, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+// ── Overflow menu context — lets children place the trigger anywhere ──────────
+const OverflowMenuCtx = createContext<{ toggle: () => void; isOpen: boolean } | null>(null);
+
+/** Renders the ≡ / ✕ toggle button. Place inside FeaturedFiveTopBar's trailing slot. */
+export function AppOverflowMenuButton({ className }: { className?: string }) {
+  const ctx = useContext(OverflowMenuCtx);
+  if (!ctx) return null;
+  const { toggle, isOpen } = ctx;
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={isOpen ? "Close menu" : "Open menu"}
+      aria-expanded={isOpen}
+      className={cn(
+        "flex size-[26px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--ff-hairline-strong)] bg-transparent text-[var(--ff-fg-secondary)] transition-colors hover:bg-white/[0.06]",
+        className
+      )}
+    >
+      {isOpen ? <X className="size-3.5" /> : <Menu className="size-3.5" />}
+    </button>
+  );
+}
 
 export type AppShellNavItem = {
   id: string;
@@ -55,22 +79,9 @@ export function AppShellV0({ children, navItems, activeId }: AppShellV0Props) {
   }, []);
 
   return (
+    <OverflowMenuCtx.Provider value={{ toggle: () => setMobileMenuOpen((v) => !v), isOpen: mobileMenuOpen }}>
     <div className="min-h-screen bg-background text-foreground">
-      {/* Overflow (auth, guide, charity, …) — all viewports */}
-      {overflowNavItems.length > 0 ? (
-        <Button
-          variant="outline"
-          size="icon"
-          className="fixed top-[calc(1rem+env(safe-area-inset-top))] right-[calc(1rem+env(safe-area-inset-right))] z-50 bg-card/90 backdrop-blur-md"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? "Close navigation" : "Open navigation"}
-          aria-expanded={mobileMenuOpen}
-        >
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-      ) : null}
-
-      {/* Overflow menu panel */}
+      {/* Overflow menu panel — triggered by AppOverflowMenuButton in the top bar */}
       {mobileMenuOpen && overflowNavItems.length > 0 ? (
         <div className="fixed inset-0 z-40">
           <div
@@ -238,5 +249,6 @@ export function AppShellV0({ children, navItems, activeId }: AppShellV0Props) {
 
       {children}
     </div>
+    </OverflowMenuCtx.Provider>
   );
 }

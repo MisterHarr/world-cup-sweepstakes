@@ -34,18 +34,22 @@ export const metadata: Metadata = {
     template: `%s | ${BRANDING.shortName}`,
   },
   description,
+  icons: {
+    icon: "/favicon.ico",
+    apple: BRANDING.logoSrc, // 256px WebP — iOS 14+ supports WebP for apple-touch-icon
+  },
   openGraph: {
     title: BRANDING.appName,
     description,
     siteName: BRANDING.shortName,
     type: "website",
-    images: [{ url: BRANDING.logoSrc, alt: BRANDING.logoAlt }],
+    images: [{ url: BRANDING.logo512Src, width: 512, height: 512, alt: BRANDING.logoAlt }],
   },
   twitter: {
-    card: "summary_large_image",
+    card: "summary",
     title: BRANDING.appName,
     description,
-    images: [BRANDING.logoSrc],
+    images: [BRANDING.logo512Src],
   },
 };
 

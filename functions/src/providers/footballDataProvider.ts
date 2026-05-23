@@ -65,6 +65,62 @@ function toProviderStage(value: unknown): MatchStage {
   return "GROUP";
 }
 
+/**
+ * Extract yellow and red card counts per team from the football-data.org
+ * `bookings` array.  Requires the Deep Data plan.
+ *
+ * Card types returned by the API:
+ *   YELLOW_CARD      → yellow card
+ *   RED_CARD         → straight red
+ *   YELLOW_RED_CARD  → second yellow (counts as a red; the first yellow was
+ *                      already recorded as YELLOW_CARD earlier in the array)
+ */
+function extractCards(
+  raw: Record<string, unknown>,
+  homeProviderId: unknown,
+  awayProviderId: unknown
+): {
+  homeYellowCards: number;
+  homeRedCards: number;
+  awayYellowCards: number;
+  awayRedCards: number;
+} {
+  const result = {
+    homeYellowCards: 0,
+    homeRedCards: 0,
+    awayYellowCards: 0,
+    awayRedCards: 0,
+  };
+
+  const bookings = Array.isArray(raw.bookings) ? raw.bookings : [];
+  if (!bookings.length) return result;
+
+  const homeId = String(homeProviderId ?? "");
+  const awayId = String(awayProviderId ?? "");
+
+  for (const booking of bookings) {
+    if (!isRecord(booking)) continue;
+    const teamRecord = isRecord(booking.team) ? booking.team : {};
+    const teamId = String(teamRecord.id ?? "");
+    const card = asString(booking.card)?.toUpperCase() ?? "";
+
+    const isHome = homeId && teamId === homeId;
+    const isAway = awayId && teamId === awayId;
+    if (!isHome && !isAway) continue;
+
+    if (card === "YELLOW_CARD") {
+      if (isHome) result.homeYellowCards += 1;
+      else result.awayYellowCards += 1;
+    } else if (card === "RED_CARD" || card === "YELLOW_RED_CARD") {
+      // YELLOW_RED_CARD is a second yellow → treated as a red for scoring
+      if (isHome) result.homeRedCards += 1;
+      else result.awayRedCards += 1;
+    }
+  }
+
+  return result;
+}
+
 export async function getFootballDataMatches(
   options: { maxMatches: number; cutoffIso: string | null }
 ): Promise<ProviderMatch[]> {
@@ -92,7 +148,9 @@ export async function getFootballDataMatches(
   );
 
   const baseUrl = base.replace(/\/+$/, "");
-  const url = `${baseUrl}/competitions/${encodeURIComponent(competition)}/matches?status=${encodeURIComponent(statuses)}`;
+  const season =
+    asString(process.env.FOOTBALL_DATA_SEASON) ?? "2026";
+  const url = `${baseUrl}/competitions/${encodeURIComponent(competition)}/matches?status=${encodeURIComponent(statuses)}&season=${encodeURIComponent(season)}`;
 
   const payload = await fetchJsonWithRetry(
     url,
@@ -126,7 +184,19 @@ export async function getFootballDataMatches(
     const status = toProviderStatus(raw.status);
     const stage = toProviderStage(raw.stage);
 
-    if (!matchId || !homeTeamId || !awayTeamId || !status) return;
+    if (!matchId || !homeTeamId || !awayTeamId || !status) {
+      // Log unmapped teams so we can add aliases
+      const ht = isRecord(raw.homeTeam) ? raw.homeTeam : {};
+      const at = isRecord(raw.awayTeam) ? raw.awayTeam : {};
+      if (!homeTeamId) console.warn(`[ingest] unmapped home team — tla: "${ht.tla}", name: "${ht.name}", shortName: "${ht.shortName}"`);
+      if (!awayTeamId) console.warn(`[ingest] unmapped away team — tla: "${at.tla}", name: "${at.name}", shortName: "${at.shortName}"`);
+      return;
+    }
+
+    // Extract provider-level team IDs for card attribution
+    const homeProvId = isRecord(raw.homeTeam) ? raw.homeTeam.id : undefined;
+    const awayProvId = isRecord(raw.awayTeam) ? raw.awayTeam.id : undefined;
+    const cards = extractCards(raw, homeProvId, awayProvId);
 
     mapped.push({
       matchId,
@@ -137,16 +207,21 @@ export async function getFootballDataMatches(
       status,
       stage,
       kickoffTime: asIsoOrNull(raw.utcDate),
-      homeRedCards: 0,
-      homeYellowCards: 0,
-      awayRedCards: 0,
-      awayYellowCards: 0,
+      homeRedCards: cards.homeRedCards,
+      homeYellowCards: cards.homeYellowCards,
+      awayRedCards: cards.awayRedCards,
+      awayYellowCards: cards.awayYellowCards,
     });
   });
 
+  const dropped = rawMatches.length - mapped.length;
+  if (dropped > 0) {
+    console.warn(`[ingest] dropped ${dropped}/${rawMatches.length} matches due to unmapped teams — see warnings above`);
+  }
   const limited = filterAndLimitMatches(mapped, options);
   console.log(
     `[ingest] provider loaded ${limited.length} mapped matches` +
+      ` (${rawMatches.length} raw from API, ${dropped} dropped)` +
       ` (competition ${competition})` +
       (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
       (options.maxMatches > 0 ? ` (max ${options.maxMatches})` : "")

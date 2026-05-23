@@ -281,11 +281,14 @@ export function AuthLandingPage() {
     setAuthBusy(true);
 
     try {
-      await sendPasswordResetEmail(auth, trimmedEmail);
+      const actionCodeSettings = localAuthEmulator
+        ? undefined
+        : { url: `${window.location.origin}/`, handleCodeInApp: false };
+      await sendPasswordResetEmail(auth, trimmedEmail, actionCodeSettings);
       setNotice(
         localAuthEmulator
-          ? "Password reset requested. In local testing, check the Auth emulator logs for the reset link."
-          : "Password reset email sent. Check your inbox."
+          ? "Password reset requested. In local testing, check the Auth Emulator UI for the reset link."
+          : "Reset email sent — check your inbox and spam folder. It may take a minute to arrive."
       );
     } catch (e: unknown) {
       if (!isExpectedAuthError(e)) {
@@ -337,9 +340,9 @@ export function AuthLandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/25 backdrop-blur-xl p-6 sm:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
         <div className="text-center">
-          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white/5 border border-white/15 mb-5 overflow-hidden p-2">
+          <div className="inline-block w-24 h-24 rounded-2xl mb-5 overflow-hidden">
             <img
-              src={BRANDING.logoSrc}
+              src={BRANDING.logo512Src}
               alt={BRANDING.logoAlt}
               className="h-full w-full object-contain"
             />
@@ -372,9 +375,9 @@ export function AuthLandingPage() {
           </div>
         ) : null}
 
-        {signedIn && bootstrapStatus ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-xs text-muted-foreground">
-            {bootstrapStatus}
+        {signedIn && bootstrapStatus === "Profile bootstrap failed." ? (
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-center text-xs text-red-300">
+            Something went wrong setting up your profile. Please refresh and try again.
           </div>
         ) : null}
 

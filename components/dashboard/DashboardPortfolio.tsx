@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Clock } from "lucide-react";
+import { Clock, Crown, X } from "lucide-react";
 
-import { TierPill } from "@/components/tier/TierPill";
 import { cn } from "@/lib/utils";
 import {
   formatMatchDate,
@@ -26,6 +25,8 @@ type TeamRecord = {
   goalsScored?: number;
   cleanSheets?: number;
   draws?: number;
+  redCards?: number;
+  yellowCards?: number;
   [key: string]: unknown;
 };
 
@@ -52,6 +53,7 @@ type DashboardPortfolioProps = {
   expandedTeam: string | null;
   teamMatchData: Record<string, TeamMatchState>;
   teamsById: Record<string, TeamRecord>;
+  allTeamNames?: Record<string, string>;
   onTeamExpand: (teamKey: string, teamId: string) => void;
   calculateTeamPoints: (team: Record<string, unknown> | null | undefined) => number;
 };
@@ -72,11 +74,6 @@ function formatScoreOneDecimal(value: number): string {
   });
 }
 
-function drawnTierBorderClass(tier: number) {
-  if (tier <= 2) return "border-[rgba(245,158,11,0.22)]";
-  if (tier === 3) return "border-[rgba(249,115,22,0.26)]";
-  return "border-[var(--ff-hairline-muted)]";
-}
 
 function FormChip({ value }: { value: MatchResult }) {
   const className =
@@ -85,365 +82,352 @@ function FormChip({ value }: { value: MatchResult }) {
       : value === "D"
         ? "border-[var(--ff-hairline-strong)] bg-[var(--ff-bg-card-alt)] text-[var(--ff-fg-secondary)]"
         : "border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.12)] text-[var(--ff-danger)]";
-
   return (
-    <div
-      className={cn(
-        "flex size-8 items-center justify-center rounded-lg border font-ff-ui text-xs font-bold",
-        className
-      )}
-    >
+    <div className={cn("flex size-7 items-center justify-center rounded-md border font-ff-ui text-xs font-bold", className)}>
       {value}
     </div>
   );
 }
 
-function HeroMicroStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "emerald" | "red" | "amber";
-}) {
-  const valueClass =
-    tone === "emerald"
-      ? "text-[var(--ff-accent-text)]"
-      : tone === "red"
-        ? "text-[var(--ff-danger)]"
-        : "text-[var(--ff-gold)]";
-
+function TierChip({ tier }: { tier: number }) {
+  const label = tier === 1 ? "Elite" : tier === 2 ? "Strong" : tier === 3 ? "Competitive" : "Underdog";
+  const colors =
+    tier === 1 ? "bg-amber-400/25 text-amber-200 border-amber-400/50"
+    : tier === 2 ? "bg-slate-300/20 text-slate-200 border-slate-300/50"
+    : tier === 3 ? "bg-orange-500/20 text-orange-200 border-orange-400/50"
+    : "bg-zinc-500/20 text-zinc-300 border-zinc-400/40";
   return (
-    <div className="text-right">
-      <p
-        className={cn(
-          "font-ff-display text-[28px] font-bold leading-none tabular-nums tracking-tight",
-          valueClass
-        )}
-      >
-        {value}
-      </p>
-      <p className="font-ff-ui mt-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-[var(--ff-fg-faint)]">
-        {label}
-      </p>
-    </div>
+    <span className={cn("rounded border px-1.5 py-px text-[8px] font-bold leading-tight whitespace-nowrap", colors)}>
+      T{tier} · {label}
+    </span>
   );
 }
 
-function TeamStatsGrid({ team }: { team: TeamRecord | undefined }) {
-  const stats = [
-    { label: "Wins", value: asNumber(team?.wins) },
-    { label: "Goals", value: asNumber(team?.goalsScored) },
-    { label: "C.Sheets", value: asNumber(team?.cleanSheets) },
-    { label: "Draws", value: asNumber(team?.draws) },
-  ];
+// ─── Compact flag-background card tile ──────────────────────────────────────
 
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {stats.map((item) => (
-        <div
-          key={item.label}
-          className="rounded-lg border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5 text-center"
-        >
-          <p className="font-ff-display text-lg font-bold tabular-nums text-[var(--ff-fg-primary)]">
-            {item.value}
-          </p>
-          <p className="font-ff-ui text-[10px] font-semibold uppercase tracking-wider text-[var(--ff-fg-faint)]">
-            {item.label}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function PortfolioTeamCard({
+function SquadCard({
   team,
-  teamKey,
-  isFeatured = false,
-  expandedTeam,
-  teamMatchData,
-  teamsById,
-  onTeamExpand,
-  calculateTeamPoints,
-  enterDelayMs,
+  isFeatured,
+  isModalOpen,
+  points,
+  onExpand,
+  cardClass,
+  objectContain = false,
 }: {
   team: DashboardTeam;
-  teamKey: string;
-  isFeatured?: boolean;
-  expandedTeam: string | null;
+  isFeatured: boolean;
+  isModalOpen: boolean;
+  points: number;
+  onExpand: () => void;
+  cardClass?: string;
+  objectContain?: boolean;
+}) {
+  const isEliminated = team.isEliminated === true;
+  const isPlaceholder = team.id.startsWith("PO_");
+
+  if (isPlaceholder) {
+    return (
+      <div className={cn(
+        "relative overflow-hidden rounded-xl border border-white/5 bg-white/[0.02]",
+        cardClass ?? "aspect-[3/2]",
+      )}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
+          <span className="text-[10px] font-semibold text-[var(--ff-fg-quieter)]">Unavailable</span>
+          <span className="text-[9px] text-[var(--ff-fg-faint)]">{team.id}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onExpand}
+      className={cn(
+        "group relative w-full overflow-hidden text-left ff-squad-stagger",
+        cardClass ?? (isFeatured ? "aspect-[4/1] rounded-2xl" : "aspect-[3/2] rounded-xl"),
+        "border shadow-[0_8px_20px_rgba(0,0,0,0.28)] transition-all duration-200",
+        isModalOpen
+          ? "ring-2 ring-[var(--ff-accent-border)] border-[var(--ff-accent-border)]"
+          : isEliminated
+            ? "border-[rgba(239,68,68,0.5)]"
+            : isFeatured
+              ? "border-[rgba(245,158,11,0.35)] ring-1 ring-orange-400/20"
+              : "border-white/10 hover:border-white/20",
+      )}
+    >
+      {/* Flag */}
+      {team.flagUrl ? (
+        <img
+          src={team.flagUrl}
+          alt={team.name}
+          className={cn(
+            "absolute inset-0 h-full w-full opacity-55 transition-transform duration-300 group-hover:scale-[1.03]",
+            objectContain ? "object-contain" : "object-cover"
+          )}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-white/5 flex items-center justify-center">
+          <span className="text-2xl font-black text-white/10 tracking-tight">{team.id.slice(0, 3).toUpperCase()}</span>
+        </div>
+      )}
+
+      {/* Gradient — always bottom-up so content sits cleanly at bottom */}
+      <div className={cn(
+        "absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent",
+        isEliminated && "from-[#1a0505]/98 via-[#1a0505]/60"
+      )} />
+
+      {/* Eliminated — diagonal stamp overlay */}
+      {isEliminated && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden" aria-hidden>
+          {/* Red tint wash */}
+          <div className="absolute inset-0 bg-red-950/30" />
+          {/* Diagonal stamp text */}
+          <span
+            className="relative select-none font-ff-display font-black uppercase tracking-[0.18em] text-red-500/70 mix-blend-screen"
+            style={{
+              fontSize: "clamp(11px, 4.5cqw, 18px)",
+              transform: "rotate(-32deg)",
+              textShadow: "0 0 24px rgba(239,68,68,0.5)",
+              letterSpacing: "0.2em",
+              whiteSpace: "nowrap",
+              border: "1.5px solid rgba(239,68,68,0.35)",
+              padding: "3px 10px",
+              borderRadius: "3px",
+            }}
+          >
+            Eliminated
+          </span>
+        </div>
+      )}
+
+      {/* Bottom content: name + tier left, pts right */}
+      <div className="absolute bottom-0 inset-x-0 z-10 flex items-end justify-between gap-2 px-3 pb-2.5 pt-6">
+        <div className="min-w-0">
+          <p className={cn("font-black leading-tight text-white truncate", isFeatured ? "text-[17px]" : "text-[15px]")}>
+            {team.name}
+          </p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <TierChip tier={team.tier} />
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[8px] uppercase tracking-wider text-white/60 font-semibold leading-none mb-0.5">pts</div>
+          <div className={cn(
+            "font-ff-display font-black leading-none tabular-nums tracking-tight",
+            isFeatured ? "text-[36px]" : "text-[28px]",
+            isEliminated ? "text-[var(--ff-danger)]" : "text-white",
+          )}>
+            {formatScoreOneDecimal(points)}
+          </div>
+        </div>
+      </div>
+
+      {/* Open indicator */}
+      <div className={cn(
+        "absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border text-[15px] font-bold transition-all",
+        isModalOpen
+          ? "border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] text-[var(--ff-accent-text)]"
+          : "border-white/35 bg-black/50 text-white/85"
+      )}>
+        {isModalOpen ? "−" : "+"}
+      </div>
+    </button>
+  );
+}
+
+// ─── Team detail modal ────────────────────────────────────────────────────────
+
+function TeamDetailModal({
+  team,
+  points,
+  isFeatured,
+  teamMatchData,
+  teamsById,
+  allTeamNames = {},
+  onClose,
+}: {
+  team: DashboardTeam;
+  points: number;
+  isFeatured: boolean;
   teamMatchData: Record<string, TeamMatchState>;
   teamsById: Record<string, TeamRecord>;
-  onTeamExpand: (teamKey: string, teamId: string) => void;
-  calculateTeamPoints: (team: Record<string, unknown> | null | undefined) => number;
-  enterDelayMs?: number;
+  allTeamNames?: Record<string, string>;
+  onClose: () => void;
 }) {
-  const isExpanded = expandedTeam === teamKey;
-  const isEliminated = team.isEliminated === true;
-  const points = calculateTeamPoints(teamsById[team.id]);
+  const [activeStat, setActiveStat] = useState<string | null>(null);
   const teamState = teamMatchData[team.id];
   const nextMatch = teamState?.nextMatch ?? null;
   const opponentName = nextMatch
-    ? teamsById[nextMatch.opponentId]?.name ?? "TBD"
+    ? ((teamsById[nextMatch.opponentId]?.name as string | undefined)
+        ?? allTeamNames[nextMatch.opponentId]
+        ?? nextMatch.opponentId)
     : null;
+  const record = teamsById[team.id];
+  const isEliminated = team.isEliminated === true;
 
-  const tier1Chrome = isFeatured && !isEliminated;
-  const compact = !isFeatured;
+  // Scoring formula breakdown — mirrors functions/src/scoring.ts
+  const rawBreakdowns = [
+    { key: "wins",        label: "Wins",         value: asNumber(record?.wins),         rate: 3,    rateLabel: "3 pts/win",     color: "text-[var(--ff-accent-text)]" },
+    { key: "goals",       label: "Goals",        value: asNumber(record?.goalsScored),  rate: 1,    rateLabel: "1 pt/goal",     color: "text-[var(--ff-accent-text)]" },
+    { key: "cleanSheets", label: "Clean sheets", value: asNumber(record?.cleanSheets),  rate: 1,    rateLabel: "1 pt/sheet",    color: "text-[var(--ff-accent-text)]" },
+    { key: "draws",       label: "Draws",        value: asNumber(record?.draws),        rate: 1,    rateLabel: "1 pt/draw",     color: "text-[var(--ff-fg-secondary)]" },
+    { key: "redCards",    label: "Red cards",    value: asNumber(record?.redCards),     rate: -1,   rateLabel: "−1 pt/card",    color: "text-[var(--ff-danger)]" },
+    { key: "yellowCards", label: "Yellow cards", value: asNumber(record?.yellowCards),  rate: -0.5, rateLabel: "−0.5 pt/card",  color: "text-[var(--ff-danger)]" },
+  ];
+  // Only show red/yellow cards rows if the team has any; always show the rest
+  const statBreakdowns = rawBreakdowns.filter(
+    (s) => !["redCards", "yellowCards"].includes(s.key) || s.value > 0
+  );
 
   return (
     <div
-      className={cn(
-        "relative overflow-hidden border transition-all duration-300",
-        compact ? "rounded-xl" : "rounded-2xl",
-        tier1Chrome &&
-          "border-[rgba(245,158,11,0.28)] bg-[linear-gradient(160deg,#1c1500_0%,#111318_60%)]",
-        !tier1Chrome &&
-          !isEliminated &&
-          cn("bg-[var(--ff-bg-card)]", drawnTierBorderClass(team.tier)),
-        isEliminated &&
-          "border-[rgba(239,68,68,0.35)] bg-[var(--ff-bg-card)] opacity-[0.55]",
-        isExpanded && "ring-2 ring-[var(--ff-accent-border)]",
-        enterDelayMs != null && "ff-squad-stagger"
-      )}
-      style={
-        enterDelayMs != null ? { animationDelay: `${enterDelayMs}ms` } : undefined
-      }
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      {isEliminated ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-[var(--ff-danger)]"
-          aria-hidden
-        />
-      ) : tier1Chrome ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[2px] bg-gradient-to-r from-[var(--ff-gold)] via-[var(--ff-gold)]/70 to-transparent"
-          aria-hidden
-        />
-      ) : null}
-      <button
-        onClick={() => onTeamExpand(teamKey, team.id)}
-        className={cn(
-          "w-full text-left",
-          tier1Chrome
-            ? "px-4 py-4 sm:px-4 sm:py-[18px]"
-            : compact
-              ? "px-3 py-3.5 sm:px-3 sm:py-3.5"
-              : "p-4 sm:p-5"
-        )}
-      >
-        {compact ? (
-          <div className="flex items-center gap-2.5">
-            <div
-              className={cn(
-                "relative size-[26px] shrink-0 overflow-hidden rounded-md border bg-black/30",
-                isEliminated
-                  ? "border-[var(--ff-danger)]/35"
-                  : "border-[var(--ff-hairline-muted)]"
-              )}
-            >
-              {team.flagUrl ? (
-                <img
-                  src={team.flagUrl}
-                  alt={team.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : null}
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
+
+      {/* Sheet */}
+      <div className="relative z-10 mx-4 w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--ff-bg-card)] animate-in zoom-in-95 duration-200">
+
+        {/* Flag hero */}
+        <div className="relative h-28 overflow-hidden rounded-t-2xl">
+          {team.flagUrl && (
+            <img src={team.flagUrl} alt={team.name} className="absolute inset-0 h-full w-full object-cover opacity-55" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[var(--ff-bg-card)] via-black/50 to-black/20" />
+
+          {/* Close */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute right-2.5 top-2.5 z-10 flex size-9 items-center justify-center rounded-full border border-white/25 bg-black/60 text-white/80 hover:text-white transition-colors"
+          >
+            <X size={16} />
+          </button>
+
+          {/* Star badge */}
+          {isFeatured && (
+            <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full border border-orange-300/60 bg-orange-500 px-2 py-[3px] text-[9px] font-black text-zinc-950">
+              <Crown size={8} className="fill-current shrink-0" />
+              Star · 2x
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-ff-display text-base font-bold leading-tight tracking-wide text-[var(--ff-fg-primary)]">
-                {team.name}
-              </p>
-              <p className="mt-0.5 font-ff-ui text-[10px] leading-snug text-[var(--ff-fg-faint)]">
-                <span
-                  className={cn(
-                    "font-semibold",
-                    isEliminated
-                      ? "text-[var(--ff-danger)]"
-                      : "text-[var(--ff-accent-text)]"
-                  )}
-                >
-                  {isEliminated ? "Eliminated" : "Active"}
-                </span>
-                <span className="mx-1 text-[var(--ff-hairline-strong)]">·</span>
-                <span>Tier {team.tier}</span>
-                <span className="mx-1 text-[var(--ff-hairline-strong)]">·</span>
-                <span>Group {team.group}</span>
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <span
-                className={cn(
-                  "font-ff-display text-[28px] font-extrabold leading-none tabular-nums tracking-tight",
-                  isEliminated ? "text-[var(--ff-danger)]" : "text-[var(--ff-fg-primary)]"
-                )}
-              >
-                {points}
-              </span>
-              <ChevronRight
-                className={cn(
-                  "size-5 shrink-0 text-[var(--ff-fg-secondary)] transition-transform",
-                  isExpanded ? "rotate-90" : ""
-                )}
-              />
+          )}
+
+          {/* Team name + tier */}
+          <div className="absolute bottom-3 left-3 z-10">
+            <p className="font-black text-[17px] text-white leading-tight">{team.name}</p>
+            <div className="mt-1 flex items-center gap-2">
+              <TierChip tier={team.tier} />
+              {isEliminated && <span className="text-[8px] font-bold text-[var(--ff-danger)] uppercase tracking-wider">Eliminated</span>}
             </div>
           </div>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <div
-                  className={cn(
-                    "relative overflow-hidden rounded-xl border bg-black/30",
-                    tier1Chrome ? "size-[34px] shrink-0" : "h-14 w-14 shrink-0",
-                    isFeatured ? "border-[var(--ff-gold)]/45" : "border-white/15"
-                  )}
-                >
-                  {team.flagUrl ? (
-                    <img
-                      src={team.flagUrl}
-                      alt={team.name}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                </div>
 
-                <div className="min-w-0">
-                  <p
-                    className={cn(
-                      "truncate font-black text-[var(--ff-fg-primary)]",
-                      tier1Chrome ? "font-ff-display text-lg tracking-wide" : "text-lg"
-                    )}
-                  >
-                    {team.name}
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span
-                      className={cn(
-                        "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-                        isEliminated
-                          ? "border-[var(--ff-danger)]/40 bg-[rgba(239,68,68,0.12)] text-[var(--ff-danger)]"
-                          : "border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] text-[var(--ff-accent-text)]"
-                      )}
-                    >
-                      {isEliminated ? "Eliminated" : "Active"}
-                    </span>
-                    <span className="font-ff-ui text-xs text-[var(--ff-fg-secondary)]">
-                      Group {team.group}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p
-                    className={cn(
-                      "font-ff-display font-extrabold leading-none tracking-tight",
-                      tier1Chrome ? "text-[42px]" : "text-3xl",
-                      isEliminated ? "text-[var(--ff-danger)]" : "text-[var(--ff-fg-primary)]"
-                    )}
-                  >
-                    {points}
-                  </p>
-                  <p className="font-ff-ui mt-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--ff-fg-faint)]">
-                    Points
-                  </p>
-                </div>
-                <ChevronRight
-                  className={cn(
-                    "size-5 text-[var(--ff-fg-secondary)] transition-transform",
-                    isExpanded ? "rotate-90" : ""
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <TierPill tier={team.tier} />
-              {isFeatured ? (
-                <div className="rounded-lg border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.1)] px-2.5 py-1 font-ff-ui text-[10px] font-bold uppercase tracking-widest text-[var(--ff-gold)]">
-                  Star Team · 2x
-                </div>
-              ) : null}
-            </div>
-          </>
-        )}
-      </button>
-
-      {isExpanded ? (
-        <div className="border-t border-[var(--ff-hairline-muted)] px-3 pb-4 pt-3 sm:px-4 sm:pb-5 sm:pt-4">
-          {isEliminated ? (
-            <div className="rounded-xl border border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.1)] p-3 text-center font-ff-ui text-sm text-[var(--ff-danger)]">
-              This team has been eliminated.
-            </div>
-          ) : null}
-
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
-            <div className="rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5 sm:p-3">
-              <p className="mb-2 font-ff-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                Recent Form
-              </p>
-              {teamState?.loading ? (
-                <div className="flex gap-1.5">
-                  {[...Array(5)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="size-8 animate-pulse rounded-lg bg-[var(--ff-hairline-muted)]"
-                    />
-                  ))}
-                </div>
-              ) : teamState?.recentForm?.length ? (
-                <div className="flex gap-1.5">
-                  {teamState.recentForm.map((value, idx) => (
-                    <FormChip key={idx} value={value} />
-                  ))}
-                </div>
-              ) : (
-                <p className="font-ff-ui text-sm text-[var(--ff-fg-secondary)]">
-                  No matches yet
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5 sm:p-3">
-              <div className="mb-2 flex items-center gap-2 font-ff-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                <Clock className="size-3 shrink-0 opacity-80" />
-                Next Match
-              </div>
-              {teamState?.loading ? (
-                <div className="space-y-1.5">
-                  <div className="h-4 w-24 animate-pulse rounded bg-[var(--ff-hairline-muted)]" />
-                  <div className="h-3 w-32 animate-pulse rounded bg-[var(--ff-hairline-muted)]" />
-                </div>
-              ) : nextMatch ? (
-                <>
-                  <p className="font-ff-ui font-bold text-[var(--ff-fg-primary)]">
-                    vs {opponentName}
-                  </p>
-                  <p className="font-ff-ui text-xs text-[var(--ff-fg-secondary)]">
-                    {formatMatchDate(nextMatch.scheduledAt)}
-                  </p>
-                </>
-              ) : (
-                <p className="font-ff-ui text-sm text-[var(--ff-fg-secondary)]">
-                  No upcoming matches
-                </p>
-              )}
-            </div>
-
-            <div className="col-span-2 rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5 sm:p-3">
-              <p className="mb-2 font-ff-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                Stats
-              </p>
-              <TeamStatsGrid team={teamsById[team.id]} />
+          {/* Points */}
+          <div className="absolute bottom-3 right-3 z-10 text-right">
+            <div className="text-[8px] text-white/60 uppercase tracking-wider leading-none mb-0.5">pts</div>
+            <div className={cn("font-ff-display text-[32px] font-black leading-none tabular-nums", isEliminated ? "text-[var(--ff-danger)]" : "text-white")}>
+              {formatScoreOneDecimal(points)}
             </div>
           </div>
         </div>
-      ) : null}
+
+        {/* Body */}
+        <div className="grid grid-cols-2 gap-2 p-3">
+          {/* Form */}
+          <div className="rounded-lg border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">Form</p>
+            {(!teamState || teamState.loading) ? (
+              <div className="flex gap-1">{[...Array(5)].map((_, i) => <div key={i} className="size-7 animate-pulse rounded-md bg-[var(--ff-hairline-muted)]" />)}</div>
+            ) : teamState?.recentForm?.length ? (
+              <div className="flex gap-1">{teamState.recentForm.map((v, i) => <FormChip key={i} value={v} />)}</div>
+            ) : (
+              <p className="text-xs text-[var(--ff-fg-secondary)]">No matches yet</p>
+            )}
+          </div>
+
+          {/* Next match */}
+          <div className="rounded-lg border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] p-2.5">
+            <div className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
+              <Clock className="size-3 shrink-0 opacity-80" />
+              Next
+            </div>
+            {(!teamState || teamState.loading) ? (
+              <div className="space-y-1.5">
+                <div className="h-4 w-20 animate-pulse rounded bg-[var(--ff-hairline-muted)]" />
+                <div className="h-3 w-24 animate-pulse rounded bg-[var(--ff-hairline-muted)]" />
+              </div>
+            ) : nextMatch ? (
+              <>
+                <p className="text-sm font-bold text-[var(--ff-fg-primary)]">vs {opponentName}</p>
+                <p className="text-[10px] text-[var(--ff-fg-secondary)]">{formatMatchDate(nextMatch.scheduledAt)}</p>
+              </>
+            ) : (
+              <p className="text-xs text-[var(--ff-fg-secondary)]">No upcoming</p>
+            )}
+          </div>
+
+          {/* Stats — tap/hover any tile to see points calculation */}
+          {statBreakdowns.map((s) => {
+            const contribution = s.value * s.rate * (isFeatured ? 2 : 1);
+            const isActive = activeStat === s.key;
+            // Formula row: "3 × +3 × 2⭐" — always one line, no extra row for featured
+            const formulaStr = isFeatured
+              ? `${s.value} × ${s.rate > 0 ? `+${s.rate}` : s.rate} × 2⭐`
+              : `${s.value} × ${s.rate > 0 ? `+${s.rate}` : s.rate}`;
+            const contribStr = contribution === 0
+              ? "0"
+              : `${contribution > 0 ? "+" : ""}${Number.isInteger(contribution) ? contribution : contribution.toFixed(1)}`;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                // Fixed height so neither state causes a layout jump
+                className={cn(
+                  "flex h-[52px] w-full flex-col items-center justify-center gap-0.5 rounded-lg border px-1 transition-all duration-150 cursor-pointer",
+                  isActive
+                    ? "border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)]"
+                    : "border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] hover:border-[var(--ff-accent-border)]/50"
+                )}
+                onClick={() => setActiveStat(isActive ? null : s.key)}
+                onMouseEnter={() => setActiveStat(s.key)}
+                onMouseLeave={() => setActiveStat(null)}
+                aria-label={`${s.label}: ${s.value} — ${contribStr} pts`}
+              >
+                {isActive ? (
+                  /* Breakdown view — always 2 rows, same height as normal */
+                  <>
+                    <p className="font-ff-ui text-[9px] leading-none text-[var(--ff-fg-faint)] tabular-nums">{formulaStr}</p>
+                    <p className={cn(
+                      "font-ff-display text-[16px] font-black tabular-nums leading-none",
+                      contribution >= 0 ? "text-[var(--ff-accent-text)]" : "text-[var(--ff-danger)]"
+                    )}>
+                      {contribStr}<span className="text-[10px] font-semibold opacity-70"> pts</span>
+                    </p>
+                  </>
+                ) : (
+                  /* Normal view — always 2 rows */
+                  <>
+                    <p className={cn("font-ff-display text-lg font-bold tabular-nums leading-none", s.color)}>{s.value}</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-wider text-[var(--ff-fg-faint)] leading-none">{s.label}</p>
+                  </>
+                )}
+              </button>
+            );
+          })}
+          {/* Hint */}
+          <div className="col-span-2 -mt-1 mb-0.5 text-center">
+            <p className="font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">Tap any stat to see points breakdown</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
+
+// ─── Main export ─────────────────────────────────────────────────────────────
 
 export default function DashboardPortfolio({
   userId,
@@ -455,6 +439,7 @@ export default function DashboardPortfolio({
   expandedTeam,
   teamMatchData,
   teamsById,
+  allTeamNames = {},
   onTeamExpand,
   calculateTeamPoints,
 }: DashboardPortfolioProps) {
@@ -462,7 +447,6 @@ export default function DashboardPortfolio({
     if (typeof window === "undefined") return null;
     if (!userId) return null;
     if (!userStats.rank) return null;
-
     const key = `dashboard:rank:${userId}`;
     const raw = window.localStorage.getItem(key);
     const parsed = raw ? Number(raw) : NaN;
@@ -520,144 +504,159 @@ export default function DashboardPortfolio({
   useEffect(() => {
     const target = Number(userStats.score);
     if (!Number.isFinite(target)) return;
-
-    if (prefersReducedMotion) {
-      setDisplayScore(target);
-      countUpDoneRef.current = true;
-      return;
-    }
-
-    if (countUpDoneRef.current) {
-      setDisplayScore(target);
-      return;
-    }
-
+    if (prefersReducedMotion) { setDisplayScore(target); countUpDoneRef.current = true; return; }
+    if (countUpDoneRef.current) { setDisplayScore(target); return; }
     let countUpMs = 950;
     if (typeof window !== "undefined") {
-      const raw = getComputedStyle(document.documentElement)
-        .getPropertyValue("--ff-count-up-ms")
-        .trim();
+      const raw = getComputedStyle(document.documentElement).getPropertyValue("--ff-count-up-ms").trim();
       const parsed = Number.parseFloat(raw);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        countUpMs = parsed;
-      }
+      if (Number.isFinite(parsed) && parsed > 0) countUpMs = parsed;
     }
-
     const start = performance.now();
-
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / countUpMs);
       setDisplayScore(target * easeOutCubic(t));
-      if (t < 1) {
-        countUpRafRef.current = requestAnimationFrame(tick);
-      } else {
-        countUpRafRef.current = null;
-        countUpDoneRef.current = true;
-      }
+      if (t < 1) { countUpRafRef.current = requestAnimationFrame(tick); }
+      else { countUpRafRef.current = null; countUpDoneRef.current = true; }
     };
-
     countUpRafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (countUpRafRef.current != null) {
-        cancelAnimationFrame(countUpRafRef.current);
-        countUpRafRef.current = null;
-      }
-    };
+    return () => { if (countUpRafRef.current != null) { cancelAnimationFrame(countUpRafRef.current); countUpRafRef.current = null; } };
   }, [userStats.score, prefersReducedMotion, userId]);
 
-  const scoreDisplay = useMemo(
-    () => formatScoreOneDecimal(displayScore),
-    [displayScore]
-  );
+  const scoreDisplay = useMemo(() => formatScoreOneDecimal(displayScore), [displayScore]);
+
+  const [modalTeam, setModalTeam] = useState<{ team: DashboardTeam; isFeatured: boolean; points: number } | null>(null);
 
   return (
-    <div className="mb-6 space-y-6">
-      <div className="mb-7 grid grid-cols-1 items-end gap-y-5 lg:grid-cols-[1fr_auto] lg:gap-x-6 lg:gap-y-0">
-        <div className="min-w-0">
-          <p className="font-ff-ui text-[11px] font-semibold uppercase tracking-[0.14em] text-[#3d4a58]">
-            Total points
-          </p>
-          <p className="font-ff-display text-[clamp(3rem,11vw,6rem)] font-extrabold leading-[0.9] tracking-[-0.02em] text-[var(--ff-fg-primary)]">
-            {scoreDisplay}
-          </p>
-          {userStats.rank ? (
-            <div
-              className={cn(
-                "mt-2.5 flex flex-wrap items-end gap-x-3 gap-y-1",
-                !prefersReducedMotion && "ff-rank-chip-in"
-              )}
-            >
-              <span className="font-ff-display text-[30px] font-extrabold leading-none text-[var(--ff-gold)] tabular-nums">
-                #{userStats.rank}
-              </span>
-              <div className="font-ff-ui text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                <div>of {leaderboardCount}</div>
-                {rankTrendCaption ? (
-                  <div className="mt-0.5 normal-case tracking-normal text-[var(--ff-fg-secondary)]">
-                    {rankTrendCaption}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : (
-            <p className="font-ff-ui mt-2.5 text-xs font-medium text-[var(--ff-fg-secondary)]">
-              Unranked
-            </p>
-          )}
+    <div className="mb-4 space-y-5 md:mb-6 md:space-y-7">
+
+      {/* ── Score header ─────────────────────────────────────────────────────
+           All sizes: score left, stats right (2 rows on mobile, cards on md+) */}
+      <div className={cn("flex items-end gap-4 md:gap-6", !prefersReducedMotion && "ff-rank-chip-in")}>
+
+        {/* Big score */}
+        <p className="font-ff-display text-[2.8rem] md:text-[5rem] font-extrabold leading-none tracking-[-0.02em] text-[var(--ff-fg-primary)] shrink-0">
+          {scoreDisplay}
+        </p>
+
+        {/* Mobile stats — always to the right of score in 2 compact rows */}
+        <div className="flex flex-col gap-1 pb-1 md:hidden">
+          {/* Row 1: rank */}
+          <div className="flex items-baseline gap-1.5">
+            {userStats.rank ? (
+              <>
+                <span className="font-ff-display text-[20px] font-extrabold leading-none text-[var(--ff-gold)] tabular-nums">#{userStats.rank}</span>
+                <span className="font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">of {leaderboardCount}</span>
+                {rankTrendCaption ? <span className="font-ff-ui text-[9px] text-[var(--ff-fg-secondary)]">{rankTrendCaption}</span> : null}
+              </>
+            ) : (
+              <span className="font-ff-ui text-[9px] text-[var(--ff-fg-secondary)]">Unranked</span>
+            )}
+          </div>
+          {/* Row 2: active / elim / transfers */}
+          <div className="flex items-center gap-2.5">
+            <span className="font-ff-ui text-[9px] text-[var(--ff-fg-faint)]"><span className="font-ff-display text-xs font-bold mr-0.5 text-[var(--ff-accent-text)]">{teamStats.active}</span>active</span>
+            <span className="font-ff-ui text-[9px] text-[var(--ff-fg-faint)]"><span className="font-ff-display text-xs font-bold mr-0.5 text-[var(--ff-danger)]">{teamStats.eliminated}</span>elim</span>
+            <span className="font-ff-ui text-[9px] text-[var(--ff-fg-faint)]"><span className="font-ff-display text-xs font-bold mr-0.5 text-[var(--ff-gold)]">{teamStats.transfers}</span>transfers</span>
+          </div>
         </div>
 
-        <div className="flex justify-end gap-8 sm:gap-10 lg:flex-col lg:items-end lg:gap-3 lg:pl-1">
-          <HeroMicroStat label="Active" value={teamStats.active} tone="emerald" />
-          <HeroMicroStat label="Eliminated" value={teamStats.eliminated} tone="red" />
-          <HeroMicroStat label="Transfer" value={teamStats.transfers} tone="amber" />
+        {/* md+ stat cards */}
+        <div className="hidden md:flex md:flex-1 md:items-end md:gap-3 md:pb-2">
+          {/* Rank */}
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] px-4 py-3">
+            <span className="font-ff-display text-[26px] font-extrabold leading-none text-[var(--ff-gold)] tabular-nums">
+              {userStats.rank ? `#${userStats.rank}` : "—"}
+            </span>
+            <span className="mt-0.5 font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">of {leaderboardCount}</span>
+            {rankTrendCaption ? <span className="mt-0.5 font-ff-ui text-[9px] text-[var(--ff-fg-secondary)]">{rankTrendCaption}</span> : null}
+          </div>
+          {/* Active */}
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] px-4 py-3">
+            <span className="font-ff-display text-[26px] font-extrabold leading-none text-[var(--ff-accent-text)]">{teamStats.active}</span>
+            <span className="mt-0.5 font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">active</span>
+          </div>
+          {/* Eliminated */}
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] px-4 py-3">
+            <span className="font-ff-display text-[26px] font-extrabold leading-none text-[var(--ff-danger)]">{teamStats.eliminated}</span>
+            <span className="mt-0.5 font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">eliminated</span>
+          </div>
+          {/* Transfers */}
+          <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card-alt)] px-4 py-3">
+            <span className="font-ff-display text-[26px] font-extrabold leading-none text-[var(--ff-gold)]">{teamStats.transfers}</span>
+            <span className="mt-0.5 font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">transfers</span>
+          </div>
         </div>
       </div>
 
-      <section className="space-y-3">
-        <div className="mb-3.5 flex min-h-[1.25rem] items-end gap-2">
-          <span className="font-ff-ui shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#3d4a58]">
-            Your squad
-          </span>
-          <div
-            className="mb-1 h-px min-w-[1rem] flex-1 bg-[rgba(255,255,255,0.05)]"
-            aria-hidden
-          />
-        </div>
+      {/* ── Squad ──────────────────────────────────────────────────────────── */}
+      <section>
+        {/* Mobile: featured full-width banner → drawn 2-col below
+            md+:    featured portrait left column (bigger, glowing) → drawn 3-col grid right */}
+        <div className="flex flex-col gap-2.5 md:flex-row md:items-stretch md:gap-4">
 
-        {featuredDisplay ? (
-          <div className="mb-2.5">
-            <PortfolioTeamCard
-              team={featuredDisplay}
-              teamKey={`featured-${featuredDisplay.id}`}
-              isFeatured
-              expandedTeam={expandedTeam}
-              teamMatchData={teamMatchData}
-              teamsById={teamsById}
-              onTeamExpand={onTeamExpand}
-              calculateTeamPoints={calculateTeamPoints}
-              enterDelayMs={60}
-            />
-          </div>
-        ) : null}
+          {/* Featured — prominent left portrait column on md+ */}
+          {featuredDisplay ? (
+            <div className="relative flex flex-col pt-5 md:w-72 md:shrink-0 xl:w-80">
+              {/* Star badge on outer wrapper — never clipped by overflow-hidden */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full border border-orange-300/60 bg-orange-500 px-2.5 py-[4px] text-[10px] font-black text-zinc-950 shadow-lg whitespace-nowrap">
+                <Crown size={9} className="fill-current shrink-0" />
+                Star · 2x
+              </div>
+              <SquadCard
+                team={featuredDisplay}
+                isFeatured
+                isModalOpen={modalTeam?.team.id === featuredDisplay.id}
+                points={calculateTeamPoints(teamsById[featuredDisplay.id]) * 2}
+                cardClass="aspect-[4/1] md:aspect-auto md:flex-1 rounded-2xl w-full"
+                objectContain
+                onExpand={() => {
+                  const pts = calculateTeamPoints(teamsById[featuredDisplay.id]) * 2;
+                  onTeamExpand(`featured-${featuredDisplay.id}`, featuredDisplay.id);
+                  setModalTeam(m =>
+                    m?.team.id === featuredDisplay.id ? null : { team: featuredDisplay, isFeatured: true, points: pts }
+                  );
+                }}
+              />
+              {/* Orange copper glow — outside the clipping container */}
+              <div className="pointer-events-none absolute inset-0 mt-5 rounded-2xl shadow-[0_0_48px_rgba(245,158,11,0.25)]" aria-hidden />
+            </div>
+          ) : null}
 
-        {drawnDisplay.length > 0 ? (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2">
-            {drawnDisplay.map((team, i) => (
-              <PortfolioTeamCard
+          {/* Drawn teams — 2-col mobile, 3-col md+ (all 5 fit in 2 rows) */}
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:flex-1">
+            {drawnDisplay.map((team) => (
+              <SquadCard
                 key={team.id}
                 team={team}
-                teamKey={`drawn-${team.id}`}
-                expandedTeam={expandedTeam}
-                teamMatchData={teamMatchData}
-                teamsById={teamsById}
-                onTeamExpand={onTeamExpand}
-                calculateTeamPoints={calculateTeamPoints}
-                enterDelayMs={60 + (i + (featuredDisplay ? 1 : 0)) * 60}
+                isFeatured={false}
+                isModalOpen={modalTeam?.team.id === team.id}
+                points={calculateTeamPoints(teamsById[team.id])}
+                onExpand={() => {
+                  const pts = calculateTeamPoints(teamsById[team.id]);
+                  onTeamExpand(`drawn-${team.id}`, team.id);
+                  setModalTeam(m =>
+                    m?.team.id === team.id ? null : { team, isFeatured: false, points: pts }
+                  );
+                }}
               />
             ))}
           </div>
-        ) : null}
+        </div>
       </section>
+
+      {/* Team detail modal */}
+      {modalTeam && (
+        <TeamDetailModal
+          team={modalTeam.team}
+          points={modalTeam.points}
+          isFeatured={modalTeam.isFeatured}
+          teamMatchData={teamMatchData}
+          teamsById={teamsById}
+          allTeamNames={allTeamNames}
+          onClose={() => setModalTeam(null)}
+        />
+      )}
     </div>
   );
 }
