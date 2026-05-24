@@ -1,7 +1,9 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
@@ -56,22 +58,22 @@ import {
   where,
 } from "firebase/firestore";
 
-const LeaderboardPanel = dynamic(
+const LeaderboardPanel = dynamicImport(
   () => import("@/components/leaderboard/LeaderboardPanel"),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
-const DashboardBracket = dynamic(
+const DashboardBracket = dynamicImport(
   () => import("@/components/dashboard/DashboardBracket"),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
-const DashboardTransferMarket = dynamic(
+const DashboardTransferMarket = dynamicImport(
   () => import("@/components/dashboard/DashboardTransferMarket"),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
 
-const DashboardPortfolio = dynamic(
+const DashboardPortfolio = dynamicImport(
   () => import("@/components/dashboard/DashboardPortfolio"),
   { ssr: false, loading: () => <TabPanelLoading /> }
 );
