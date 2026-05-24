@@ -128,7 +128,7 @@ export default function CharityPageClient() {
               }
               liveCount={0}
               userDisplayName={user?.displayName ?? null}
-              userEmail={auth.currentUser?.email ?? null}
+              userEmail={auth?.currentUser?.email ?? null}
               showUserTile={Boolean(user)}
               trailing={<AppOverflowMenuButton />}
             />
