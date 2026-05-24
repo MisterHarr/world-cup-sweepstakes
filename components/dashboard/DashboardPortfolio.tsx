@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Clock, Crown, X } from "lucide-react";
+import { ChevronDown, Clock, Crown, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import {
@@ -202,36 +202,35 @@ function SquadCard({
         </div>
       )}
 
-      {/* Bottom content: name + tier left, pts right */}
-      <div className="absolute bottom-0 inset-x-0 z-10 flex items-end justify-between gap-2 px-3 pb-2.5 pt-6">
-        <div className="min-w-0">
-          <p className={cn("font-black leading-tight text-white truncate", isFeatured ? "text-[17px]" : "text-[15px]")}>
-            {team.name}
-          </p>
-          <div className="mt-1 flex items-center gap-1.5">
-            <TierChip tier={team.tier} />
+      {/* Bottom content: name + tier left, pts right, chevron centred at very bottom */}
+      <div className="absolute bottom-0 inset-x-0 z-10 px-3 pb-2 pt-6">
+        <div className="flex items-end justify-between gap-2">
+          <div className="min-w-0">
+            <p className={cn("font-black leading-tight text-white truncate", isFeatured ? "text-[17px]" : "text-[15px]")}>
+              {team.name}
+            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <TierChip tier={team.tier} />
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-[8px] uppercase tracking-wider text-white/60 font-semibold leading-none mb-0.5">pts</div>
+            <div className={cn(
+              "font-ff-display font-black leading-none tabular-nums tracking-tight",
+              isFeatured ? "text-[36px]" : "text-[28px]",
+              isEliminated ? "text-[var(--ff-danger)]" : "text-white",
+            )}>
+              {formatScoreOneDecimal(points)}
+            </div>
           </div>
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-[8px] uppercase tracking-wider text-white/60 font-semibold leading-none mb-0.5">pts</div>
-          <div className={cn(
-            "font-ff-display font-black leading-none tabular-nums tracking-tight",
-            isFeatured ? "text-[36px]" : "text-[28px]",
-            isEliminated ? "text-[var(--ff-danger)]" : "text-white",
-          )}>
-            {formatScoreOneDecimal(points)}
-          </div>
+        {/* Expand hint — centred chevron, no clash with score */}
+        <div className="mt-1 flex justify-center">
+          <ChevronDown className={cn(
+            "size-3.5 text-white/40 transition-transform duration-200",
+            isModalOpen && "rotate-180 text-[var(--ff-accent-text)]"
+          )} />
         </div>
-      </div>
-
-      {/* Open indicator */}
-      <div className={cn(
-        "absolute right-2 top-2 z-10 flex size-7 items-center justify-center rounded-full border text-[15px] font-bold transition-all",
-        isModalOpen
-          ? "border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] text-[var(--ff-accent-text)]"
-          : "border-white/35 bg-black/50 text-white/85"
-      )}>
-        {isModalOpen ? "−" : "+"}
       </div>
     </button>
   );
