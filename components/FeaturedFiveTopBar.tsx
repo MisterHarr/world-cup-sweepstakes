@@ -36,6 +36,12 @@ export type FeaturedFiveTopBarProps = {
   userEmail?: string | null;
   /** When false, the initials tile is omitted (e.g. signed-out marketing shell). */
   showUserTile?: boolean;
+  /**
+   * When provided, the initials tile becomes a button and clicking it calls
+   * this handler (used to open the "set display name" modal when no username
+   * has been chosen yet).
+   */
+  onSetDisplayName?: () => void;
   /** e.g. Sign out control */
   trailing?: ReactNode;
   className?: string;
@@ -47,6 +53,7 @@ export function FeaturedFiveTopBar({
   userDisplayName,
   userEmail,
   showUserTile = true,
+  onSetDisplayName,
   trailing,
   className,
 }: FeaturedFiveTopBarProps) {
@@ -84,15 +91,32 @@ export function FeaturedFiveTopBar({
         </div>
 
         {showUserTile ? (
-          <div
-            className="flex size-[26px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] font-ff-display text-[10px] font-bold uppercase leading-none tracking-wide text-[var(--ff-accent-text)]"
-            aria-label={
-              signedLabel === "Signed out" ? "Signed out" : `Account: ${signedLabel}`
-            }
-            title={signedLabel}
-          >
-            {initials}
-          </div>
+          onSetDisplayName ? (
+            <button
+              type="button"
+              onClick={onSetDisplayName}
+              title="Set your display name"
+              aria-label="Set your display name"
+              className="relative flex size-[26px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] font-ff-display text-[10px] font-bold uppercase leading-none tracking-wide text-[var(--ff-accent-text)] hover:bg-primary/20 transition-colors"
+            >
+              {initials}
+              {/* Pulsing green dot to draw attention */}
+              <span className="absolute -top-1 -right-1 flex size-2.5 items-center justify-center">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
+              </span>
+            </button>
+          ) : (
+            <div
+              className="flex size-[26px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] font-ff-display text-[10px] font-bold uppercase leading-none tracking-wide text-[var(--ff-accent-text)]"
+              aria-label={
+                signedLabel === "Signed out" ? "Signed out" : `Account: ${signedLabel}`
+              }
+              title={signedLabel}
+            >
+              {initials}
+            </div>
+          )
         ) : null}
 
         {trailing ? <div className="flex items-center gap-1.5">{trailing}</div> : null}

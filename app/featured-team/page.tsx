@@ -603,17 +603,17 @@ export default function FeaturedTeamPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-center text-3xl sm:text-4xl font-black tracking-tight">
-                You&apos;re In!
+                You&apos;re In! 🎉
               </DialogTitle>
               <DialogDescription className="text-center text-base sm:text-lg text-muted-foreground">
-                Featured team confirmed. Five teams are ready.
+                Star Team confirmed. Five more teams are ready.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-5">
               <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/12 to-primary/5 p-5 text-center shadow-[0_16px_36px_rgba(16,185,129,0.18)]">
                 <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-3">
-                  Your Featured Team
+                  Your Star Team
                 </div>
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-16 h-16 rounded-2xl overflow-hidden border border-primary/30 bg-background">
@@ -629,7 +629,7 @@ export default function FeaturedTeamPage() {
                     {confirmResult?.featured?.name ?? "—"}
                   </div>
                   <div className="text-xs sm:text-sm font-semibold text-primary">
-                    Earns 2x points while active
+                    Earns 2× points — your multiplier team
                   </div>
                 </div>
               </div>
@@ -639,7 +639,7 @@ export default function FeaturedTeamPage() {
                 className="w-full h-14 text-base sm:text-lg font-black tracking-wide"
                 size="lg"
               >
-                Reveal Teams
+                Reveal Your Squad
               </Button>
             </div>
           </DialogContent>

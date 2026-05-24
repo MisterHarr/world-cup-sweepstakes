@@ -243,7 +243,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("failed-precondition", "Not enough teams to draw from.");
   }
 
-  const drawnTeams = drawTierBalanced(eligibleForDraw, 5);
+  const drawnTeams = drawTierBalanced(eligibleForDraw, 5, featuredTeam.tier);
   if (drawnTeams.length < 5) {
     throw new HttpsError(
       "failed-precondition",
@@ -334,8 +334,41 @@ export const setUsername = onCall({ region: REGION }, async (request) => {
 
   const db = admin.firestore();
   const userRef = db.collection("users").doc(uid);
+
+  // Read user doc to enforce one-time setting
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    throw new HttpsError("not-found", "User profile not found.");
+  }
+  const userData = (userSnap.data() ?? {}) as Record<string, unknown>;
+  const isAdmin = request.auth?.token?.admin === true;
+
+  if (userData.username && !isAdmin) {
+    throw new HttpsError(
+      "already-exists",
+      "Display name already set. It can only be chosen once."
+    );
+  }
+
+  // Case-insensitive duplicate check
+  const rawLower = raw.toLowerCase();
+  const dupSnap = await db
+    .collection("users")
+    .where("usernameLower", "==", rawLower)
+    .limit(1)
+    .get();
+
+  const taken = dupSnap.docs.some((d) => d.id !== uid);
+  if (taken) {
+    throw new HttpsError(
+      "already-exists",
+      "That name is already taken — please choose another."
+    );
+  }
+
   await userRef.update({
     username: raw,
+    usernameLower: rawLower,
     updatedAt: FieldValue.serverTimestamp(),
   });
 

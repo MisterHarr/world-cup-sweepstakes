@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -11,16 +11,45 @@ interface Props {
   onSave: (username: string) => Promise<void>;
   /** Called when the user taps the X to dismiss for this session. */
   onDismiss: () => void;
+  /**
+   * Controlled open state — lets a parent force the modal open (e.g. from a
+   * top-bar button).  When undefined the component manages its own open state.
+   */
+  forceOpen?: boolean;
+  onForceOpenChange?: (open: boolean) => void;
+  /** Hide the banner strip — render only the modal (used when opened via top bar after dismissal). */
+  hideBanner?: boolean;
 }
 
 const MAX = 30;
 const MIN = 2;
 
-export function UsernameBanner({ defaultValue = "", onSave, onDismiss }: Props) {
-  const [modalOpen, setModalOpen] = useState(false);
+export function UsernameBanner({
+  defaultValue = "",
+  onSave,
+  onDismiss,
+  forceOpen,
+  onForceOpenChange,
+  hideBanner = false,
+}: Props) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [value, setValue] = useState(defaultValue);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Sync value when defaultValue changes (e.g. Google name loads async)
+  useEffect(() => {
+    setValue(defaultValue);
+  }, [defaultValue]);
+
+  const modalOpen = forceOpen !== undefined ? forceOpen : internalOpen;
+  function setModalOpen(open: boolean) {
+    if (forceOpen !== undefined) {
+      onForceOpenChange?.(open);
+    } else {
+      setInternalOpen(open);
+    }
+  }
 
   async function handleSave() {
     const trimmed = value.trim();
@@ -44,29 +73,31 @@ export function UsernameBanner({ defaultValue = "", onSave, onDismiss }: Props) 
 
   return (
     <>
-      {/* Banner */}
-      <div className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
-        <span className="flex-1 text-[var(--ff-fg-primary)]">
-          <span className="font-medium">Set your display name</span>
-          <span className="text-[var(--ff-fg-secondary)]">
-            {" "}— how others see you on the leaderboard.
+      {/* Banner — hidden when opened from top bar after user dismissed it */}
+      {!hideBanner && (
+        <div className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+          <span className="flex-1 text-[var(--ff-fg-primary)]">
+            <span className="font-medium">Set your display name</span>
+            <span className="text-[var(--ff-fg-secondary)]">
+              {" "}— how others see you on the leaderboard.
+            </span>
           </span>
-        </span>
-        <button
-          onClick={() => { setValue(defaultValue); setError(""); setModalOpen(true); }}
-          className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
-        >
-          Set name
-          <ChevronRight className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={onDismiss}
-          aria-label="Dismiss"
-          className="text-[var(--ff-fg-secondary)] hover:text-[var(--ff-fg-primary)] transition-colors shrink-0 -mr-1"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      </div>
+          <button
+            onClick={() => { setValue(defaultValue); setError(""); setModalOpen(true); }}
+            className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
+          >
+            Set name
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onDismiss}
+            aria-label="Dismiss"
+            className="text-[var(--ff-fg-secondary)] hover:text-[var(--ff-fg-primary)] transition-colors shrink-0 -mr-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Modal */}
       {modalOpen && (
@@ -78,9 +109,12 @@ export function UsernameBanner({ defaultValue = "", onSave, onDismiss }: Props) 
             <h2 className="text-base font-semibold text-[var(--ff-fg-primary)] mb-1">
               Your display name
             </h2>
-            <p className="text-sm text-[var(--ff-fg-secondary)] mb-5">
+            <p className="text-sm text-[var(--ff-fg-secondary)] mb-3">
               Shown on the leaderboard — not your Google account name.
             </p>
+            <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
+              ⚠️ Choose carefully — this can only be set once and cannot be changed later.
+            </div>
 
             <div className="relative mb-1">
               <input

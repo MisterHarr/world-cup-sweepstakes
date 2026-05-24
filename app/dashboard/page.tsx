@@ -335,6 +335,7 @@ function DashboardPageContent() {
   const [displayName, setDisplayName] = useState<string>("");
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [usernameBannerDismissed, setUsernameBannerDismissed] = useState(false);
+  const [usernameModalOpen, setUsernameModalOpen] = useState(false);
 
   const [userDoc, setUserDoc] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -1398,6 +1399,7 @@ function DashboardPageContent() {
               userDisplayName={signedIn ? topBarDisplayName : null}
               userEmail={auth?.currentUser?.email ?? null}
               showUserTile={signedIn}
+              onSetDisplayName={signedIn && !userHasUsername ? () => setUsernameModalOpen(true) : undefined}
               trailing={<AppOverflowMenuButton />}
             />
           </div>
@@ -1405,15 +1407,30 @@ function DashboardPageContent() {
 
         {/* Main */}
         <main className="max-w-6xl mx-auto p-4 md:p-8">
-        {/* Username banner — shown until user sets a display name */}
-        {signedIn && !userHasUsername && !usernameBannerDismissed && (
-          <div className="mb-4">
-            <UsernameBanner
-              defaultValue={displayName}
-              onSave={handleSetUsername}
-              onDismiss={() => setUsernameBannerDismissed(true)}
-            />
-          </div>
+        {/* Username banner — shown until user sets a display name or dismisses for session */}
+        {signedIn && !userHasUsername && (
+          <>
+            {!usernameBannerDismissed && (
+              <div className="mb-4">
+                <UsernameBanner
+                  defaultValue={displayName}
+                  onSave={handleSetUsername}
+                  onDismiss={() => setUsernameBannerDismissed(true)}
+                />
+              </div>
+            )}
+            {/* Modal-only instance — triggered via top bar after banner is dismissed */}
+            {usernameBannerDismissed && usernameModalOpen && (
+              <UsernameBanner
+                defaultValue={displayName}
+                onSave={handleSetUsername}
+                onDismiss={() => setUsernameModalOpen(false)}
+                forceOpen={usernameModalOpen}
+                onForceOpenChange={(open) => setUsernameModalOpen(open)}
+                hideBanner
+              />
+            )}
+          </>
         )}
         {/* Status / errors */}
         {error && (

@@ -209,9 +209,6 @@ function SquadCard({
             <p className={cn("font-black leading-tight text-white truncate", isFeatured ? "text-[17px]" : "text-[15px]")}>
               {team.name}
             </p>
-            <div className="mt-1 flex items-center gap-1.5">
-              <TierChip tier={team.tier} />
-            </div>
           </div>
           <div className="shrink-0 text-right">
             <div className="text-[8px] uppercase tracking-wider text-white/60 font-semibold leading-none mb-0.5">pts</div>
