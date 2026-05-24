@@ -17,14 +17,6 @@ type FaqItem = { q: string; a: string };
 type GlossaryItem = { term: string; meaning: string };
 type NavHelpItem = { label: string; meaning: string };
 
-const FIRST_TIME_STEPS = [
-  "Sign in with Google.",
-  "Pick your Star Team — this is the one team you choose yourself.",
-  "The app randomly draws 5 more teams for you.",
-  "Watch your score update automatically as matches are played.",
-  "Check Leaderboard to see where you rank.",
-];
-
 const FOOTBALL_BASICS: GlossaryItem[] = [
   {
     term: "Star Team",
@@ -195,15 +187,6 @@ export default function GuidePage() {
               {authError}
             </div>
           ) : null}
-
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">Getting started</h2>
-            <ol className="mt-3 space-y-1.5 text-sm text-muted-foreground list-decimal list-inside">
-              {FIRST_TIME_STEPS.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ol>
-          </section>
 
           <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
             <h2 className="text-xl font-black tracking-tight">Key terms</h2>
