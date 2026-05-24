@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { AppBrandBlock } from "@/components/AppBrandBlock";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
@@ -11,107 +12,89 @@ import { BRANDING } from "@/lib/branding";
 import { auth } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
+import { cn } from "@/lib/utils";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 
-type FaqItem = { q: string; a: string };
-type GlossaryItem = { term: string; meaning: string };
-type NavHelpItem = { label: string; meaning: string };
+// ── Data ────────────────────────────────────────────────────────────────────
 
-const FOOTBALL_BASICS: GlossaryItem[] = [
-  {
-    term: "Star Team",
-    meaning: "Your chosen team. Earns double points.",
-  },
-  {
-    term: "Drawn Teams",
-    meaning: "5 random teams the app assigns you.",
-  },
-  {
-    term: "Transfer",
-    meaning: "Swap one of your drawn teams for another.",
-  },
-  {
-    term: "Clean Sheet",
-    meaning: "A team that concedes 0 goals in a match. Worth +1 pt.",
-  },
-  {
-    term: "Yellow / Red Card",
-    meaning: "Cards reduce your team’s points.",
-  },
-];
-
-const NAV_HELP: NavHelpItem[] = [
-  {
-    label: "My Teams",
-    meaning: "Your squad, points breakdown, and next fixture for each team.",
-  },
-  {
-    label: "Leaderboard",
-    meaning: "Everyone’s scores and your current rank.",
-  },
-  {
-    label: "Live",
-    meaning: "Fixtures, results, and tournament bracket.",
-  },
-  {
-    label: "Transfer",
-    meaning: "Swap a drawn team (only available when the window is open).",
-  },
-];
-
-const SIMPLE_POINTS_RULES = [
+const POINTS = [
   "Win = +3 pts",
   "Draw = +1 pt",
-  "Goal scored = +1 pt",
+  "Goal = +1 pt",
   "Clean sheet = +1 pt",
   "Yellow card = −0.5 pts",
   "Red card = −1 pt",
   "Star Team = all points × 2",
 ];
 
-const FAQS: FaqItem[] = [
-  {
-    q: "I don’t follow football — can I still play?",
-    a: "Yes. Pick any Star Team you like. The app scores everything automatically.",
-  },
-  {
-    q: "Why does my Star Team score more?",
-    a: "Its points are doubled, so it has the biggest impact on your total.",
-  },
-  {
-    q: "Can I swap my Star Team?",
-    a: "No — your Star Team is locked. Only your 5 drawn teams can be transferred.",
-  },
+const TERMS = [
+  { term: "Star Team", meaning: "Your chosen team. Earns double points." },
+  { term: "Drawn Teams", meaning: "5 random teams assigned to you." },
+  { term: "Transfer", meaning: "Swap one drawn team for another." },
+  { term: "Clean Sheet", meaning: "0 goals conceded in a match. +1 pt." },
+  { term: "Cards", meaning: "Yellow −0.5 pt · Red −1 pt." },
 ];
 
-type TransferRule = { label: string; detail: string };
-
-const TRANSFER_RULES: TransferRule[] = [
-  {
-    label: "One transfer per player",
-    detail: "You get exactly 1 transfer for the whole tournament. Use it wisely.",
-  },
-  {
-    label: "Window opens after the group stage",
-    detail: "The window opens once all group stage matches are finished — after 28 June.",
-  },
-  {
-    label: "Window closes before the knockouts",
-    detail: "You must make your transfer before the Round of 32 begins. Once it closes, no more moves.",
-  },
-  {
-    label: "Only drawn teams can be swapped",
-    detail: "Your Star Team is locked. You can only replace one of your 5 drawn teams.",
-  },
-  {
-    label: "Transfers cost points",
-    detail: "Every transfer deducts points from your score. The bigger the upgrade, the higher the cost. Dropping to a weaker team costs much less.",
-  },
-  {
-    label: "You can’t pick up a team you already have",
-    detail: "You can’t transfer to a team already in your squad.",
-  },
+const TRANSFERS = [
+  { label: "1 transfer per player", detail: "One swap for the entire tournament." },
+  { label: "Window: after group stage", detail: "Opens after all group matches finish (after 28 June). Closes before the Round of 32." },
+  { label: "Drawn teams only", detail: "Your Star Team is locked — only drawn teams can be swapped." },
+  { label: "Costs points", detail: "Upgrading to a stronger team costs more. Downgrading costs less. Minimum cost: 5 pts." },
+  { label: "No duplicates", detail: "You can't pick up a team already in your squad." },
+  { label: "Any drawn team", detail: "You can drop eliminated or active teams — the choice is yours." },
 ];
+
+const TABS = [
+  { label: "My Teams", meaning: "Your squad, scores, and next fixture." },
+  { label: "Leaderboard", meaning: "Everyone's rank and total score." },
+  { label: "Live", meaning: "Scores, results, and fixtures." },
+  { label: "Transfer", meaning: "Swap a drawn team (window must be open)." },
+  { label: "Guide", meaning: "This page." },
+];
+
+const FAQS = [
+  { q: "I don't follow football — can I still play?", a: "Yes. Pick any Star Team. Everything scores automatically." },
+  { q: "Why does my Star Team score more?", a: "Its points are doubled." },
+  { q: "Can I swap my Star Team?", a: "No. Star Team is locked for the whole tournament." },
+];
+
+// ── Collapsible section ──────────────────────────────────────────────────────
+
+function GuideSection({
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="rounded-2xl border border-border bg-card/75 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 sm:px-6 text-left"
+      >
+        <h2 className="text-base font-bold tracking-tight">{title}</h2>
+        <ChevronDown
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform duration-200",
+            open && "rotate-180"
+          )}
+        />
+      </button>
+      {open && (
+        <div className="px-5 pb-5 sm:px-6 sm:pb-6 border-t border-border/50">
+          {children}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function GuidePage() {
   const router = useRouter();
@@ -202,81 +185,67 @@ export default function GuidePage() {
           </div>
         </header>
 
-        <main className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+        <main className="max-w-6xl mx-auto p-4 md:p-8 space-y-3">
           {authError ? (
             <div className="p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
               {authError}
             </div>
           ) : null}
 
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">Key terms</h2>
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {FOOTBALL_BASICS.map((item) => (
-                <article
-                  key={item.term}
-                  className="rounded-xl border border-border bg-background/40 p-3"
-                >
-                  <h3 className="text-sm font-semibold text-foreground">{item.term}</h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{item.meaning}</p>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">Points</h2>
+          <GuideSection title="Points" defaultOpen>
             <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-muted-foreground">
-              {SIMPLE_POINTS_RULES.map((rule) => (
+              {POINTS.map((rule) => (
                 <li key={rule} className="flex items-center gap-1.5">
                   <span className="size-1 rounded-full bg-muted-foreground/40 shrink-0" />
                   {rule}
                 </li>
               ))}
             </ul>
-          </section>
+          </GuideSection>
 
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">Transfers</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              After the group stage, a transfer window opens briefly before the knockout rounds begin. This is your one chance to drop an eliminated or weak team and pick up someone still in the tournament.
-            </p>
+          <GuideSection title="Transfers">
             <div className="mt-3 space-y-2">
-              {TRANSFER_RULES.map((rule) => (
-                <div key={rule.label} className="rounded-xl border border-border bg-background/40 p-3">
-                  <p className="text-sm font-semibold text-foreground">{rule.label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{rule.detail}</p>
+              {TRANSFERS.map((r) => (
+                <div key={r.label} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{r.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{r.detail}</p>
                 </div>
               ))}
             </div>
-          </section>
+          </GuideSection>
 
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">Tabs</h2>
+          <GuideSection title="Key terms">
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {TERMS.map((item) => (
+                <div key={item.term} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{item.term}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{item.meaning}</p>
+                </div>
+              ))}
+            </div>
+          </GuideSection>
+
+          <GuideSection title="Tabs">
             <div className="mt-3 space-y-2">
-              {NAV_HELP.map((item) => (
+              {TABS.map((item) => (
                 <div key={item.label} className="flex gap-3 text-sm">
                   <span className="w-24 shrink-0 font-semibold text-foreground">{item.label}</span>
                   <span className="text-muted-foreground">{item.meaning}</span>
                 </div>
               ))}
             </div>
-          </section>
+          </GuideSection>
 
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <h2 className="text-xl font-black tracking-tight">FAQ</h2>
-            <div className="mt-3 space-y-3">
+          <GuideSection title="FAQ">
+            <div className="mt-3 space-y-2">
               {FAQS.map((item) => (
-                <article
-                  key={item.q}
-                  className="rounded-xl border border-border bg-background/40 p-3.5"
-                >
-                  <h3 className="text-sm font-semibold text-foreground">{item.q}</h3>
-                  <p className="mt-1.5 text-xs text-muted-foreground">{item.a}</p>
-                </article>
+                <div key={item.q} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{item.q}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.a}</p>
+                </div>
               ))}
             </div>
-          </section>
+          </GuideSection>
         </main>
       </div>
     </AppShellV0>
