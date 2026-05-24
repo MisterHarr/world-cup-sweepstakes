@@ -39,7 +39,7 @@ const TRANSFERS = [
   { label: "1 transfer per player", detail: "One swap for the entire tournament." },
   { label: "Window: after group stage", detail: "Opens after all group matches finish (after 28 June). Closes before the Round of 32." },
   { label: "Drawn teams only", detail: "Your Star Team is locked — only drawn teams can be swapped." },
-  { label: "Costs points", detail: "Upgrading to a stronger team costs more. Downgrading costs less. Minimum cost: 5 pts." },
+  { label: "Costs points", detail: "Upgrading to a stronger team costs more. Downgrading costs less. Minimum cost: 2 pts." },
   { label: "No duplicates", detail: "You can't pick up a team already in your squad." },
   { label: "Any drawn team", detail: "You can drop eliminated or active teams — the choice is yours." },
 ];
@@ -54,7 +54,7 @@ const TABS = [
 
 const FAQS = [
   { q: "I don't follow football — can I still play?", a: "Yes. Pick any Star Team. Everything scores automatically." },
-  { q: "Why does my Star Team score more?", a: "Its points are doubled." },
+  { q: "Why does my Star Team score more?", a: "You locked in a 2× multiplier when you picked it — every point it earns counts double." },
   { q: "Can I swap my Star Team?", a: "No. Star Team is locked for the whole tournament." },
 ];
 

@@ -1406,7 +1406,7 @@ function DashboardPageContent() {
         {/* Main */}
         <main className="max-w-6xl mx-auto p-4 md:p-8">
         {/* Username banner — shown until user sets a display name */}
-        {signedIn && !loadingUser && !userHasUsername && !usernameBannerDismissed && (
+        {signedIn && !userHasUsername && !usernameBannerDismissed && (
           <div className="mb-4">
             <UsernameBanner
               defaultValue={displayName}

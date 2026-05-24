@@ -326,7 +326,7 @@ export default function FeaturedTeamPage() {
     }
 
     setIsSubmitting(true);
-    setStatus("Confirming your Featured Team...");
+    setStatus("Confirming your Star Team...");
 
     try {
       const confirmFn = httpsCallable(functions, "confirmFeaturedTeam");
@@ -339,7 +339,7 @@ export default function FeaturedTeamPage() {
 
       await getDoc(doc(db, "users", uid));
       setConfirmed(true);
-      setStatus("✅ Featured Team confirmed + 5 teams drawn!");
+      setStatus("✅ Star Team confirmed + 5 teams drawn!");
     } catch (e: unknown) {
       console.error(e);
       setError(friendlyErrorMessage(e, "Failed to confirm featured team."));
@@ -384,14 +384,13 @@ export default function FeaturedTeamPage() {
           {/* Page Title */}
           <div className="mb-7 text-center max-w-3xl mx-auto">
             <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-2">
-              Select Your Featured Team
+              Pick Your Star Team
             </h2>
             <p className="text-muted-foreground text-base sm:text-lg">
               Choose one team to be the star of your squad.
             </p>
             <p className="mt-3 text-sm sm:text-base font-semibold text-primary">
-              Featured team earns <span className="font-black">2x points</span> while active.
-              Choose wisely.
+              Your Star Team earns <span className="font-black">2× points</span> — choose wisely.
             </p>
           </div>
 
