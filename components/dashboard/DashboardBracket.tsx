@@ -242,11 +242,23 @@ const DashboardBracket = ({
               <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
                 {t1Name}
               </div>
-              {isUserTeam(match.t1) ? (
-                <div className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">
-                  SQUAD
-                </div>
-              ) : null}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {isUserTeam(match.t1) ? (
+                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
+                ) : null}
+                {(match.yellowCards?.[0] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
+                    {match.yellowCards![0] > 1 ? `×${match.yellowCards![0]}` : ""}
+                  </span>
+                )}
+                {(match.redCards?.[0] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
+                    {match.redCards![0] > 1 ? `×${match.redCards![0]}` : ""}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -290,11 +302,23 @@ const DashboardBracket = ({
               <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
                 {t2Name}
               </div>
-              {isUserTeam(match.t2) ? (
-                <div className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">
-                  SQUAD
-                </div>
-              ) : null}
+              <div className="flex flex-row-reverse items-center gap-1.5 mt-0.5">
+                {isUserTeam(match.t2) ? (
+                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
+                ) : null}
+                {(match.yellowCards?.[1] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                    {match.yellowCards![1] > 1 ? `×${match.yellowCards![1]}` : ""}
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
+                  </span>
+                )}
+                {(match.redCards?.[1] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                    {match.redCards![1] > 1 ? `×${match.redCards![1]}` : ""}
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>

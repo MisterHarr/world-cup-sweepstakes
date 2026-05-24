@@ -16,6 +16,9 @@ export type BracketMatch = {
   group?: string;
   /** Stage this match belongs to — populated when flattening cross-stage results. */
   stageId?: string;
+  /** Card counts [home, away] */
+  yellowCards?: [number, number];
+  redCards?: [number, number];
 };
 
 export const STAGE_ORDER = ["GROUP", "R32", "R16", "QF", "SF", "FINAL"] as const;

@@ -707,6 +707,11 @@ function DashboardPageContent() {
               ? groupRaw.trim()
               : undefined;
 
+          const homeYellow = typeof data.homeYellowCards === "number" ? data.homeYellowCards : 0;
+          const awayYellow = typeof data.awayYellowCards === "number" ? data.awayYellowCards : 0;
+          const homeRed = typeof data.homeRedCards === "number" ? data.homeRedCards : 0;
+          const awayRed = typeof data.awayRedCards === "number" ? data.awayRedCards : 0;
+
           const match: Match = {
             id: docSnap.id,
             t1: home,
@@ -720,6 +725,8 @@ function DashboardPageContent() {
             updatedAt,
             isLive: statusCode === "LIVE",
             group,
+            yellowCards: [homeYellow, awayYellow],
+            redCards: [homeRed, awayRed],
           };
 
           if (!grouped[stage]) grouped[stage] = [];

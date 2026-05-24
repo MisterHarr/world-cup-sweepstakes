@@ -18,20 +18,31 @@ export type MarketTeam = {
 };
 
 // Mirrors the server-side calculateTransferCost in functions/src/transfers.ts
-const BASE_COST = 10;
-const UPGRADE_MULTIPLIER = 15; // per tier gained (lower tier number = better team)
-const DOWNGRADE_DISCOUNT = 3;  // per tier dropped
-const MINIMUM_COST = 5;
+const BASE_COST = 3;
+const UPGRADE_MULTIPLIER = 4;  // per tier step when upgrading
+const FLAT_DOWNGRADE_COST = 2; // flat cost for any downgrade
+const MINIMUM_COST = 2;
 
 function calculateTransferCost(dropTier: number, pickupTier: number): number {
   const tierDifference = pickupTier - dropTier;
-  let tierPenalty = 0;
+  if (tierDifference > 0) return FLAT_DOWNGRADE_COST; // downgrade — flat
   if (tierDifference < 0) {
-    tierPenalty = Math.abs(tierDifference) * UPGRADE_MULTIPLIER;
-  } else if (tierDifference > 0) {
-    tierPenalty = -(tierDifference * DOWNGRADE_DISCOUNT);
+    return Math.max(MINIMUM_COST, BASE_COST + Math.abs(tierDifference) * UPGRADE_MULTIPLIER);
   }
-  return Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
+  return Math.max(MINIMUM_COST, BASE_COST); // lateral
+}
+
+function costBreakdown(dropTier: number, pickupTier: number): string[] {
+  const tierDifference = pickupTier - dropTier;
+  if (tierDifference > 0) return [`Downgrade — flat fee: ${FLAT_DOWNGRADE_COST} pts`];
+  if (tierDifference === 0) return [`Same tier — base fee: ${BASE_COST} pts`];
+  const steps = Math.abs(tierDifference);
+  const upgradeCost = steps * UPGRADE_MULTIPLIER;
+  return [
+    `Base fee: ${BASE_COST} pts`,
+    `Tier upgrade ×${steps}: +${upgradeCost} pts`,
+    `Total: ${BASE_COST + upgradeCost} pts`,
+  ];
 }
 
 export type TradeResult = {
@@ -300,8 +311,14 @@ const DashboardTransferMarket = ({
                 −{tieredCost}
               </p>
               <p className="mt-1 font-ff-ui text-[12px] text-[var(--ff-fg-quieter)]">pts · fee</p>
+              {/* Cost breakdown */}
+              <div className="mt-3 mx-auto inline-flex flex-col gap-0.5 rounded-lg bg-white/[0.04] px-3 py-2 text-left">
+                {costBreakdown(dropTier, pickupTier).map((line) => (
+                  <p key={line} className="font-ff-ui text-[11px] text-[var(--ff-fg-quieter)]">{line}</p>
+                ))}
+              </div>
               <p className="mt-3 font-ff-ui text-[13px] text-[var(--ff-fg-muted)]">
-                Score{" "}
+                Score after:{" "}
                 <span className="font-semibold text-[var(--ff-fg-primary)]">
                   {scoreFmt(projectedScore)} pts
                 </span>

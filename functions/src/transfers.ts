@@ -10,10 +10,12 @@ const TRANSFER_WINDOW_DOC = "transferWindow";
 const TRANSFER_SCORING_VERSION = "v2-tiered-cost";
 
 // Tiered transfer cost system
-const BASE_COST = 10;
-const UPGRADE_MULTIPLIER = 15; // Cost per tier when upgrading to better team
-const DOWNGRADE_DISCOUNT = 3; // Discount per tier when downgrading
-const MINIMUM_COST = 5; // Floor for any transfer
+// Calibrated for post-group-stage window: top teams earn ~15-20 pts across
+// remaining knockout matches, so costs must stay well below that ceiling.
+const BASE_COST = 3;           // Flat fee for any transfer
+const UPGRADE_MULTIPLIER = 4;  // Per tier step when upgrading
+const FLAT_DOWNGRADE_COST = 2; // Flat cost when moving to a lower tier
+const MINIMUM_COST = 2;        // Floor
 
 type PortfolioRole = "featured" | "drawn";
 type PortfolioItem = { teamId: string; role: PortfolioRole };
@@ -86,15 +88,14 @@ function calculateTransferCost(dropTier: number, pickupTier: number): number {
   let tierPenalty = 0;
 
   if (tierDifference < 0) {
-    // UPGRADING: Expensive (penalize)
+    // UPGRADING: base + per-tier penalty
     tierPenalty = Math.abs(tierDifference) * UPGRADE_MULTIPLIER;
   } else if (tierDifference > 0) {
-    // DOWNGRADING: Cheap (reward)
-    tierPenalty = -(tierDifference * DOWNGRADE_DISCOUNT);
+    // DOWNGRADING: flat cost regardless of how many tiers dropped
+    return FLAT_DOWNGRADE_COST;
   }
-  // else: LATERAL (same tier) - no penalty
+  // else: LATERAL (same tier) - just base cost
 
-  // Apply minimum cost floor
   return Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
 }
 
