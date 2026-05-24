@@ -386,7 +386,7 @@ export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => 
           isAdmin: false,
           department,
           hasSeenReveal: true,
-          remainingTransfers: 2,
+          remainingTransfers: 1,
           transferPenaltyPoints: 0,
           totalScore: 0,
           isMock: true,

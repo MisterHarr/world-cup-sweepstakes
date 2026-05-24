@@ -79,16 +79,37 @@ const FAQS: FaqItem[] = [
     a: "Its points are doubled, so it has the biggest impact on your total.",
   },
   {
-    q: "Why can’t I transfer right now?",
-    a: "The transfer window has to be open. When it’s closed, nobody can move teams.",
-  },
-  {
     q: "Can I swap my Star Team?",
-    a: "No — only your 5 drawn teams can be swapped.",
+    a: "No — your Star Team is locked. Only your 5 drawn teams can be transferred.",
+  },
+];
+
+type TransferRule = { label: string; detail: string };
+
+const TRANSFER_RULES: TransferRule[] = [
+  {
+    label: "One transfer per player",
+    detail: "You get exactly 1 transfer for the whole tournament. Use it wisely.",
   },
   {
-    q: "Why did my score drop after a transfer?",
-    a: "Each transfer costs points. The cost depends on how big the upgrade is.",
+    label: "Window opens after the group stage",
+    detail: "The window opens once all group stage matches are finished — after 28 June.",
+  },
+  {
+    label: "Window closes before the knockouts",
+    detail: "You must make your transfer before the Round of 32 begins. Once it closes, no more moves.",
+  },
+  {
+    label: "Only drawn teams can be swapped",
+    detail: "Your Star Team is locked. You can only replace one of your 5 drawn teams.",
+  },
+  {
+    label: "Transfers cost points",
+    detail: "Every transfer deducts points from your score. The bigger the upgrade, the higher the cost. Dropping to a weaker team costs much less.",
+  },
+  {
+    label: "You can’t pick up a team you already have",
+    detail: "You can’t transfer to a team already in your squad.",
   },
 ];
 
@@ -213,6 +234,21 @@ export default function GuidePage() {
                 </li>
               ))}
             </ul>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
+            <h2 className="text-xl font-black tracking-tight">Transfers</h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              After the group stage, a transfer window opens briefly before the knockout rounds begin. This is your one chance to drop an eliminated or weak team and pick up someone still in the tournament.
+            </p>
+            <div className="mt-3 space-y-2">
+              {TRANSFER_RULES.map((rule) => (
+                <div key={rule.label} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{rule.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{rule.detail}</p>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">

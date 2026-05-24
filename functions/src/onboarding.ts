@@ -93,7 +93,7 @@ function buildUserBootstrapPatch(params: {
     photoURL,
     portfolio: Array.isArray(existing.portfolio) ? existing.portfolio : [],
     totalScore: asNonNegativeNumber(existing.totalScore) ?? 0,
-    remainingTransfers: asNonNegativeNumber(existing.remainingTransfers) ?? 2,
+    remainingTransfers: asNonNegativeNumber(existing.remainingTransfers) ?? 1,
     transferPenaltyPoints: asNonNegativeNumber(existing.transferPenaltyPoints) ?? 0,
     isAdmin:
       typeof existing.isAdmin === "boolean"
