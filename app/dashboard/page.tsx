@@ -963,11 +963,7 @@ function DashboardPageContent() {
     setAuthBusy(true);
     try {
       setStatus("Opening Google sign-in...");
-      const mode = await signInWithGoogle(auth);
-      if (mode === "redirect") {
-        setStatus("Redirecting to Google sign-in...");
-        return;
-      }
+      await signInWithGoogle(auth);
       setStatus("");
     } catch (e: unknown) {
       console.error(e);

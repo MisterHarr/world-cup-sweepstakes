@@ -80,11 +80,7 @@ export default function StandaloneLeaderboardPage() {
     setStatus("Opening Google sign-in...");
     setAuthBusy(true);
     try {
-      const mode = await signInWithGoogle(auth);
-      if (mode === "redirect") {
-        setStatus("Redirecting to Google sign-in...");
-        return;
-      }
+      await signInWithGoogle(auth);
       setStatus("");
     } catch (err: unknown) {
       console.error(err);

@@ -189,10 +189,7 @@ export function AuthLandingPage() {
         setError("Google sign-in is not available in the local Auth Emulator. Use Email for local testing.");
         return;
       }
-      const mode = await signInWithGoogle(auth);
-      if (mode === "redirect") {
-        return;
-      }
+      await signInWithGoogle(auth);
     } catch (e: unknown) {
       if (!isExpectedAuthError(e)) {
         console.error(e);
