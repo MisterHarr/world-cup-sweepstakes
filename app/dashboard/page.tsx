@@ -1383,15 +1383,6 @@ function DashboardPageContent() {
             </div>
           </div>
         )}
-        {signedIn && !loadingUser && !userHasUsername && !usernameBannerDismissed && (
-          <div className="mx-auto max-w-6xl px-4 pt-4 md:px-8">
-            <UsernameBanner
-              defaultValue={displayName}
-              onSave={handleSetUsername}
-              onDismiss={() => setUsernameBannerDismissed(true)}
-            />
-          </div>
-        )}
         {/* Sticky Header */}
         <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
           <div className="pt-safe">
@@ -1414,6 +1405,16 @@ function DashboardPageContent() {
 
         {/* Main */}
         <main className="max-w-6xl mx-auto p-4 md:p-8">
+        {/* Username banner — shown until user sets a display name */}
+        {signedIn && !loadingUser && !userHasUsername && !usernameBannerDismissed && (
+          <div className="mb-4">
+            <UsernameBanner
+              defaultValue={displayName}
+              onSave={handleSetUsername}
+              onDismiss={() => setUsernameBannerDismissed(true)}
+            />
+          </div>
+        )}
         {/* Status / errors */}
         {error && (
           <div className="mb-4 p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
