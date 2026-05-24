@@ -337,7 +337,7 @@ export function AuthLandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-black/25 backdrop-blur-xl p-6 sm:p-8 shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
         <div className="text-center">
-          <div className="inline-block w-24 h-24 rounded-2xl mb-5 overflow-hidden">
+          <div className="inline-block w-20 h-20 rounded-2xl mb-4 overflow-hidden">
             <img
               src={BRANDING.logo512Src}
               alt={BRANDING.logoAlt}
@@ -381,6 +381,7 @@ export function AuthLandingPage() {
         <div className="mt-6 space-y-3">
           {!signedIn ? (
             <>
+              {authMethod !== "email" && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
                 <p className="text-sm text-foreground/90 font-medium">
                   New here?
@@ -416,6 +417,7 @@ export function AuthLandingPage() {
                   </div>
                 ) : null}
               </div>
+              )}
 
               {localAuthEmulator ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 text-center">
@@ -487,27 +489,27 @@ export function AuthLandingPage() {
                 </div>
               ) : (
                 <form
-                  className="space-y-4"
+                  className="space-y-2.5"
                   onSubmit={(event) => {
                     event.preventDefault();
                     void handleEmailAuth();
                   }}
                 >
                   {emailMode === "signup" ? (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="auth-full-name">Full name (optional)</Label>
+                    <div className="space-y-1">
+                      <Label htmlFor="auth-full-name" className="text-xs">Full name (optional)</Label>
                       <Input
                         id="auth-full-name"
                         type="text"
                         value={fullName}
                         onChange={(event) => setFullName(event.target.value)}
                         autoComplete="name"
-                        className="h-11"
+                        className="h-9 text-sm"
                       />
                     </div>
                   ) : null}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="auth-email">Email</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="auth-email" className="text-xs">Email</Label>
                     <Input
                       id="auth-email"
                       type="email"
@@ -515,11 +517,11 @@ export function AuthLandingPage() {
                       onChange={(event) => setEmail(event.target.value)}
                       placeholder="you@example.com"
                       autoComplete="email"
-                      className="h-11"
+                      className="h-9 text-sm"
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="auth-password">Password</Label>
+                  <div className="space-y-1">
+                    <Label htmlFor="auth-password" className="text-xs">Password</Label>
                     <Input
                       id="auth-password"
                       type="password"
@@ -528,14 +530,13 @@ export function AuthLandingPage() {
                       autoComplete={
                         emailMode === "signup" ? "new-password" : "current-password"
                       }
-                      className="h-11"
+                      className="h-9 text-sm"
                     />
                   </div>
                   <Button
                     type="submit"
                     disabled={checking || authBusy}
-                    className="w-full h-12 text-base font-semibold"
-                    size="lg"
+                    className="w-full h-10 text-sm font-semibold"
                   >
                     {authBusy
                       ? "Please wait..."
@@ -543,33 +544,33 @@ export function AuthLandingPage() {
                         ? "Create Account"
                         : "Sign in with Email"}
                   </Button>
-                  {emailMode === "signin" ? (
-                    <Button
+                  <div className="flex items-center justify-between gap-2 pt-0.5">
+                    {emailMode === "signin" ? (
+                      <button
+                        type="button"
+                        onClick={handlePasswordReset}
+                        disabled={checking || authBusy}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Forgot password?
+                      </button>
+                    ) : <span />}
+                    <button
                       type="button"
-                      variant="ghost"
-                      onClick={handlePasswordReset}
-                      disabled={checking || authBusy}
-                      className="w-full min-h-10 h-10 text-sm font-semibold"
+                      onClick={() => {
+                        setError("");
+                        setNotice("");
+                        setEmailMode((prev) =>
+                          prev === "signup" ? "signin" : "signup"
+                        );
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
                     >
-                      Forgot password?
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setError("");
-                      setNotice("");
-                      setEmailMode((prev) =>
-                        prev === "signup" ? "signin" : "signup"
-                      );
-                    }}
-                    className="w-full min-h-11 h-11 text-sm font-semibold"
-                  >
-                    {emailMode === "signup"
-                      ? "I already have an account"
-                      : "Create a new account"}
-                  </Button>
+                      {emailMode === "signup"
+                        ? "Already have an account"
+                        : "Create account"}
+                    </button>
+                  </div>
                 </form>
               )}
             </>
