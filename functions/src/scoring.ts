@@ -506,6 +506,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       const data = userDoc.data() as Record<string, unknown>;
 
       const displayName =
+        asString(data.username) ??
         asString(data.displayName) ??
         asString(data.name) ??
         asString(data.email) ??

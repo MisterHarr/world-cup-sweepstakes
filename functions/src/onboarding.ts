@@ -318,6 +318,43 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
   }
 });
 
+export const setUsername = onCall({ region: REGION }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+
+  const requestData = isRecord(request.data) ? request.data : {};
+  const raw = asTrimmedString(requestData.username);
+
+  if (!raw || raw.length < 2 || raw.length > 30) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Username must be between 2 and 30 characters."
+    );
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(uid);
+  await userRef.update({
+    username: raw,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  // Patch the leaderboard immediately so the name appears at once
+  const lbRef = db.collection("leaderboard").doc("current");
+  const lbSnap = await lbRef.get();
+  if (lbSnap.exists) {
+    const lbData = (lbSnap.data() ?? {}) as Record<string, unknown>;
+    if (Array.isArray(lbData.rows)) {
+      const updatedRows = (lbData.rows as Record<string, unknown>[]).map((row) =>
+        row.userId === uid ? { ...row, displayName: raw } : row
+      );
+      await lbRef.update({ rows: updatedRows });
+    }
+  }
+
+  return { ok: true, username: raw };
+});
+
 export const setDepartment = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {

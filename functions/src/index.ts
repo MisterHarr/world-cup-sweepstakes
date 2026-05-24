@@ -2,7 +2,7 @@ import * as admin from "firebase-admin";
 
 admin.initializeApp();
 
-export { ensureUserProfile, assignDrawnTeams, confirmFeaturedTeam, setDepartment } from "./onboarding";
+export { ensureUserProfile, assignDrawnTeams, confirmFeaturedTeam, setDepartment, setUsername } from "./onboarding";
 export { adminListUsers, adminAssignTeamsToUser, adminSeedMockUsers } from "./adminUsers";
 export { setAdminClaim } from "./admin";
 export { getLeaderboard } from "./getLeaderboard";

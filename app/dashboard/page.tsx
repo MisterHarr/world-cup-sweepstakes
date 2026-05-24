@@ -7,6 +7,7 @@ import dynamicImport from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { UsernameBanner } from "@/components/dashboard/UsernameBanner";
 import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import type {
@@ -333,6 +334,7 @@ function DashboardPageContent() {
   const [uid, setUid] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState<string>("");
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [usernameBannerDismissed, setUsernameBannerDismissed] = useState(false);
 
   const [userDoc, setUserDoc] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(false);
@@ -962,6 +964,20 @@ function DashboardPageContent() {
     return Array.from(set);
   }, [drawnTeamIds, featuredTeamId]);
 
+  const userHasUsername = Boolean(
+    typeof userDocData.username === "string" && (userDocData.username as string).trim().length > 0
+  );
+
+  // The name to show in top bar: prefer chosen username, fall back to Google name
+  const topBarDisplayName = (userDocData.username as string | undefined)?.trim() || displayName || null;
+
+  async function handleSetUsername(username: string): Promise<void> {
+    const fn = httpsCallable(functions, "setUsername");
+    await fn({ username });
+    // Optimistically update local state so the banner disappears immediately
+    setUserDoc((prev) => prev ? { ...prev, username } : prev);
+  }
+
   async function handleGoogleSignIn() {
     if (authBusy) return;
 
@@ -1367,6 +1383,15 @@ function DashboardPageContent() {
             </div>
           </div>
         )}
+        {signedIn && !loadingUser && !userHasUsername && !usernameBannerDismissed && (
+          <div className="mx-auto max-w-6xl px-4 pt-4 md:px-8">
+            <UsernameBanner
+              defaultValue={displayName}
+              onSave={handleSetUsername}
+              onDismiss={() => setUsernameBannerDismissed(true)}
+            />
+          </div>
+        )}
         {/* Sticky Header */}
         <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
           <div className="pt-safe">
@@ -1379,7 +1404,7 @@ function DashboardPageContent() {
                 />
               }
               liveCount={liveMatchCount}
-              userDisplayName={signedIn ? displayName || null : null}
+              userDisplayName={signedIn ? topBarDisplayName : null}
               userEmail={auth?.currentUser?.email ?? null}
               showUserTile={signedIn}
               trailing={<AppOverflowMenuButton />}
