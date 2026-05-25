@@ -63,6 +63,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       icon: Tv,
       href: "/dashboard?tab=bracket",
       onClick: onLive,
+      badgeVariant: "live" as const,
     },
   ];
 
@@ -94,6 +95,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
     icon: ArrowLeftRight,
     href: "/dashboard?tab=market",
     onClick: onTransfer,
+    badgeVariant: "amber" as const,
   });
 
   return navItems;
