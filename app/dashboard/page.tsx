@@ -543,11 +543,24 @@ function DashboardPageContent() {
     return () => unsub();
   }, []);
 
-  // Reveal gate - redirect to reveal screen if user hasn't seen it yet
+  // Entry gate — send users without a confirmed entry to the star team picker
+  // Reveal gate — send users who haven't seen the reveal there first
   useEffect(() => {
     if (!signedIn) return;
     if (loadingUser) return;
-    if (!userDoc) return;
+    if (!userDoc) {
+      // No Firestore doc at all (e.g. deleted by admin) — treat as new user
+      router.replace("/featured-team");
+      return;
+    }
+
+    const confirmedAt = userDoc.entry?.confirmedAt;
+    const hasConfirmedEntry = Boolean(confirmedAt);
+
+    if (!hasConfirmedEntry) {
+      router.replace("/featured-team");
+      return;
+    }
 
     const hasTeams = userDoc.entry?.featuredTeamId && userDoc.entry?.drawnTeamIds?.length >= 5;
     const hasSeenReveal = userDoc.hasSeenReveal ?? false;
@@ -1028,12 +1041,16 @@ function DashboardPageContent() {
     onLive: () => setActiveTab("bracket"),
   }).map((item) => {
     if (item.id === "live") {
-      return { ...item, badge: String(liveMatchCount), badgeVariant: "live" as const };
-    }
-    if (item.id === "transfer" && remainingTransfers > 0) {
       return {
         ...item,
-        badge: String(remainingTransfers),
+        badge: liveMatchCount > 0 ? String(liveMatchCount) : "",
+        badgeVariant: "live" as const,
+      };
+    }
+    if (item.id === "transfer") {
+      return {
+        ...item,
+        badge: remainingTransfers > 0 ? String(remainingTransfers) : "",
         badgeVariant: "amber" as const,
       };
     }

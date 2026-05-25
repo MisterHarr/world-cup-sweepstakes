@@ -175,7 +175,7 @@ export function AppShellV0({ children, navItems, activeId }: AppShellV0Props) {
                   )}
                   aria-hidden
                 />
-                {item.badge ? (
+                {item.badgeVariant ? (
                   <span
                     className={cn(
                       "pointer-events-none absolute right-0 top-0 flex h-3.5 min-w-3.5 translate-x-1/2 -translate-y-0.5 items-center justify-center rounded-full px-0.5 text-[8px] font-bold leading-none",
