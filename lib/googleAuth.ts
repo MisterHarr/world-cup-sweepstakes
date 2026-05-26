@@ -28,10 +28,6 @@ function isInAppBrowser(): boolean {
   );
 }
 
-export function isUsingRedirectSignIn(): boolean {
-  return isInAppBrowser();
-}
-
 export async function signInWithGoogle(
   auth: Auth
 ): Promise<GoogleSignInMode> {
