@@ -42,7 +42,7 @@ export type AppShellNavItem = {
   title?: string;
   /** Optional count / label in a corner pip (Live / Transfer). */
   badge?: string;
-  badgeVariant?: "live" | "amber";
+  badgeVariant?: "live" | "live-active" | "amber";
 };
 
 const MAIN_BOTTOM_IDS = [
@@ -156,6 +156,8 @@ export function AppShellV0({ children, navItems, activeId }: AppShellV0Props) {
           const pipTone =
             item.badgeVariant === "amber"
               ? "bg-[var(--ff-gold)] text-black"
+              : item.badgeVariant === "live-active"
+              ? "bg-emerald-500 text-black shadow-[0_0_6px_2px_rgba(52,211,153,0.7)]"
               : "bg-[var(--ff-danger)] text-black";
 
           const scaleClass = cn(

@@ -1043,8 +1043,8 @@ function DashboardPageContent() {
     if (item.id === "live") {
       return {
         ...item,
-        badge: liveMatchCount > 0 ? String(liveMatchCount) : "",
-        badgeVariant: "live" as const,
+        badge: String(liveMatchCount),
+        badgeVariant: liveMatchCount > 0 ? "live-active" as const : "live" as const,
       };
     }
     if (item.id === "transfer") {
