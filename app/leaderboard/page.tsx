@@ -307,7 +307,7 @@ export default function StandaloneLeaderboardPage() {
                 />
               }
               liveCount={0}
-              userDisplayName={signedIn ? displayName || null : null}
+              userDisplayName={signedIn ? ((userDoc?.username as string | undefined) ?? displayName) || null : null}
               userEmail={auth?.currentUser?.email ?? null}
               showUserTile={signedIn}
               trailing={<AppOverflowMenuButton />}

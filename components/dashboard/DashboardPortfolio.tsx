@@ -272,10 +272,8 @@ function TeamDetailModal({
     { key: "redCards",    label: "Red cards",    value: asNumber(record?.redCards),     rate: -1,   rateLabel: "−1 pt/card",    color: "text-[var(--ff-danger)]" },
     { key: "yellowCards", label: "Yellow cards", value: asNumber(record?.yellowCards),  rate: -0.5, rateLabel: "−0.5 pt/card",  color: "text-[var(--ff-danger)]" },
   ];
-  // Only show red/yellow cards rows if the team has any; always show the rest
-  const statBreakdowns = rawBreakdowns.filter(
-    (s) => !["redCards", "yellowCards"].includes(s.key) || s.value > 0
-  );
+  // Always show all stat rows including red/yellow cards
+  const statBreakdowns = rawBreakdowns;
 
   return (
     <div
