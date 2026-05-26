@@ -9,6 +9,7 @@ import { ensureUserDoc } from "@/lib/userBootstrap";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import {
   createUserWithEmailAndPassword,
+  getRedirectResult,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
@@ -145,6 +146,17 @@ export function AuthLandingPage() {
     const isLocal = isLocalAuthEmulatorEnabled();
     setLocalAuthEmulator(isLocal);
     setAuthMethod(isLocal ? "email" : "google");
+  }, []);
+
+  // Handle the redirect callback from signInWithRedirect (in-app browsers).
+  // getRedirectResult is a no-op when no redirect is pending, so it's safe to
+  // call unconditionally. Errors (cancelled, network, etc.) are shown as auth errors.
+  useEffect(() => {
+    getRedirectResult(auth).catch((err: unknown) => {
+      const message = authErrorMessage(err, "Sign-in failed.");
+      if (message) setError(message);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
