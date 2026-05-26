@@ -459,32 +459,29 @@ const DashboardTransferMarket = ({
       ) : (
         <>
           {/* ── Transfer status header ── */}
-          <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0f1115] px-4 py-3.5">
-            <div className="flex items-center gap-3 min-w-0">
+          <div className="mb-5 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0f1115] px-4 py-3.5">
+            {/* Row 1: icon + title */}
+            <div className="flex items-center gap-3">
               {transferWindowOpen
                 ? <Unlock className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
                 : <Lock className="h-5 w-5 shrink-0 text-[var(--ff-danger)]" aria-hidden />
               }
-              <div className="min-w-0">
-                <p className={cn(
-                  "font-ff-display text-[18px] font-bold leading-tight",
-                  transferWindowOpen ? "text-emerald-400" : "text-[var(--ff-fg-primary)]"
-                )}>
-                  {transferWindowOpen ? "Window Open" : "Window Closed"}
-                </p>
-                {transferWindowLabel ? (
-                  <p className="mt-0.5 font-ff-ui text-[11px] text-[var(--ff-fg-faint)] truncate">{transferWindowLabel}</p>
-                ) : null}
-              </div>
+              <p className={cn(
+                "font-ff-display text-[18px] font-bold leading-tight",
+                transferWindowOpen ? "text-emerald-400" : "text-[var(--ff-fg-primary)]"
+              )}>
+                {transferWindowOpen ? "Window Open" : "Window Closed"}
+              </p>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            {/* Row 2: chips — always on their own line so they never overlap the title */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
               <span className={cn(
                 "rounded-full border px-3 py-1 font-ff-ui text-[11px] font-semibold",
                 transfersRemaining > 0
                   ? "border-[var(--ff-gold)]/40 bg-[rgba(245,158,11,0.1)] text-[var(--ff-gold)]"
                   : "border-[var(--ff-hairline)] bg-white/[0.03] text-[var(--ff-fg-quieter)]"
               )}>
-                {transfersRemaining} left
+                {transfersRemaining} transfer{transfersRemaining === 1 ? "" : "s"} remaining
               </span>
               <span className="rounded-full border border-[var(--ff-hairline)] bg-white/[0.03] px-3 py-1 font-ff-ui text-[11px] font-semibold text-[var(--ff-fg-secondary)]">
                 {scoreFmt(userScore)} pts
@@ -496,12 +493,15 @@ const DashboardTransferMarket = ({
                 <History className="h-3 w-3" aria-hidden />
                 History
               </Link>
+              {transferWindowLabel ? (
+                <span className="font-ff-ui text-[11px] text-[var(--ff-fg-faint)]">{transferWindowLabel}</span>
+              ) : null}
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col lg:min-h-0 lg:flex-1">
-            <div className="mb-6 flex min-h-0 max-h-none flex-col gap-6 lg:mb-0 lg:max-h-[min(640px,calc(100dvh-15rem))] lg:flex-1 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden">
-              <div className="lg:flex lg:min-h-0 lg:w-[40%] lg:max-w-sm lg:shrink-0 lg:flex-col">
+          <div className="flex min-h-0 flex-col md:min-h-0 md:flex-1">
+            <div className="mb-6 flex min-h-0 max-h-none flex-col gap-6 md:mb-0 md:max-h-[min(640px,calc(100dvh-15rem))] md:flex-1 md:flex-row md:items-stretch md:gap-6 md:overflow-hidden">
+              <div className="md:flex md:min-h-0 md:w-[42%] md:max-w-xs md:shrink-0 md:flex-col">
                 <p className="mb-2.5 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
                   Release a team
                 </p>
@@ -510,7 +510,7 @@ const DashboardTransferMarket = ({
                     No squad teams available.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-2.5 lg:max-h-full lg:auto-rows-min lg:overflow-y-auto xl:grid-cols-3">
+                  <div className="grid grid-cols-3 gap-2 md:grid-cols-2 md:max-h-full md:auto-rows-min md:overflow-y-auto">
                     {releaseTeams.map((team) => (
                       <SquadReleaseCard
                         key={team.id}
@@ -529,13 +529,13 @@ const DashboardTransferMarket = ({
 
               <section
                 className={cn(
-                  "flex min-h-0 flex-col transition-opacity duration-200 motion-reduce:transition-none lg:min-h-0 lg:flex-1",
+                  "flex min-h-0 flex-col transition-opacity duration-200 motion-reduce:transition-none md:min-h-0 md:flex-1",
                   canPickReplacement ? "opacity-100" : "pointer-events-none opacity-[0.35]"
                 )}
                 aria-disabled={!canPickReplacement}
               >
                 <p className="mb-2 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                  ② Choose replacement
+                  Choose replacement
                 </p>
                 <div className="mb-3 flex shrink-0 items-center gap-2 border-b border-[rgba(255,255,255,0.07)] pb-2">
                   <Search className="h-4 w-4 shrink-0 text-[var(--ff-fg-faint)]" aria-hidden />
@@ -548,7 +548,7 @@ const DashboardTransferMarket = ({
                   />
                 </div>
 
-                <div className="max-h-[min(50vh,420px)] min-h-0 flex-1 overflow-y-auto rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card)] lg:max-h-none">
+                <div className="max-h-[min(50vh,420px)] min-h-0 flex-1 overflow-y-auto rounded-xl border border-[var(--ff-hairline-muted)] bg-[var(--ff-bg-card)] md:max-h-none">
                   {filteredAvailable.length === 0 ? (
                     <div className="p-8 text-center font-ff-ui text-sm text-[var(--ff-fg-quiet)]">No teams found.</div>
                   ) : (
