@@ -1413,9 +1413,9 @@ function DashboardPageContent() {
                 />
               }
               liveCount={liveMatchCount}
-              userDisplayName={signedIn && !loadingUser ? topBarDisplayName : null}
-              userEmail={auth?.currentUser?.email ?? null}
-              showUserTile={signedIn}
+              userDisplayName={topBarDisplayName}
+              userEmail={null}
+              showUserTile={signedIn && !checkingAuth && !loadingUser}
               onSetDisplayName={signedIn && !loadingUser && !userHasUsername ? () => setUsernameModalOpen(true) : undefined}
               trailing={<AppOverflowMenuButton />}
             />

@@ -250,9 +250,9 @@ export default function TransferHistoryPage() {
                 />
               }
               liveCount={0}
-              userDisplayName={signedIn ? displayName || null : null}
-              userEmail={auth?.currentUser?.email ?? null}
-              showUserTile={signedIn}
+              userDisplayName={(userDoc as any)?.username ?? displayName ?? null}
+              userEmail={null}
+              showUserTile={signedIn && !checkingAuth && !loadingUser}
               trailing={<AppOverflowMenuButton />}
             />
           </div>
