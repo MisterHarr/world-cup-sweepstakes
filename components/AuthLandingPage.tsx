@@ -137,6 +137,7 @@ export function AuthLandingPage() {
 
   const [continuing, setContinuing] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<string>("");
+  const [bootstrapFailed, setBootstrapFailed] = useState(false);
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
 
@@ -154,10 +155,13 @@ export function AuthLandingPage() {
       setAuthBusy(false);
       setContinuing(false);
       setBootstrapStatus("");
+      setBootstrapFailed(false);
       setNotice("");
 
       if (!u) return;
 
+      // Bootstrap the user profile, then auto-navigate
+      setContinuing(true);
       try {
         const result = await ensureUserDoc({
           uid: u.uid,
@@ -168,13 +172,22 @@ export function AuthLandingPage() {
         setBootstrapStatus(
           `Profile bootstrap: ${result.bootstrapPath}${result.created ? " (created)" : ""}`
         );
+        // Auto-navigate: read the user doc and route accordingly
+        const userRef = doc(db, "users", u.uid);
+        const snap = await getDoc(userRef);
+        const rawData = snap.exists() ? snap.data() : null;
+        const data = isRecord(rawData) ? rawData : null;
+        const confirmed = hasConfirmedEntry(data);
+        router.push(confirmed ? "/dashboard" : "/featured-team");
       } catch (err) {
         console.error("ensureUserDoc failed:", err);
         setBootstrapStatus("Profile bootstrap failed.");
+        setBootstrapFailed(true);
+        setContinuing(false);
       }
     });
     return () => unsub();
-  }, []);
+  }, [router]);
 
   async function handleGoogleSignIn() {
     if (authBusy) return;
@@ -372,9 +385,9 @@ export function AuthLandingPage() {
           </div>
         ) : null}
 
-        {signedIn && bootstrapStatus === "Profile bootstrap failed." ? (
+        {signedIn && bootstrapFailed ? (
           <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-center text-xs text-red-300">
-            Something went wrong setting up your profile. Please refresh and try again.
+            Something went wrong setting up your profile. Try the button below or refresh the page.
           </div>
         ) : null}
 
@@ -576,15 +589,17 @@ export function AuthLandingPage() {
                 className="w-full h-12 text-base font-semibold"
                 size="lg"
               >
-                {continuing ? "Loading..." : "Continue"}
+                {continuing ? "Taking you in…" : "Continue"}
               </Button>
-              <Button
-                variant="outline"
-                onClick={handleSignOut}
-                className="w-full h-11 text-sm font-semibold"
-              >
-                Sign Out
-              </Button>
+              {bootstrapFailed ? (
+                <Button
+                  variant="outline"
+                  onClick={handleSignOut}
+                  className="w-full h-11 text-sm font-semibold"
+                >
+                  Sign Out
+                </Button>
+              ) : null}
             </>
           )}
         </div>
