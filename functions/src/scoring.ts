@@ -2,6 +2,18 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "./auth";
+import {
+  getErrorMessage,
+  markScoresDirty,
+  recordRecomputeAttempt,
+  recordRecomputeError,
+  recordRecomputeSuccess,
+} from "./ingestHealth";
+import {
+  loadKnownTeamIds,
+  validateMatchUpdate,
+} from "./ingest/validateMatchUpdate";
+import type { NormalizedMatchUpdate } from "./providers/providerTypes";
 
 const REGION = "asia-southeast1";
 const DEFAULT_TRANSFER_PENALTY_POINTS = 15;
@@ -147,8 +159,17 @@ export const adminUpsertMatch = onCall({ region: REGION }, async (request) => {
     asNonNegativeNumber(existing.awayYellowCards) ??
     0;
 
-  const payload = cleanUndefined({
-    matchId,
+  const nowIso = new Date().toISOString();
+  const revision =
+    typeof existing.providerRevision === "number" &&
+    Number.isFinite(existing.providerRevision)
+      ? Math.floor(existing.providerRevision) + 1
+      : Date.now();
+
+  const normalizedUpdate: NormalizedMatchUpdate = {
+    provider: "manual",
+    providerMatchId: matchId,
+    canonicalMatchId: matchId,
     homeTeamId,
     awayTeamId,
     homeScore: homeScore ?? null,
@@ -160,7 +181,42 @@ export const adminUpsertMatch = onCall({ region: REGION }, async (request) => {
     homeYellowCards,
     awayRedCards,
     awayYellowCards,
+    providerUpdatedAt: nowIso,
+    ingestReceivedAt: nowIso,
+    revision,
+    correction: true,
+  };
+
+  const knownTeamIds = await loadKnownTeamIds(db);
+  const validation = validateMatchUpdate({
+    update: normalizedUpdate,
+    knownTeamIds,
+    existing,
+  });
+
+  if (!validation.ok) {
+    throw new HttpsError("invalid-argument", validation.message);
+  }
+
+  const payload = cleanUndefined({
+    matchId: validation.update.canonicalMatchId,
+    homeTeamId: validation.update.homeTeamId,
+    awayTeamId: validation.update.awayTeamId,
+    homeScore: validation.update.homeScore,
+    awayScore: validation.update.awayScore,
+    status: validation.update.status,
+    stage: validation.update.stage,
+    kickoffTime: validation.update.kickoffTime,
+    homeRedCards: validation.update.homeRedCards,
+    homeYellowCards: validation.update.homeYellowCards,
+    awayRedCards: validation.update.awayRedCards,
+    awayYellowCards: validation.update.awayYellowCards,
     source: "manual",
+    provider: validation.update.provider,
+    providerMatchId: validation.update.providerMatchId,
+    providerUpdatedAt: validation.update.providerUpdatedAt,
+    ingestReceivedAt: validation.update.ingestReceivedAt,
+    providerRevision: validation.update.revision,
     lastUpdated: FieldValue.serverTimestamp(),
   });
 
@@ -204,31 +260,44 @@ function calcTeamPoints(stats: TeamStats): number {
   );
 }
 
-function hasBadgeEntry(value: unknown): boolean {
+function hasBadgeUnlockTimestamp(value: unknown): boolean {
   if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (value instanceof Date) return !Number.isNaN(value.getTime());
+  return isRecord(value);
+}
+
+function hasBadgeId(value: unknown): boolean {
   if (!isRecord(value)) return false;
   return typeof value.badgeId === "string" && value.badgeId.trim().length > 0;
+}
+
+function shouldCountBadge(value: unknown): boolean {
+  if (value === true) return true;
+  if (typeof value === "string") return value.trim().length > 0;
+  if (!isRecord(value)) return false;
+
+  if (value.unlocked === false) return false;
+  if (value.unlocked === true) return true;
+  if (hasBadgeUnlockTimestamp(value.unlockedAt)) return true;
+
+  return hasBadgeId(value);
 }
 
 function readBadgeCount(userData: unknown): number {
   const source = isRecord(userData) ? userData : {};
 
   if (Array.isArray(source.earnedBadges)) {
-    return source.earnedBadges.filter((entry: unknown) => hasBadgeEntry(entry))
+    return source.earnedBadges.filter((entry: unknown) => shouldCountBadge(entry))
       .length;
   }
 
   if (Array.isArray(source.badges)) {
-    return source.badges.filter((entry: unknown) => hasBadgeEntry(entry)).length;
+    return source.badges.filter((entry: unknown) => shouldCountBadge(entry)).length;
   }
 
   if (isRecord(source.badges)) {
-    return Object.values(source.badges).filter((value: unknown) => {
-      if (value === true) return true;
-      if (!isRecord(value)) return false;
-      if (value.unlocked === true) return true;
-      return isRecord(value.unlockedAt);
-    }).length;
+    return Object.values(source.badges).filter((value: unknown) => shouldCountBadge(value)).length;
   }
 
   return 0;
@@ -271,227 +340,297 @@ type RecomputeOptions = {
   includeLive: boolean;
   scoringVersion: string;
   initiatedBy: string;
+  target?: "public" | "shadow";
 };
 
 export async function recomputeScoresCore(options: RecomputeOptions) {
   const includeLive = options.includeLive;
   const scoringVersion = options.scoringVersion;
   const initiatedBy = options.initiatedBy;
+  const target = options.target ?? "public";
+  const isShadowTarget = target === "shadow";
+  const matchesCollection = isShadowTarget ? "shadowMatches" : "matches";
+  const leaderboardCollection = isShadowTarget
+    ? "shadowLeaderboard"
+    : "leaderboard";
 
-  const db = admin.firestore();
-  const matchesSnap = await db.collection("matches").get();
+  await recordRecomputeAttempt();
 
-  const statsByTeam: Record<string, TeamStats> = {};
-  const eligibleStatuses: MatchStatus[] = includeLive
-    ? ["LIVE", "FINISHED"]
-    : ["FINISHED"];
+  try {
+    const db = admin.firestore();
+    const leaderboardRef = db.collection(leaderboardCollection).doc("current");
 
-  matchesSnap.docs.forEach((docSnap) => {
-    const data = docSnap.data() as Record<string, unknown>;
-    const status = asStatus(data.status);
-    if (!status || !eligibleStatuses.includes(status)) return;
-
-    const homeTeamId = asString(data.homeTeamId);
-    const awayTeamId = asString(data.awayTeamId);
-    const homeScore = asNumberOrNull(data.homeScore);
-    const awayScore = asNumberOrNull(data.awayScore);
-
-    if (!homeTeamId || !awayTeamId) return;
-    if (homeScore === null || awayScore === null) return;
-
-    if (!statsByTeam[homeTeamId]) statsByTeam[homeTeamId] = emptyStats();
-    if (!statsByTeam[awayTeamId]) statsByTeam[awayTeamId] = emptyStats();
-
-    const home = statsByTeam[homeTeamId];
-    const away = statsByTeam[awayTeamId];
-
-    home.goalsScored += homeScore;
-    home.goalsConceded += awayScore;
-    away.goalsScored += awayScore;
-    away.goalsConceded += homeScore;
-
-    if (homeScore > awayScore) {
-      home.wins += 1;
-      away.losses += 1;
-    } else if (homeScore < awayScore) {
-      away.wins += 1;
-      home.losses += 1;
-    } else {
-      home.draws += 1;
-      away.draws += 1;
+    if (isShadowTarget) {
+      await leaderboardRef.set(
+        {
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          lastAttemptBy: initiatedBy,
+          sourceCollection: matchesCollection,
+          target,
+        },
+        { merge: true }
+      );
     }
 
-    if (awayScore === 0) home.cleanSheets += 1;
-    if (homeScore === 0) away.cleanSheets += 1;
+    const matchesSnap = await db.collection(matchesCollection).get();
 
-    const homeRedCards = asNonNegativeNumber(data.homeRedCards) ?? 0;
-    const homeYellowCards = asNonNegativeNumber(data.homeYellowCards) ?? 0;
-    const awayRedCards = asNonNegativeNumber(data.awayRedCards) ?? 0;
-    const awayYellowCards = asNonNegativeNumber(data.awayYellowCards) ?? 0;
+    const statsByTeam: Record<string, TeamStats> = {};
+    const eligibleStatuses: MatchStatus[] = includeLive
+      ? ["LIVE", "FINISHED"]
+      : ["FINISHED"];
 
-    home.redCards += homeRedCards;
-    home.yellowCards += homeYellowCards;
-    away.redCards += awayRedCards;
-    away.yellowCards += awayYellowCards;
-  });
+    matchesSnap.docs.forEach((docSnap) => {
+      const data = docSnap.data() as Record<string, unknown>;
+      const status = asStatus(data.status);
+      if (!status || !eligibleStatuses.includes(status)) return;
 
-  const teamsSnap = await db.collection("teams").get();
-  const teamPointsById: Record<string, number> = {};
+      const homeTeamId = asString(data.homeTeamId);
+      const awayTeamId = asString(data.awayTeamId);
+      const homeScore = asNumberOrNull(data.homeScore);
+      const awayScore = asNumberOrNull(data.awayScore);
 
-  const commitBatches = async (updates: BatchUpdate[]) => {
-    const maxBatch = 450;
-    let batch = db.batch();
-    let writes = 0;
+      if (!homeTeamId || !awayTeamId) return;
+      if (homeScore === null || awayScore === null) return;
 
-    for (const update of updates) {
-      batch.set(update.ref, update.data, { merge: true });
-      writes += 1;
-      if (writes >= maxBatch) {
-        await batch.commit();
-        batch = db.batch();
-        writes = 0;
+      if (!statsByTeam[homeTeamId]) statsByTeam[homeTeamId] = emptyStats();
+      if (!statsByTeam[awayTeamId]) statsByTeam[awayTeamId] = emptyStats();
+
+      const home = statsByTeam[homeTeamId];
+      const away = statsByTeam[awayTeamId];
+
+      home.goalsScored += homeScore;
+      home.goalsConceded += awayScore;
+      away.goalsScored += awayScore;
+      away.goalsConceded += homeScore;
+
+      if (homeScore > awayScore) {
+        home.wins += 1;
+        away.losses += 1;
+      } else if (homeScore < awayScore) {
+        away.wins += 1;
+        home.losses += 1;
+      } else {
+        home.draws += 1;
+        away.draws += 1;
       }
-    }
 
-    if (writes > 0) {
-      await batch.commit();
-    }
-  };
+      if (awayScore === 0) home.cleanSheets += 1;
+      if (homeScore === 0) away.cleanSheets += 1;
 
-  const teamUpdates: BatchUpdate[] = [];
+      const homeRedCards = asNonNegativeNumber(data.homeRedCards) ?? 0;
+      const homeYellowCards = asNonNegativeNumber(data.homeYellowCards) ?? 0;
+      const awayRedCards = asNonNegativeNumber(data.awayRedCards) ?? 0;
+      const awayYellowCards = asNonNegativeNumber(data.awayYellowCards) ?? 0;
 
-  teamsSnap.docs.forEach((teamDoc) => {
-    const teamId = teamDoc.id;
-    const stats = statsByTeam[teamId] ?? emptyStats();
-    const points = calcTeamPoints(stats);
-    teamPointsById[teamId] = points;
-
-    teamUpdates.push({
-      ref: teamDoc.ref,
-      data: {
-        ...stats,
-        lastUpdated: FieldValue.serverTimestamp(),
-      },
-    });
-  });
-
-  await commitBatches(teamUpdates);
-
-  const usersSnap = await db.collection("users").get();
-  const transferEventsSnap = await db.collection("transferEvents").get();
-  const transferPenaltyByUserId: Record<string, number> = {};
-
-  transferEventsSnap.docs.forEach((transferEventDoc) => {
-    const data = transferEventDoc.data() as Record<string, unknown>;
-    const uid = asString(data.uid);
-    if (!uid) return;
-
-    const scoringPenaltyPoints =
-      asNumberOrNull(data.scoringPenaltyPoints) ??
-      DEFAULT_TRANSFER_PENALTY_POINTS;
-    const penaltyPoints = Number.isFinite(scoringPenaltyPoints)
-      ? scoringPenaltyPoints
-      : DEFAULT_TRANSFER_PENALTY_POINTS;
-
-    transferPenaltyByUserId[uid] =
-      (transferPenaltyByUserId[uid] ?? 0) + penaltyPoints;
-  });
-
-  const userUpdates: BatchUpdate[] = [];
-
-  const rows: LeaderboardRow[] = [];
-
-  usersSnap.docs.forEach((userDoc) => {
-    const data = userDoc.data() as Record<string, unknown>;
-
-    const displayName =
-      asString(data.displayName) ??
-      asString(data.name) ??
-      asString(data.email) ??
-      "Anonymous";
-
-    const department = asDepartment(data.department);
-
-    let featuredId: string | null = null;
-    let drawnIds: string[] = [];
-
-    const portfolio = readPortfolio(data.portfolio);
-    portfolio.forEach((item) => {
-      if (item.role === "featured") featuredId = item.teamId;
-      if (item.role === "drawn") drawnIds.push(item.teamId);
+      home.redCards += homeRedCards;
+      home.yellowCards += homeYellowCards;
+      away.redCards += awayRedCards;
+      away.yellowCards += awayYellowCards;
     });
 
-    const entry = isRecord(data.entry) ? data.entry : null;
-    if (!featuredId && entry && entry.featuredTeamId) {
-      featuredId = asString(entry.featuredTeamId);
-    }
-    if (drawnIds.length === 0 && entry && Array.isArray(entry.drawnTeamIds)) {
-      drawnIds = entry.drawnTeamIds
-        .map((id: unknown) => asString(id))
-        .filter((id): id is string => Boolean(id));
-    }
+    const teamsSnap = await db.collection("teams").get();
+    const teamPointsById: Record<string, number> = {};
 
-    const featuredPoints = featuredId ? teamPointsById[featuredId] ?? 0 : 0;
-    const drawnPoints = drawnIds.reduce(
-      (sum, teamId) => sum + (teamPointsById[teamId] ?? 0),
-      0
-    );
-    const transferPenaltyPoints = transferPenaltyByUserId[userDoc.id] ?? 0;
-    const badgeCount = readBadgeCount(data);
+    const commitBatches = async (updates: BatchUpdate[]) => {
+      const maxBatch = 450;
+      let batch = db.batch();
+      let writes = 0;
 
-    const totalScore = featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
+      for (const update of updates) {
+        batch.set(update.ref, update.data, { merge: true });
+        writes += 1;
+        if (writes >= maxBatch) {
+          await batch.commit();
+          batch = db.batch();
+          writes = 0;
+        }
+      }
 
-    rows.push({
-      userId: userDoc.id,
-      displayName,
-      totalScore,
-      badgeCount,
-      rank: 0,
-      department,
+      if (writes > 0) {
+        await batch.commit();
+      }
+    };
+
+    const teamUpdates: BatchUpdate[] = [];
+
+    teamsSnap.docs.forEach((teamDoc) => {
+      const teamId = teamDoc.id;
+      const stats = statsByTeam[teamId] ?? emptyStats();
+      const points = calcTeamPoints(stats);
+      teamPointsById[teamId] = points;
+
+      teamUpdates.push({
+        ref: teamDoc.ref,
+        data: {
+          ...stats,
+          lastUpdated: FieldValue.serverTimestamp(),
+        },
+      });
     });
 
-    userUpdates.push({
-      ref: userDoc.ref,
-      data: {
-        totalScore,
-        transferPenaltyPoints,
-        scoreUpdatedAt: FieldValue.serverTimestamp(),
-      },
+    if (!isShadowTarget) {
+      await commitBatches(teamUpdates);
+    }
+
+    const usersSnap = await db.collection("users").get();
+    const transferEventsSnap = await db.collection("transferEvents").get();
+    const mockUserSettingsSnap = await db.collection("settings").doc("mockUsers").get();
+    const mockUserSettings = (mockUserSettingsSnap.exists
+      ? mockUserSettingsSnap.data()
+      : {}) as Record<string, unknown>;
+    const excludeMockUsersFromLeaderboard =
+      mockUserSettings.excludeMockUsersFromLeaderboard !== false;
+    const transferPenaltyByUserId: Record<string, number> = {};
+
+    transferEventsSnap.docs.forEach((transferEventDoc) => {
+      const data = transferEventDoc.data() as Record<string, unknown>;
+      const uid = asString(data.uid);
+      if (!uid) return;
+
+      const scoringPenaltyPoints =
+        asNumberOrNull(data.scoringPenaltyPoints) ??
+        DEFAULT_TRANSFER_PENALTY_POINTS;
+      const penaltyPoints = Number.isFinite(scoringPenaltyPoints)
+        ? scoringPenaltyPoints
+        : DEFAULT_TRANSFER_PENALTY_POINTS;
+
+      transferPenaltyByUserId[uid] =
+        (transferPenaltyByUserId[uid] ?? 0) + penaltyPoints;
     });
-  });
 
-  await commitBatches(userUpdates);
+    const userUpdates: BatchUpdate[] = [];
 
-  rows.sort((a, b) => {
-    if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-    return a.displayName.localeCompare(b.displayName);
-  });
+    const rows: LeaderboardRow[] = [];
 
-  rows.forEach((row, idx) => {
-    row.rank = idx + 1;
-  });
+    usersSnap.docs.forEach((userDoc) => {
+      const data = userDoc.data() as Record<string, unknown>;
 
-  await db
-    .collection("leaderboard")
-    .doc("current")
-    .set(
-      {
+      const displayName =
+        asString(data.username) ??
+        asString(data.displayName) ??
+        asString(data.name) ??
+        asString(data.email) ??
+        "Anonymous";
+
+      const department = asDepartment(data.department);
+
+      let featuredId: string | null = null;
+      let drawnIds: string[] = [];
+
+      const portfolio = readPortfolio(data.portfolio);
+      portfolio.forEach((item) => {
+        if (item.role === "featured") featuredId = item.teamId;
+        if (item.role === "drawn") drawnIds.push(item.teamId);
+      });
+
+      const entry = isRecord(data.entry) ? data.entry : null;
+      if (!featuredId && entry && entry.featuredTeamId) {
+        featuredId = asString(entry.featuredTeamId);
+      }
+      if (drawnIds.length === 0 && entry && Array.isArray(entry.drawnTeamIds)) {
+        drawnIds = entry.drawnTeamIds
+          .map((id: unknown) => asString(id))
+          .filter((id): id is string => Boolean(id));
+      }
+
+      const featuredPoints = featuredId ? teamPointsById[featuredId] ?? 0 : 0;
+      const drawnPoints = drawnIds.reduce(
+        (sum, teamId) => sum + (teamPointsById[teamId] ?? 0),
+        0
+      );
+      const transferPenaltyPoints = transferPenaltyByUserId[userDoc.id] ?? 0;
+      const badgeCount = readBadgeCount(data);
+
+      const totalScore =
+        featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
+      const isMock = data.isMock === true;
+
+      if (!(excludeMockUsersFromLeaderboard && isMock)) {
+        rows.push({
+          userId: userDoc.id,
+          displayName,
+          totalScore,
+          badgeCount,
+          rank: 0,
+          department,
+        });
+      }
+
+      userUpdates.push({
+        ref: userDoc.ref,
+        data: {
+          totalScore,
+          transferPenaltyPoints,
+          scoreUpdatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+    });
+
+    if (!isShadowTarget) {
+      await commitBatches(userUpdates);
+    }
+
+    rows.sort((a, b) => {
+      if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
+      return a.displayName.localeCompare(b.displayName);
+    });
+
+    rows.forEach((row, idx) => {
+      row.rank = idx + 1;
+    });
+
+    await leaderboardRef.set(
+      cleanUndefined({
         rows,
+        rowCount: rows.length,
         lastUpdated: FieldValue.serverTimestamp(),
         scoringVersion,
         includeLive,
         updatedBy: initiatedBy,
-      },
+        sourceCollection: matchesCollection,
+        target,
+        lastAttemptAt: FieldValue.serverTimestamp(),
+        lastAttemptBy: initiatedBy,
+        lastErrorAt: isShadowTarget ? null : undefined,
+        lastErrorMessage: isShadowTarget ? null : undefined,
+      }),
       { merge: true }
     );
 
-  return {
-    ok: true,
-    users: rows.length,
-    matches: matchesSnap.size,
-    transferEvents: transferEventsSnap.size,
-    includeLive,
-  };
+    await recordRecomputeSuccess({
+      clearDirty: !isShadowTarget,
+    });
+
+    return {
+      ok: true,
+      users: rows.length,
+      matches: matchesSnap.size,
+      transferEvents: transferEventsSnap.size,
+      includeLive,
+      target,
+    };
+  } catch (err) {
+    const message = getErrorMessage(err);
+    if (isShadowTarget) {
+      const db = admin.firestore();
+      await db.collection(leaderboardCollection).doc("current").set(
+        {
+          lastAttemptAt: FieldValue.serverTimestamp(),
+          lastAttemptBy: initiatedBy,
+          lastErrorAt: FieldValue.serverTimestamp(),
+          lastErrorMessage: message.slice(0, 1000),
+          sourceCollection: matchesCollection,
+          target,
+        },
+        { merge: true }
+      );
+      await recordRecomputeError(message);
+    } else {
+      await recordRecomputeError(message);
+      await markScoresDirty({ reason: "manual", errorMessage: message });
+    }
+    throw err;
+  }
 }
 
 export const recomputeScores = onCall({ region: REGION }, async (request) => {
@@ -507,3 +646,64 @@ export const recomputeScores = onCall({ region: REGION }, async (request) => {
 
   return recomputeScoresCore({ includeLive, scoringVersion, initiatedBy });
 });
+
+export const retryDirtyRecompute = onCall({ region: REGION }, async (request) => {
+  requireAdmin(request);
+
+  const payload =
+    request.data && typeof request.data === "object"
+      ? (request.data as Record<string, unknown>)
+      : {};
+  const includeLive = payload.includeLive !== false;
+  const scoringVersion = asString(payload.scoringVersion) ?? "v1";
+  const initiatedBy = request.auth?.uid ?? "unknown";
+
+  const healthSnap = await admin
+    .firestore()
+    .collection("ingestHealth")
+    .doc("current")
+    .get();
+  const health = (healthSnap.exists ? healthSnap.data() : {}) as Record<string, unknown>;
+  const wasDirty = health.scoresDirty === true;
+  const dirtyReason = asString(health.dirtyReason);
+
+  const result = await recomputeScoresCore({
+    includeLive,
+    scoringVersion,
+    initiatedBy,
+  });
+
+  return {
+    wasDirty,
+    dirtyReason,
+    retried: true,
+    ...result,
+  };
+});
+
+export const recomputeShadowScores = onCall(
+  { region: REGION },
+  async (request) => {
+    requireAdmin(request);
+
+    const payload =
+      request.data && typeof request.data === "object"
+        ? (request.data as Record<string, unknown>)
+        : {};
+    const includeLive = payload.includeLive !== false;
+    const scoringVersion = asString(payload.scoringVersion) ?? "v1";
+    const initiatedBy = request.auth?.uid ?? "unknown";
+
+    const result = await recomputeScoresCore({
+      includeLive,
+      scoringVersion,
+      initiatedBy,
+      target: "shadow",
+    });
+
+    return {
+      retried: false,
+      ...result,
+    };
+  }
+);

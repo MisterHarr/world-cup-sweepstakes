@@ -9,10 +9,12 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 - 🏆 [Tournament Runbook](./docs/current/TOURNAMENT-RUNBOOK.md)
 - 🚀 [Build Status & Roadmap](./docs/current/BUILD-STATUS-NEXT-STEPS.md)
 - 🎖️ [Badge System Design](./docs/current/BADGE-SYSTEM-DESIGN.md)
+- ❓ [User Guide & FAQ](./docs/current/USER-GUIDE-FAQ.md)
+- 💝 [Charity Payments Module](./docs/current/CHARITY-PAYMENTS.md)
 
 **Admin Operations:**
-- Admin tools UI: `http://localhost:3000/admin`
-- In-app runbook: `http://localhost:3000/admin/runbook`
+- Admin tools UI: `http://localhost:3001/admin`
+- In-app runbook: `http://localhost:3001/admin/runbook`
 
 ## Getting Started
 
@@ -28,7 +30,7 @@ pnpm dev
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3001](http://localhost:3001) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

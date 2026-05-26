@@ -2,45 +2,58 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule, type ScheduledEvent } from "firebase-functions/v2/scheduler";
-import { defineSecret } from "firebase-functions/params";
 import fixtures from "./fixtures/worldcup2022.json";
 import preTournamentFixtures from "./fixtures/pretournament2022.json";
+import {
+  getErrorMessage,
+  markScoresDirty,
+  recordIngestAttempt,
+  recordIngestError,
+  recordIngestSuccess,
+} from "./ingestHealth";
 import { recomputeScoresCore } from "./scoring";
 import { requireAdmin } from "./auth";
+import { getFootballDataMatches } from "./providers/footballDataProvider";
+import {
+  FOOTBALL_DATA_TOKEN,
+  filterAndLimitMatches,
+  isRecord,
+  asString,
+} from "./providers/providerUtils";
+import {
+  loadKnownTeamIds,
+  validateMatchUpdate,
+  type ValidatedMatchUpdate,
+} from "./ingest/validateMatchUpdate";
+import type {
+  MatchStage,
+  MatchStatus,
+  NormalizedMatchProvider,
+  NormalizedMatchUpdate,
+  ProviderMatch,
+} from "./providers/providerTypes";
 
 const REGION = "asia-southeast1";
 const SCHEDULE = "every 10 minutes";
-const FOOTBALL_DATA_BASE_DEFAULT = "https://api.football-data.org/v4";
-const FOOTBALL_DATA_COMPETITION_DEFAULT = "WC";
-const PROVIDER_TIMEOUT_MS_DEFAULT = 12_000;
-const PROVIDER_MAX_RETRIES_DEFAULT = 1;
-const TEAM_LOOKUP_TTL_MS = 5 * 60 * 1000;
-const FOOTBALL_DATA_TOKEN = defineSecret("FOOTBALL_DATA_TOKEN");
 
-type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
-type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
-type LiveScoresProvider = "stub" | "fixture" | "provider";
+export type LiveScoresProvider =
+  | "stub"
+  | "fixture"
+  | "football-data";
 type LiveOpsRunStatus = "success" | "error";
+export type LiveOpsMode = "disabled" | "shadow" | "staging" | "production";
 
 const LIVE_OPS_HISTORY_LIMIT = 12;
 
-type ProviderMatch = {
-  matchId: string;
-  homeTeamId: string;
-  awayTeamId: string;
-  homeScore: number | null;
-  awayScore: number | null;
-  status: MatchStatus;
-  stage: MatchStage;
-  kickoffTime: string | null;
-  homeRedCards: number;
-  homeYellowCards: number;
-  awayRedCards: number;
-  awayYellowCards: number;
+export type ApplyMatchUpdatesResult = {
+  updated: number;
+  matches: number;
+  quarantined: number;
 };
 
 type LiveOpsConfig = {
   enabled: boolean;
+  mode: LiveOpsMode;
   provider: LiveScoresProvider;
   fixtureMaxMatches: number;
   fixtureCutoffIso: string | null;
@@ -48,24 +61,11 @@ type LiveOpsConfig = {
 
 const DEFAULT_LIVE_OPS: LiveOpsConfig = {
   enabled: false,
+  mode: "disabled",
   provider: "fixture",
   fixtureMaxMatches: 0,
   fixtureCutoffIso: null,
 };
-
-let teamLookupCache:
-  | { expiresAt: number; lookup: Record<string, string> }
-  | null = null;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function asString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : null;
-}
 
 function asNumberOrNull(value: unknown): number | null {
   if (value === null) return null;
@@ -97,7 +97,24 @@ function asStage(value: unknown): MatchStage | null {
 }
 
 function asProvider(value: unknown): LiveScoresProvider | null {
-  return value === "stub" || value === "fixture" || value === "provider"
+  if (
+    value === "stub" ||
+    value === "fixture" ||
+    value === "football-data"
+  ) {
+    return value;
+  }
+  if (value === "provider") {
+    return "football-data";
+  }
+  return null;
+}
+
+function asMode(value: unknown): LiveOpsMode | null {
+  return value === "disabled" ||
+    value === "shadow" ||
+    value === "staging" ||
+    value === "production"
     ? value
     : null;
 }
@@ -114,157 +131,58 @@ function asIsoOrNull(value: unknown): string | null {
   return Number.isNaN(Date.parse(raw)) ? null : raw;
 }
 
-function toUpperToken(value: unknown): string | null {
-  const raw = asString(value);
-  if (!raw) return null;
-  const token = raw.toUpperCase().replace(/[^A-Z0-9_]/g, "");
-  return token.length ? token : null;
-}
-
-function normalizeNameToken(value: unknown): string | null {
-  const raw = asString(value);
-  if (!raw) return null;
-  const token = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return token.length ? token : null;
-}
-
-function toProviderStatus(value: unknown): MatchStatus | null {
-  const status = asString(value)?.toUpperCase();
-  if (!status) return null;
-
-  if (status === "IN_PLAY" || status === "PAUSED" || status === "LIVE") {
-    return "LIVE";
-  }
-  if (
-    status === "FINISHED" ||
-    status === "AWARDED" ||
-    status === "AFTER_EXTRA_TIME" ||
-    status === "PENALTY_SHOOTOUT"
-  ) {
-    return "FINISHED";
-  }
-  if (
-    status === "SCHEDULED" ||
-    status === "TIMED" ||
-    status === "POSTPONED" ||
-    status === "SUSPENDED"
-  ) {
-    return "SCHEDULED";
-  }
-
-  return null;
-}
-
-function toProviderStage(value: unknown): MatchStage {
-  const stage = asString(value)?.toUpperCase();
-  if (!stage) return "GROUP";
-
-  if (stage === "LAST_32" || stage === "ROUND_OF_32") return "R32";
-  if (stage === "LAST_16" || stage === "ROUND_OF_16") return "R16";
-  if (stage === "QUARTER_FINALS") return "QF";
-  if (stage === "SEMI_FINALS") return "SF";
-  if (stage === "FINAL" || stage === "THIRD_PLACE") return "FINAL";
-  if (stage === "GROUP_STAGE") return "GROUP";
-
-  return "GROUP";
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function normalizeLiveOpsConfig(raw: unknown): LiveOpsConfig {
   const config = isRecord(raw) ? raw : {};
+  const mode =
+    asMode(config.mode) ??
+    (config.enabled === true ? "production" : DEFAULT_LIVE_OPS.mode);
   return {
-    enabled: config.enabled === true,
+    enabled: mode !== "disabled",
+    mode,
     provider: asProvider(config.provider) ?? DEFAULT_LIVE_OPS.provider,
     fixtureMaxMatches: asNonNegativeInteger(config.fixtureMaxMatches),
     fixtureCutoffIso: asIsoOrNull(config.fixtureCutoffIso),
   };
 }
 
-const TEAM_NAME_ALIASES: Record<string, string> = {
-  CROATIA: "HRV",
-  UNITEDSTATES: "USA",
-  USA: "USA",
-  KOREAREPUBLIC: "KOR",
-  REPUBLICOFKOREA: "KOR",
-  COTEDIVOIRE: "CIV",
-  IVORYCOAST: "CIV",
-};
-
-function addAlias(
-  lookup: Record<string, string>,
-  key: string | null,
-  teamId: string
-) {
-  if (!key) return;
-  if (!lookup[key]) lookup[key] = teamId;
-}
-
-async function buildTeamLookup(): Promise<Record<string, string>> {
-  const db = admin.firestore();
-  const snap = await db.collection("teams").get();
-  const lookup: Record<string, string> = {};
-
-  snap.docs.forEach((docSnap) => {
-    const data = docSnap.data() as Record<string, unknown>;
-    const teamId =
-      toUpperToken(data.id) ?? toUpperToken(docSnap.id);
-    if (!teamId) return;
-
-    addAlias(lookup, teamId, teamId);
-    addAlias(lookup, normalizeNameToken(data.name), teamId);
-  });
-
-  Object.entries(TEAM_NAME_ALIASES).forEach(([alias, teamId]) => {
-    addAlias(lookup, alias, teamId);
-  });
-
-  return lookup;
-}
-
-async function getTeamLookup(): Promise<Record<string, string>> {
-  const now = Date.now();
-  if (teamLookupCache && teamLookupCache.expiresAt > now) {
-    return teamLookupCache.lookup;
+function getLiveOpsTarget(mode: LiveOpsMode): {
+  collectionName: "matches" | "shadowMatches";
+  recompute: boolean;
+  recomputeTarget: "public" | "shadow";
+} {
+  if (mode === "shadow" || mode === "staging") {
+    return {
+      collectionName: "shadowMatches",
+      recompute: false,
+      recomputeTarget: "shadow",
+    };
   }
 
-  const lookup = await buildTeamLookup();
-  teamLookupCache = {
-    lookup,
-    expiresAt: now + TEAM_LOOKUP_TTL_MS,
+  return {
+    collectionName: "matches",
+    recompute: true,
+    recomputeTarget: "public",
   };
-  return lookup;
 }
 
-function mapProviderTeamId(
-  rawTeam: unknown,
-  teamLookup: Record<string, string>
-): string | null {
-  const team = isRecord(rawTeam) ? rawTeam : {};
-  const codeCandidates = [
-    toUpperToken(team.tla),
-    toUpperToken(team.shortName),
-    toUpperToken(team.name),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidate of codeCandidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
+function getManualIngestTargetOrThrow(mode: LiveOpsMode): {
+  collectionName: "matches" | "shadowMatches";
+  recompute: boolean;
+  recomputeTarget: "public" | "shadow";
+  label: string;
+} {
+  if (mode === "disabled") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Live ops mode is disabled. Switch to shadow, staging, or production before running manual ingest."
+    );
   }
 
-  const nameCandidates = [
-    normalizeNameToken(team.name),
-    normalizeNameToken(team.shortName),
-  ].filter((value): value is string => Boolean(value));
-
-  for (const candidate of nameCandidates) {
-    const mapped = teamLookup[candidate];
-    if (mapped) return mapped;
-  }
-
-  return null;
+  const target = getLiveOpsTarget(mode);
+  return {
+    ...target,
+    label: target.collectionName,
+  };
 }
 
 function toProviderMatch(raw: unknown): ProviderMatch | null {
@@ -294,188 +212,6 @@ function toProviderMatch(raw: unknown): ProviderMatch | null {
     awayRedCards: asNonNegativeNumber(source.awayRedCards),
     awayYellowCards: asNonNegativeNumber(source.awayYellowCards),
   };
-}
-
-function extractScore(
-  score: unknown,
-  side: "home" | "away"
-): number | null {
-  const scoreRecord = isRecord(score) ? score : {};
-  const fullTime = isRecord(scoreRecord.fullTime) ? scoreRecord.fullTime : {};
-  const regularTime = isRecord(scoreRecord.regularTime) ? scoreRecord.regularTime : {};
-  const extraTime = isRecord(scoreRecord.extraTime) ? scoreRecord.extraTime : {};
-  const halfTime = isRecord(scoreRecord.halfTime) ? scoreRecord.halfTime : {};
-
-  const candidates = [
-    fullTime[side],
-    regularTime[side],
-    extraTime[side],
-    halfTime[side],
-  ];
-
-  for (const value of candidates) {
-    const parsed = asNumberOrNull(value);
-    if (parsed !== null) return parsed;
-  }
-
-  return null;
-}
-
-async function fetchJsonWithRetry(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-  maxRetries: number
-): Promise<unknown> {
-  let lastError: unknown = null;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const response = await fetch(url, {
-        ...init,
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (response.ok) {
-        return await response.json();
-      }
-
-      const retryable = response.status === 429 || response.status >= 500;
-      const bodyText = await response.text();
-      const message = `[ingest] provider request failed (${response.status}): ${bodyText.slice(0, 240)}`;
-
-      if (retryable && attempt < maxRetries) {
-        await sleep((attempt + 1) * 1000);
-        continue;
-      }
-
-      throw new Error(message);
-    } catch (err) {
-      clearTimeout(timeout);
-      lastError = err;
-      if (attempt >= maxRetries) break;
-      await sleep((attempt + 1) * 1000);
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("[ingest] provider request failed.");
-}
-
-function filterAndLimitMatches(
-  matches: ProviderMatch[],
-  options: { maxMatches: number; cutoffIso: string | null }
-): ProviderMatch[] {
-  const cutoffIso = options.cutoffIso;
-  const filteredByCutoff = cutoffIso
-    ? matches.filter((match) => {
-        if (!match.kickoffTime) return false;
-        return match.kickoffTime <= cutoffIso;
-      })
-    : matches;
-
-  const sorted = [...filteredByCutoff].sort((a, b) =>
-    (a.kickoffTime ?? "").localeCompare(b.kickoffTime ?? "")
-  );
-
-  return options.maxMatches > 0
-    ? sorted.slice(0, options.maxMatches)
-    : sorted;
-}
-
-async function getFootballDataMatches(
-  options: { maxMatches: number; cutoffIso: string | null }
-): Promise<ProviderMatch[]> {
-  const token = asString(FOOTBALL_DATA_TOKEN.value()) ??
-    asString(process.env.FOOTBALL_DATA_TOKEN);
-  if (!token) {
-    console.warn("[ingest] FOOTBALL_DATA_TOKEN missing. Skipping provider ingest.");
-    return [];
-  }
-
-  const base = asString(process.env.FOOTBALL_DATA_API_BASE) ??
-    FOOTBALL_DATA_BASE_DEFAULT;
-  const competition = asString(process.env.FOOTBALL_DATA_COMPETITION) ??
-    FOOTBALL_DATA_COMPETITION_DEFAULT;
-  const statuses = asString(process.env.FOOTBALL_DATA_STATUSES) ??
-    "SCHEDULED,TIMED,IN_PLAY,PAUSED,FINISHED";
-  const timeoutMs = asNonNegativeInteger(
-    Number(process.env.PROVIDER_TIMEOUT_MS ?? PROVIDER_TIMEOUT_MS_DEFAULT)
-  ) || PROVIDER_TIMEOUT_MS_DEFAULT;
-  const maxRetries = asNonNegativeInteger(
-    Number(process.env.PROVIDER_MAX_RETRIES ?? PROVIDER_MAX_RETRIES_DEFAULT)
-  );
-
-  const baseUrl = base.replace(/\/+$/, "");
-  const url = `${baseUrl}/competitions/${encodeURIComponent(competition)}/matches?status=${encodeURIComponent(statuses)}`;
-
-  const payload = await fetchJsonWithRetry(
-    url,
-    {
-      method: "GET",
-      headers: {
-        "X-Auth-Token": token,
-        "Accept": "application/json",
-      },
-    },
-    timeoutMs,
-    maxRetries
-  );
-
-  const payloadRecord = isRecord(payload) ? payload : {};
-  const rawMatches = Array.isArray(payloadRecord.matches)
-    ? payloadRecord.matches
-    : [];
-  if (!rawMatches.length) return [];
-
-  const teamLookup = await getTeamLookup();
-  const mapped: ProviderMatch[] = [];
-
-  rawMatches.forEach((raw: unknown) => {
-    if (!isRecord(raw)) return;
-    const rawId = raw.id;
-    const matchId =
-      typeof rawId === "number" || typeof rawId === "string"
-        ? `fd-${String(rawId)}`
-        : null;
-    const homeTeamId = mapProviderTeamId(raw.homeTeam, teamLookup);
-    const awayTeamId = mapProviderTeamId(raw.awayTeam, teamLookup);
-    const status = toProviderStatus(raw.status);
-    const stage = toProviderStage(raw.stage);
-
-    if (!matchId || !homeTeamId || !awayTeamId || !status) {
-      return;
-    }
-
-    mapped.push({
-      matchId,
-      homeTeamId,
-      awayTeamId,
-      homeScore: extractScore(raw.score, "home"),
-      awayScore: extractScore(raw.score, "away"),
-      status,
-      stage,
-      kickoffTime: asIsoOrNull(raw.utcDate),
-      homeRedCards: 0,
-      homeYellowCards: 0,
-      awayRedCards: 0,
-      awayYellowCards: 0,
-    });
-  });
-
-  const limited = filterAndLimitMatches(mapped, options);
-  console.log(
-    `[ingest] provider loaded ${limited.length} mapped matches` +
-      ` (competition ${competition})` +
-      (options.cutoffIso ? ` (cutoff ${options.cutoffIso})` : "") +
-      (options.maxMatches > 0 ? ` (max ${options.maxMatches})` : "")
-  );
-  return limited;
 }
 
 type FetchProviderOptions = {
@@ -512,11 +248,11 @@ async function fetchProviderMatches(
     return getFixtureMatches({ maxMatches, cutoffIso });
   }
 
-  if (provider === "provider") {
+  if (provider === "football-data") {
     try {
       return await getFootballDataMatches({ maxMatches, cutoffIso });
     } catch (err) {
-      console.error("[ingest] provider fetch failed:", err);
+      console.error("[ingest] football-data fetch failed:", err);
       return [];
     }
   }
@@ -541,28 +277,8 @@ type FixtureOptions = {
   cutoffIso?: string | null;
 };
 
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error && err.message.trim().length > 0) {
-    return err.message.trim();
-  }
-
-  if (typeof err === "string" && err.trim().length > 0) {
-    return err.trim();
-  }
-
-  try {
-    const serialized = JSON.stringify(err);
-    if (serialized && serialized !== "{}") {
-      return serialized.slice(0, 1000);
-    }
-  } catch {
-    // Ignore serialization failures and use fallback.
-  }
-
-  return "Unknown ingest error.";
-}
-
-async function writeLiveOpsHealth(data: {
+export async function writeLiveOpsHealth(data: {
+  mode?: LiveOpsMode;
   provider: LiveScoresProvider;
   matches?: number;
   updated?: number;
@@ -638,6 +354,7 @@ async function writeLiveOpsHealth(data: {
         lastRunAt: now,
         lastRunAtIso: runAtIso,
         lastRunProvider: data.provider,
+        ...(data.mode ? { mode: data.mode } : {}),
         lastRunMatches: matches,
         lastRunUpdated: updated,
         lastRunStatus: status,
@@ -679,10 +396,6 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
   return limited;
 }
 
-/**
- * Load pre-tournament matches from fixture file
- * Used to provide match history before tournament starts
- */
 function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[] {
   const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
   const cutoffIso = asIsoOrNull(options.cutoffIso);
@@ -703,13 +416,154 @@ function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[]
   return limited;
 }
 
+function summarizeNormalizedUpdate(update: NormalizedMatchUpdate) {
+  return {
+    provider: update.provider,
+    providerMatchId: update.providerMatchId,
+    canonicalMatchId: update.canonicalMatchId,
+    homeTeamId: update.homeTeamId,
+    awayTeamId: update.awayTeamId,
+    kickoffTime: update.kickoffTime,
+    status: update.status,
+    stage: update.stage,
+    homeScore: update.homeScore,
+    awayScore: update.awayScore,
+    homeYellowCards: update.homeYellowCards ?? 0,
+    awayYellowCards: update.awayYellowCards ?? 0,
+    homeRedCards: update.homeRedCards ?? 0,
+    awayRedCards: update.awayRedCards ?? 0,
+    providerUpdatedAt: update.providerUpdatedAt,
+    ingestReceivedAt: update.ingestReceivedAt,
+    revision: update.revision,
+  };
+}
+
+function toNormalizedProvider(source: IngestOptions["source"]): NormalizedMatchProvider {
+  if (source === "fixture") return "fixture-replay";
+  return "football-data";
+}
+
+function toNormalizedMatchUpdate(
+  match: ProviderMatch,
+  provider: NormalizedMatchProvider
+): NormalizedMatchUpdate {
+  const nowIso = new Date().toISOString();
+  return {
+    provider,
+    providerMatchId: match.matchId,
+    canonicalMatchId: match.matchId,
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId,
+    kickoffTime: match.kickoffTime,
+    status: match.status,
+    stage: match.stage,
+    homeScore: match.homeScore,
+    awayScore: match.awayScore,
+    homeYellowCards: match.homeYellowCards,
+    awayYellowCards: match.awayYellowCards,
+    homeRedCards: match.homeRedCards,
+    awayRedCards: match.awayRedCards,
+    providerUpdatedAt: nowIso,
+    ingestReceivedAt: nowIso,
+    revision: Date.now(),
+  };
+}
+
+async function writeProviderRawSummaries(
+  db: FirebaseFirestore.Firestore,
+  updates: NormalizedMatchUpdate[]
+): Promise<void> {
+  if (!updates.length) return;
+
+  const maxBatch = 450;
+  let batch = db.batch();
+  let writes = 0;
+
+  for (const update of updates) {
+    const ref = db
+      .collection("providerRaw")
+      .doc(update.provider)
+      .collection("updates")
+      .doc();
+
+    batch.set(ref, {
+      ...summarizeNormalizedUpdate(update),
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    writes += 1;
+
+    if (writes >= maxBatch) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+  }
+
+  if (writes > 0) {
+    await batch.commit();
+  }
+}
+
+async function quarantineRejectedUpdates(
+  db: FirebaseFirestore.Firestore,
+  rejected: Array<{
+    update: NormalizedMatchUpdate;
+    reason: string;
+    message: string;
+  }>
+): Promise<void> {
+  if (!rejected.length) return;
+
+  const maxBatch = 450;
+  let batch = db.batch();
+  let writes = 0;
+
+  for (const item of rejected) {
+    const ref = db.collection("providerErrors").doc();
+    batch.set(ref, {
+      provider: item.update.provider,
+      providerMatchId: item.update.providerMatchId,
+      canonicalMatchId: item.update.canonicalMatchId,
+      reason: item.reason,
+      message: item.message,
+      payloadSummary: summarizeNormalizedUpdate(item.update),
+      createdAt: FieldValue.serverTimestamp(),
+      handled: false,
+    });
+    writes += 1;
+
+    if (writes >= maxBatch) {
+      await batch.commit();
+      batch = db.batch();
+      writes = 0;
+    }
+  }
+
+  if (writes > 0) {
+    await batch.commit();
+  }
+}
+
 function isDifferent(
   existing: FirebaseFirestore.DocumentData | undefined,
-  incoming: ProviderMatch
+  incoming: ValidatedMatchUpdate
 ): boolean {
   if (!existing) return true;
 
-  const fields: Array<keyof ProviderMatch> = [
+  const fields: Array<
+    | "homeTeamId"
+    | "awayTeamId"
+    | "homeScore"
+    | "awayScore"
+    | "status"
+    | "stage"
+    | "kickoffTime"
+    | "homeRedCards"
+    | "homeYellowCards"
+    | "awayRedCards"
+    | "awayYellowCards"
+    | "providerRevision"
+  > = [
     "homeTeamId",
     "awayTeamId",
     "homeScore",
@@ -721,31 +575,45 @@ function isDifferent(
     "homeYellowCards",
     "awayRedCards",
     "awayYellowCards",
+    "providerRevision",
   ];
 
   return fields.some((field) => {
     const current = existing[field];
-    const next = incoming[field];
+    const next =
+      field === "providerRevision" ? incoming.revision : incoming[field];
     return current !== next;
   });
 }
 
-type IngestOptions = {
-  source: "provider" | "fixture";
+export type IngestOptions = {
+  source: "football-data" | "fixture";
   initiatedBy: string;
+  collectionName?: "matches" | "shadowMatches";
+  recompute?: boolean;
+  recomputeTarget?: "public" | "shadow";
 };
 
-async function applyMatchUpdates(
-  matches: ProviderMatch[],
+export async function applyNormalizedMatchUpdates(
+  normalizedUpdates: NormalizedMatchUpdate[],
   options: IngestOptions
-): Promise<{ updated: number; matches: number }> {
-  if (!matches.length) {
-    return { updated: 0, matches: 0 };
+): Promise<ApplyMatchUpdatesResult> {
+  if (!normalizedUpdates.length) {
+    return { updated: 0, matches: 0, quarantined: 0 };
   }
 
   const db = admin.firestore();
-  const refs = matches.map((match) => db.collection("matches").doc(match.matchId));
-  const snaps = await db.getAll(...refs);
+  const collectionName = options.collectionName ?? "matches";
+  const shouldRecompute = options.recompute !== false;
+  await writeProviderRawSummaries(db, normalizedUpdates);
+
+  const refs = normalizedUpdates.map((update) =>
+    db.collection(collectionName).doc(update.canonicalMatchId)
+  );
+  const [snaps, knownTeamIds] = await Promise.all([
+    db.getAll(...refs),
+    loadKnownTeamIds(db),
+  ]);
 
   const existingById: Record<string, FirebaseFirestore.DocumentData | undefined> =
     {};
@@ -754,27 +622,75 @@ async function applyMatchUpdates(
     existingById[snap.id] = snap.exists ? snap.data() : undefined;
   });
 
+  const rejected: Array<{
+    update: NormalizedMatchUpdate;
+    reason: string;
+    message: string;
+  }> = [];
+  const validMatches: ValidatedMatchUpdate[] = [];
+
+  normalizedUpdates.forEach((update) => {
+    const result = validateMatchUpdate({
+      update,
+      knownTeamIds,
+      existing: existingById[update.canonicalMatchId] as Record<string, unknown> | undefined,
+    });
+
+    if (!result.ok) {
+      rejected.push({
+        update,
+        reason: result.reason,
+        message: result.message,
+      });
+      return;
+    }
+
+    validMatches.push(result.update);
+  });
+
+  await quarantineRejectedUpdates(db, rejected);
+
   const updates: Array<{
     ref: FirebaseFirestore.DocumentReference;
     data: Record<string, unknown>;
   }> = [];
 
-  matches.forEach((match) => {
-    const existing = existingById[match.matchId];
+  validMatches.forEach((match) => {
+    const existing = existingById[match.canonicalMatchId];
     if (!isDifferent(existing, match)) return;
 
     updates.push({
-      ref: db.collection("matches").doc(match.matchId),
+      ref: db.collection(collectionName).doc(match.canonicalMatchId),
       data: {
-        ...match,
+        matchId: match.canonicalMatchId,
+        homeTeamId: match.homeTeamId,
+        awayTeamId: match.awayTeamId,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+        status: match.status,
+        stage: match.stage,
+        kickoffTime: match.kickoffTime,
+        homeRedCards: match.homeRedCards,
+        homeYellowCards: match.homeYellowCards,
+        awayRedCards: match.awayRedCards,
+        awayYellowCards: match.awayYellowCards,
         source: options.source,
+        provider: match.provider,
+        providerMatchId: match.providerMatchId,
+        providerUpdatedAt: match.providerUpdatedAt,
+        ingestReceivedAt: match.ingestReceivedAt,
+        providerRevision: match.revision,
         lastUpdated: FieldValue.serverTimestamp(),
       },
     });
   });
 
   if (!updates.length) {
-    return { updated: 0, matches: matches.length };
+    return {
+      updated: 0,
+      matches: normalizedUpdates.length,
+      quarantined: rejected.length,
+    };
   }
 
   const maxBatch = 450;
@@ -793,31 +709,64 @@ async function applyMatchUpdates(
     await batch.commit();
   }
 
-  await recomputeScoresCore({
-    includeLive: true,
-    scoringVersion: "v1",
-    initiatedBy: options.initiatedBy,
-  });
+  if (shouldRecompute) {
+    const recomputeTarget = options.recomputeTarget ?? "public";
+    try {
+      await recomputeScoresCore({
+        includeLive: true,
+        scoringVersion: "v1",
+        initiatedBy: options.initiatedBy,
+        target: recomputeTarget,
+      });
+    } catch (err) {
+      if (recomputeTarget === "public") {
+        await markScoresDirty({
+          reason: "ingest",
+          errorMessage: getErrorMessage(err),
+        });
+      }
+      throw err;
+    }
+  }
 
-  return { updated: updates.length, matches: matches.length };
+  return {
+    updated: updates.length,
+    matches: normalizedUpdates.length,
+    quarantined: rejected.length,
+  };
 }
 
-async function countFixtureMatches(): Promise<number> {
+async function applyMatchUpdates(
+  matches: ProviderMatch[],
+  options: IngestOptions
+): Promise<ApplyMatchUpdatesResult> {
+  const normalizedUpdates = matches.map((match) =>
+    toNormalizedMatchUpdate(match, toNormalizedProvider(options.source))
+  );
+
+  return applyNormalizedMatchUpdates(normalizedUpdates, options);
+}
+
+async function countFixtureMatches(
+  collectionName: "matches" | "shadowMatches" = "matches"
+): Promise<number> {
   const db = admin.firestore();
   const snap = await db
-    .collection("matches")
+    .collection(collectionName)
     .where("source", "==", "fixture")
     .get();
   return snap.size;
 }
 
-async function deleteFixtureMatches(): Promise<number> {
+async function deleteFixtureMatches(
+  collectionName: "matches" | "shadowMatches" = "matches"
+): Promise<number> {
   const db = admin.firestore();
   let deleted = 0;
 
   while (true) {
     const snap = await db
-      .collection("matches")
+      .collection(collectionName)
       .where("source", "==", "fixture")
       .limit(400)
       .get();
@@ -844,36 +793,60 @@ export const ingestLiveScores = onSchedule(
   },
   async (_event: ScheduledEvent) => {
     const liveOps = await getLiveOpsConfig();
-    if (!liveOps.enabled) {
+    if (liveOps.mode === "disabled") {
       console.log("[ingest] liveOps disabled. Skipping scheduled ingest.");
       return;
     }
 
+    await recordIngestAttempt({
+      activeProvider: liveOps.provider,
+      mode: liveOps.mode,
+    });
+
     try {
+      const target = getLiveOpsTarget(liveOps.mode);
       const matches = await fetchProviderMatches({
         provider: liveOps.provider,
         maxMatches: liveOps.fixtureMaxMatches,
         cutoffIso: liveOps.fixtureCutoffIso,
       });
-      const source = liveOps.provider === "fixture" ? "fixture" : "provider";
+      const source =
+        liveOps.provider === "fixture"
+          ? "fixture"
+          : "football-data";
       const result = matches.length
         ? await applyMatchUpdates(matches, {
             source,
             initiatedBy: "scheduler",
+            collectionName: target.collectionName,
+            recompute: true,
+            recomputeTarget: target.recomputeTarget,
           })
-        : { updated: 0, matches: 0 };
+        : { updated: 0, matches: 0, quarantined: 0 };
 
       await writeLiveOpsHealth({
+        mode: liveOps.mode,
         provider: liveOps.provider,
         matches: result.matches,
         updated: result.updated,
         errorMessage: null,
       });
+      await recordIngestSuccess({
+        activeProvider: liveOps.provider,
+        mode: liveOps.mode,
+      });
     } catch (err) {
       console.error("[ingest] scheduled ingest failed:", err);
+      const message = getErrorMessage(err);
       await writeLiveOpsHealth({
+        mode: liveOps.mode,
         provider: liveOps.provider,
-        errorMessage: getErrorMessage(err),
+        errorMessage: message,
+      });
+      await recordIngestError({
+        activeProvider: liveOps.provider,
+        errorMessage: message,
+        mode: liveOps.mode,
       });
     }
   }
@@ -889,25 +862,56 @@ export const adminIngestFixture = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getFixtureMatches({ maxMatches, cutoffIso });
+    const liveOps = await getLiveOpsConfig();
 
     if (dryRun) {
+      const target =
+        liveOps.mode === "disabled" ? "disabled" : getLiveOpsTarget(liveOps.mode).collectionName;
       return {
         ok: true,
         matches: matches.length,
         updated: 0,
         dryRun: true,
+        mode: liveOps.mode,
+        target,
       };
     }
 
-    const result = await applyMatchUpdates(matches, {
-      source: "fixture",
-      initiatedBy: request.auth?.uid ?? "admin",
+    const target = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
     });
 
-    return {
-      ok: true,
-      ...result,
-    };
+    try {
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: target.collectionName,
+        recompute: true,
+        recomputeTarget: target.recomputeTarget,
+      });
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: target.label,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
   }
 );
 
@@ -921,7 +925,12 @@ export const adminResetFixtureIngest = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getFixtureMatches({ maxMatches, cutoffIso });
-    const existingFixtureMatches = await countFixtureMatches();
+    const liveOps = await getLiveOpsConfig();
+    const target =
+      liveOps.mode === "disabled" ? null : getLiveOpsTarget(liveOps.mode);
+    const existingFixtureMatches = await countFixtureMatches(
+      target?.collectionName ?? "matches"
+    );
 
     if (dryRun) {
       return {
@@ -930,35 +939,62 @@ export const adminResetFixtureIngest = onCall(
         existingFixtureMatches,
         willDelete: existingFixtureMatches,
         willIngest: matches.length,
+        mode: liveOps.mode,
+        target: target?.collectionName ?? "disabled",
       };
     }
 
-    const deletedFixtureMatches = await deleteFixtureMatches();
-    const result = await applyMatchUpdates(matches, {
-      source: "fixture",
-      initiatedBy: request.auth?.uid ?? "admin",
+    const manualTarget = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
     });
 
-    if (!matches.length || result.updated === 0) {
-      await recomputeScoresCore({
-        includeLive: true,
-        scoringVersion: "v1",
+    try {
+      const deletedFixtureMatches = await deleteFixtureMatches(
+        manualTarget.collectionName
+      );
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
         initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: manualTarget.collectionName,
+        recompute: true,
+        recomputeTarget: manualTarget.recomputeTarget,
       });
-    }
 
-    return {
-      ok: true,
-      deletedFixtureMatches,
-      ...result,
-    };
+      if (!matches.length || result.updated === 0) {
+        await recomputeScoresCore({
+          includeLive: true,
+          scoringVersion: "v1",
+          initiatedBy: request.auth?.uid ?? "admin",
+          target: manualTarget.recomputeTarget,
+        });
+      }
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: manualTarget.label,
+        deletedFixtureMatches,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
   }
 );
 
-/**
- * Import pre-tournament match data (friendlies and qualifiers)
- * Provides match history from tournament start
- */
 export const adminIngestPreTournament = onCall(
   { region: REGION },
   async (request) => {
@@ -969,25 +1005,150 @@ export const adminIngestPreTournament = onCall(
     const dryRun = request.data?.dryRun === true;
 
     const matches = getPreTournamentFixtures({ maxMatches, cutoffIso });
+    const liveOps = await getLiveOpsConfig();
 
     if (dryRun) {
+      const target =
+        liveOps.mode === "disabled" ? "disabled" : getLiveOpsTarget(liveOps.mode).collectionName;
       return {
         ok: true,
         matches: matches.length,
         updated: 0,
         dryRun: true,
+        mode: liveOps.mode,
+        target,
       };
     }
 
-    const result = await applyMatchUpdates(matches, {
-      source: "fixture",
-      initiatedBy: request.auth?.uid ?? "admin",
+    const target = getManualIngestTargetOrThrow(liveOps.mode);
+
+    await recordIngestAttempt({
+      activeProvider: "fixture",
+      mode: liveOps.mode,
     });
 
-    return {
-      ok: true,
-      ...result,
-    };
+    try {
+      const result = await applyMatchUpdates(matches, {
+        source: "fixture",
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: target.collectionName,
+        recompute: true,
+        recomputeTarget: target.recomputeTarget,
+      });
+
+      await recordIngestSuccess({
+        activeProvider: "fixture",
+        mode: liveOps.mode,
+      });
+
+      return {
+        ok: true,
+        mode: liveOps.mode,
+        target: target.label,
+        ...result,
+      };
+    } catch (err) {
+      await recordIngestError({
+        activeProvider: "fixture",
+        errorMessage: getErrorMessage(err),
+        mode: liveOps.mode,
+      });
+      throw err;
+    }
+  }
+);
+
+export const adminContractTestProvider = onCall(
+  { region: REGION, secrets: [FOOTBALL_DATA_TOKEN] },
+  async (request) => {
+    requireAdmin(request);
+
+    const provider = asProvider(request.data?.provider);
+    if (!provider || provider === "stub" || provider === "fixture") {
+      throw new HttpsError(
+        "invalid-argument",
+        "provider must be: football-data."
+      );
+    }
+
+    const maxMatches = Number(request.data?.maxMatches ?? 0);
+    const cutoffIso = asString(request.data?.cutoffIso) ?? null;
+    const dryRun = request.data?.dryRun === true;
+
+    await recordIngestAttempt({
+      activeProvider: provider,
+      mode: "shadow",
+    });
+
+    try {
+      const matches = await fetchProviderMatches({
+        provider,
+        maxMatches,
+        cutoffIso,
+      });
+
+      if (dryRun) {
+        await writeLiveOpsHealth({
+          mode: "shadow",
+          provider,
+          matches: matches.length,
+          updated: 0,
+          errorMessage: null,
+        });
+        await recordIngestSuccess({
+          activeProvider: provider,
+          mode: "shadow",
+        });
+        return {
+          ok: true,
+          provider,
+          dryRun: true,
+          matches: matches.length,
+          target: "shadowMatches",
+        };
+      }
+
+      const result = await applyMatchUpdates(matches, {
+        source: provider,
+        initiatedBy: request.auth?.uid ?? "admin",
+        collectionName: "shadowMatches",
+        recompute: true,
+        recomputeTarget: "shadow",
+      });
+
+      await writeLiveOpsHealth({
+        mode: "shadow",
+        provider,
+        matches: result.matches,
+        updated: result.updated,
+        errorMessage: null,
+      });
+      await recordIngestSuccess({
+        activeProvider: provider,
+        mode: "shadow",
+      });
+
+      return {
+        ok: true,
+        provider,
+        target: "shadowMatches",
+        leaderboardTarget: "shadowLeaderboard/current",
+        ...result,
+      };
+    } catch (err) {
+      const message = getErrorMessage(err);
+      await writeLiveOpsHealth({
+        mode: "shadow",
+        provider,
+        errorMessage: message,
+      });
+      await recordIngestError({
+        activeProvider: provider,
+        errorMessage: message,
+        mode: "shadow",
+      });
+      throw err;
+    }
   }
 );
 
@@ -997,12 +1158,15 @@ export const setLiveOpsSettings = onCall(
     const auth = requireAdmin(request);
     const payload = request.data ?? {};
 
+    const mode =
+      asMode(payload.mode) ??
+      (payload.enabled === true ? "production" : "disabled");
     const providerInput = payload.provider;
     const provider = asProvider(providerInput);
     if (!provider) {
       throw new HttpsError(
         "invalid-argument",
-        "provider must be one of: stub, fixture, provider."
+        "provider must be one of: stub, fixture, football-data."
       );
     }
 
@@ -1016,26 +1180,27 @@ export const setLiveOpsSettings = onCall(
       );
     }
 
-    const enabled = payload.enabled === true;
+    const enabled = mode !== "disabled";
 
-    if (
-      enabled &&
-      provider === "provider" &&
-      !(
-        asString(FOOTBALL_DATA_TOKEN.value()) ??
-        asString(process.env.FOOTBALL_DATA_TOKEN)
-      )
-    ) {
-      throw new HttpsError(
-        "failed-precondition",
-        "FOOTBALL_DATA_TOKEN is required before enabling provider automation."
-      );
+    if (mode !== "disabled" && provider === "football-data") {
+      if (
+        !(
+          asString(FOOTBALL_DATA_TOKEN.value()) ??
+          asString(process.env.FOOTBALL_DATA_TOKEN)
+        )
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "FOOTBALL_DATA_TOKEN is required before enabling football-data automation."
+        );
+      }
     }
 
     const db = admin.firestore();
     await db.collection("settings").doc("liveOps").set(
       {
         enabled,
+        mode,
         provider,
         fixtureMaxMatches,
         fixtureCutoffIso,
@@ -1048,6 +1213,7 @@ export const setLiveOpsSettings = onCall(
     return {
       ok: true,
       enabled,
+      mode,
       provider,
       fixtureMaxMatches,
       fixtureCutoffIso,

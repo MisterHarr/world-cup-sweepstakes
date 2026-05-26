@@ -13,7 +13,6 @@ import {
   orderBy,
   limit,
   getDocs,
-  Timestamp,
 } from "firebase/firestore";
 
 export type MatchResult = "W" | "D" | "L";
@@ -234,6 +233,14 @@ export async function getTeamNextMatch(teamId: string): Promise<NextMatch | null
  */
 function formatStage(stage: string): string {
   const stageMap: Record<string, string> = {
+    // Uppercase (from football-data.org ingest)
+    GROUP: "Group Stage",
+    R32: "Round of 32",
+    R16: "Round of 16",
+    QF: "Quarter Final",
+    SF: "Semi Final",
+    FINAL: "Final",
+    // Legacy lowercase keys
     group: "Group Stage",
     round_16: "Round of 16",
     quarter: "Quarter Final",

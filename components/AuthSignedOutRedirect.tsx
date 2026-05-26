@@ -28,7 +28,7 @@ export function AuthSignedOutRedirect() {
       const currentPath = pathnameRef.current || "/";
       if (isPublicPath(currentPath)) return;
 
-      router.replace("/login");
+      router.replace("/");
     });
 
     return () => unsub();
@@ -36,4 +36,3 @@ export function AuthSignedOutRedirect() {
 
   return null;
 }
-

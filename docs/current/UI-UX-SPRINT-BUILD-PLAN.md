@@ -1,6 +1,6 @@
 # UI/UX Sprint Build Plan
 
-**Last Updated:** 2026-02-19
+**Last Updated:** 2026-02-22
 **Owner:** Architecture + Engineering
 **Scope:** Frontend UX overhaul with correctness safeguards
 
@@ -145,5 +145,9 @@
   - Removed transfer-confirm runtime state-update regression by shifting trade execution outside state updater callbacks.
   - Hardened leaderboard row-id parsing and added current-user local score/squad fallback when remote row/schema data is inconsistent.
   - Added stable leaderboard pagination buckets (`1-10`, `11-20`, ...) to prevent long-list rendering for 60+ participants.
+- **Post-Sprint Trust + Operations Outcomes (2026-02-22):**
+  - Added in-app `/guide` route with user-facing FAQ and transparent scoring/randomization formulas.
+  - Added feature-flagged `/charity` module with hosted payment rails and explicit off-switch (`NEXT_PUBLIC_ENABLE_CHARITY_POT=false`).
+  - Completed 2022-data feasibility audit and adjusted badge definitions to remove impossible criteria types.
 - **Note on Sprint 2 Step 3:**
   - Signed-in welcome-state simplification was delivered as part of Sprint 2 Step 1.

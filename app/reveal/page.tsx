@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -192,39 +194,36 @@ export default function TeamRevealPage() {
 
         <main className="container mx-auto px-4 py-8 relative z-10">
           {/* Intro Section */}
-          <div className="text-center mb-8 max-w-3xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-3">
-              Your World Cup Squad
+          <div className="text-center mb-4 max-w-3xl mx-auto">
+            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight mb-1">
+              Your Squad
             </h1>
-            <p className="text-primary text-base sm:text-lg font-semibold">
-              Featured Team earns <span className="font-black">2x points</span> while active.
-            </p>
-            <p className="text-muted-foreground text-sm sm:text-base mt-2">
-              Tap each card to reveal your full squad.
+            <p className="text-primary text-sm sm:text-base font-semibold">
+              Star Team earns <span className="font-black">2× points</span> — tap cards to reveal.
             </p>
           </div>
 
           {/* Reveal Progress */}
-          <div className="flex justify-center gap-2 mb-8">
+          <div className="flex justify-center gap-1.5 mb-4">
             {assignedTeams.map((_, i) => (
               <div
                 key={i}
                 className={cn(
-                  "w-3 h-3 rounded-full transition-all duration-300",
+                  "w-2 h-2 rounded-full transition-all duration-300",
                   i < revealedCount ? "bg-primary scale-100" : "bg-muted scale-75"
                 )}
               />
             ))}
           </div>
 
-          {/* Team Cards Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 max-w-4xl mx-auto mb-8">
+          {/* Team Cards Grid — 3 cols always so all 6 fit in 2 rows */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 max-w-lg sm:max-w-2xl mx-auto mb-4">
             {assignedTeams.map((team, index) => (
               <div
                 key={`${team.code}:${index}`}
                 onClick={() => handleRevealNext(index)}
                 className={cn(
-                  "relative aspect-[3/4] sm:aspect-[4/5] rounded-2xl transition-all duration-500 perspective-1000",
+                  "relative aspect-[3/4] rounded-xl sm:rounded-2xl transition-all duration-500 perspective-1000",
                   index >= revealedCount && "cursor-pointer hover:scale-105"
                 )}
               >
@@ -259,31 +258,31 @@ export default function TeamRevealPage() {
                       Tier {team.tier}: {tierLabels[team.tier]}
                     </div>
 
-                    {/* Featured Badge */}
+                    {/* Star Team Badge */}
                     {team.isChosen && (
-                      <div className="absolute top-8 sm:top-10 left-1/2 -translate-x-1/2 rounded-full border border-primary/50 bg-primary/20 px-2.5 py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-primary">
-                        Featured · 2x
+                      <div className="absolute top-6 sm:top-8 left-1/2 -translate-x-1/2 rounded-full border border-primary/50 bg-primary/20 px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-primary whitespace-nowrap">
+                        Star · 2×
                       </div>
                     )}
 
                     {/* Team Content */}
-                    <div className="flex flex-col items-center justify-center h-full pt-7 sm:pt-9">
+                    <div className="flex flex-col items-center justify-center h-full pt-6 sm:pt-8 px-1">
                       <div
                         className={cn(
-                          "w-16 h-16 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl overflow-hidden mb-2.5 sm:mb-4 border-2",
+                          "w-10 h-10 sm:w-16 sm:h-16 rounded-lg sm:rounded-xl overflow-hidden mb-1.5 sm:mb-2.5 border-2",
                           team.isChosen ? "border-primary/70" : "border-border"
                         )}
                       >
                         {team.flag ? (
                           <img src={team.flag} alt={team.name} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-4xl">🏳️</span>
+                          <span className="text-2xl">🏳️</span>
                         )}
                       </div>
-                      <h3 className="text-sm sm:text-[28px] font-black text-foreground text-center px-2 sm:px-3 leading-tight">
+                      <h3 className="text-[10px] sm:text-sm font-black text-foreground text-center leading-tight">
                         {team.name}
                       </h3>
-                      <p className="text-[11px] sm:text-lg text-muted-foreground font-semibold tracking-wider mt-0.5 sm:mt-1">
+                      <p className="text-[9px] sm:text-xs text-muted-foreground font-semibold tracking-wider mt-0.5">
                         {team.code}
                       </p>
                     </div>
@@ -311,7 +310,7 @@ export default function TeamRevealPage() {
                       </p>
                       {index === 0 && (
                         <p className="mt-2 text-xs font-bold uppercase tracking-wider text-primary">
-                          Featured Team
+                          Star Team
                         </p>
                       )}
                     </div>
@@ -336,7 +335,7 @@ export default function TeamRevealPage() {
           </div>
 
           {revealComplete ? (
-            <div className="fixed inset-x-0 bottom-4 z-40 px-4">
+            <div className="fixed inset-x-0 z-40 px-4 bottom-[calc(1rem+env(safe-area-inset-bottom))]">
               <div className="mx-auto max-w-sm">
                 <Button
                   size="lg"

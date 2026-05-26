@@ -1,12 +1,28 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, BellOff, ChevronLeft, ChevronRight, Clock, TrendingUp, Tv, Zap } from "lucide-react";
 import {
   stageLabel,
   type BracketMatch,
   type BracketStage,
 } from "@/lib/bracketUtils";
+import { cn } from "@/lib/utils";
+
+function filterMatchesForTab(
+  rows: BracketMatch[],
+  tab: "live" | "upcoming" | "results"
+): BracketMatch[] {
+  const norm = (status?: string) => (status || "").toUpperCase();
+  const live = (m: BracketMatch) =>
+    Boolean(m.isLive) || norm(m.status) === "LIVE";
+  const fin = (m: BracketMatch) => {
+    const s = norm(m.status);
+    return s === "FINISHED" || s === "FINAL" || s === "FT";
+  };
+  if (tab === "live") return rows.filter(live);
+  if (tab === "upcoming") return rows.filter((m) => !live(m) && !fin(m));
+  return rows.filter(fin);
+}
 
 const DashboardBracket = ({
   stages = [],
@@ -32,7 +48,11 @@ const DashboardBracket = ({
   const [activeTab, setActiveTab] = useState<
     "live" | "upcoming" | "results"
   >("live");
-  const [notifyMap, setNotifyMap] = useState<Record<string, boolean>>({});
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [matchRowVisible, setMatchRowVisible] = useState<Record<number, boolean>>(
+    {}
+  );
+  const [fixtureSearch, setFixtureSearch] = useState("");
 
   const stagesToUse = useMemo<BracketStage[]>(
     () => (stages.length > 0 ? stages : [{ id: "EMPTY_STAGE", name: "Match Center" }]),
@@ -73,35 +93,6 @@ const DashboardBracket = ({
     });
   };
 
-  const formatUpdated = (value?: string) => {
-    if (!value) return "";
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return "";
-    return dt.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  };
-
-  const navigate = (dir: "next" | "prev") => {
-    const lastIdx = stagesToUse.length - 1;
-    const nextIdx =
-      dir === "next"
-        ? Math.min(safeStageIndex + 1, lastIdx)
-        : Math.max(safeStageIndex - 1, 0);
-    if (nextIdx === safeStageIndex) return;
-
-    const nextStage = stagesToUse[nextIdx];
-    if (activeStageId && onStageChange && nextStage) {
-      onStageChange(nextStage.id);
-      return;
-    }
-
-    setActiveStageIdx(nextIdx);
-  };
-
   useEffect(() => {
     const stage = stagesToUse[safeStageIndex];
     if (!stage || !onStageChange) return;
@@ -109,486 +100,359 @@ const DashboardBracket = ({
     onStageChange(stage.id);
   }, [activeStageId, onStageChange, safeStageIndex, stagesToUse]);
 
-  const normalizeStatus = (status?: string) => (status || "").toUpperCase();
-  const isLiveMatch = (match: BracketMatch) =>
-    Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE";
-  const isFinishedMatch = (match: BracketMatch) => {
-    const status = normalizeStatus(match.status);
-    return status === "FINISHED" || status === "FINAL" || status === "FT";
-  };
-
-  const liveMatches = currentMatches.filter(isLiveMatch);
-  const finishedMatches = currentMatches.filter(isFinishedMatch);
-  const upcomingMatches = currentMatches.filter(
-    (match) => !isLiveMatch(match) && !isFinishedMatch(match)
+  // All matches across every stage — used for global fixture search
+  const allMatches = useMemo(
+    () => Object.values(matches).flat(),
+    [matches]
   );
 
-  const liveMatchCount = liveMatches.length;
-  const totalLiveMatchCount = Object.values(matches).reduce((sum, stageMatches) => {
-    const rows = Array.isArray(stageMatches) ? stageMatches : [];
-    const live = rows.filter(
-      (match) => Boolean(match.isLive) || normalizeStatus(match.status) === "LIVE"
-    ).length;
-    return sum + live;
-  }, 0);
-  const liveYourTeamCount = liveMatches.filter(
-    (match) => isUserTeam(match.t1) || isUserTeam(match.t2)
-  ).length;
+  const visibleMatches = useMemo(() => {
+    // When searching upcoming fixtures, span the entire tournament (all stages)
+    if (activeTab === "upcoming" && fixtureSearch.trim()) {
+      const q = fixtureSearch.trim().toLowerCase();
+      return filterMatchesForTab(allMatches, "upcoming").filter((m) => {
+        const t1 = (teamNames[m.t1 ?? ""] ?? m.t1 ?? "").toLowerCase();
+        const t2 = (teamNames[m.t2 ?? ""] ?? m.t2 ?? "").toLowerCase();
+        const grp = (m.group ?? "").toLowerCase();
+        const stage = (m.stageId ?? "").toLowerCase();
+        return t1.includes(q) || t2.includes(q) || grp.includes(q) || stage.includes(q);
+      });
+    }
+    return filterMatchesForTab(currentMatches, activeTab);
+  }, [allMatches, currentMatches, activeTab, fixtureSearch, teamNames]);
+  const visibleMatchIds = visibleMatches.map((m) => m.id).join(",");
 
-  const toggleNotify = (matchId: string) => {
-    setNotifyMap((prev) => ({ ...prev, [matchId]: !prev[matchId] }));
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setPrefersReducedMotion(mq.matches);
+    const h = () => setPrefersReducedMotion(mq.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) {
+      setMatchRowVisible({});
+      return;
+    }
+    const rows = filterMatchesForTab(currentMatches, activeTab);
+    if (prefersReducedMotion) {
+      const all: Record<number, boolean> = {};
+      rows.forEach((_, i) => {
+        all[i] = true;
+      });
+      setMatchRowVisible(all);
+      return;
+    }
+    setMatchRowVisible({});
+    const timers = rows.map((_, i) =>
+      window.setTimeout(() => {
+        setMatchRowVisible((prev) => ({ ...prev, [i]: true }));
+      }, i * 65)
+    );
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [
+    isLoading,
+    prefersReducedMotion,
+    activeTab,
+    safeStageIndex,
+    visibleMatchIds,
+  ]);
+
+  const stageTitle =
+    activeStage?.name ?? stageLabel(activeStage?.id ?? "");
+
+  const headerMid = (match: BracketMatch, tab: typeof activeTab) => {
+    if (tab === "live") return "LIVE";
+    if (tab === "results") return "FT";
+    return match.kickoffTime ? formatKickoff(match.kickoffTime) : "Scheduled";
+  };
+
+  const matchCardEyebrow = (match: BracketMatch, tab: typeof activeTab) => {
+    const mid = headerMid(match, tab);
+    // When searching across stages, use the match's own stageId for the label
+    const resolvedStageId = (fixtureSearch.trim() && match.stageId) ? match.stageId : (activeStage?.id ?? "");
+    const resolvedStageTitle = stageLabel(resolvedStageId);
+    if (resolvedStageId === "GROUP") {
+      const g = match.group?.trim();
+      return g ? `GROUP ${g.toUpperCase()} · ${mid}` : `GROUP · ${mid}`;
+    }
+    return `${resolvedStageTitle} · ${mid}`;
+  };
+
+  const renderFfMatchCard = (
+    match: BracketMatch,
+    index: number,
+    tab: typeof activeTab
+  ) => {
+    const yourTeam = isUserTeam(match.t1) || isUserTeam(match.t2);
+    const visible = Boolean(matchRowVisible[index]);
+    const t1Name = resolveName(match.t1);
+    const t2Name = resolveName(match.t2);
+    const scoreLine = `${match.s1 ?? "–"}–${match.s2 ?? "–"}`;
+
+    return (
+      <div
+        key={match.id}
+        className={cn(
+          "relative overflow-hidden rounded-[14px] border px-3.5 py-4 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none",
+          yourTeam
+            ? "border-[var(--ff-accent-border)] bg-gradient-to-br from-[#0b160e] to-[#0f1115]"
+            : "border-[rgba(255,255,255,0.06)] bg-[var(--ff-bg-card)]",
+          visible ? "translate-y-0 opacity-100" : "translate-y-[10px] opacity-0"
+        )}
+      >
+        {yourTeam ? (
+          <div
+            className="absolute bottom-0 left-0 top-0 w-[3px] bg-[var(--ff-accent-text)]"
+            aria-hidden
+          />
+        ) : null}
+        <div
+          className={cn(
+            "mb-2.5 font-ff-ui text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]",
+            yourTeam && "pl-2"
+          )}
+        >
+          {matchCardEyebrow(match, tab)}
+        </div>
+
+        <div
+          className={cn(
+            "grid grid-cols-[1fr_auto_1fr] items-center gap-2.5",
+            yourTeam && "pl-2"
+          )}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+              {resolveFlag(match.t1) ? (
+                <img
+                  src={resolveFlag(match.t1)}
+                  alt={t1Name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
+                  {match.t1?.substring(0, 2).toUpperCase() ?? "—"}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
+                {t1Name}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {isUserTeam(match.t1) ? (
+                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
+                ) : null}
+                {(match.yellowCards?.[0] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
+                    {match.yellowCards![0] > 1 ? `×${match.yellowCards![0]}` : ""}
+                  </span>
+                )}
+                {(match.redCards?.[0] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
+                    {match.redCards![0] > 1 ? `×${match.redCards![0]}` : ""}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-[64px] shrink-0 text-center">
+            {tab === "upcoming" ? (
+              <>
+                <div className="font-ff-display text-base font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
+                  {match.kickoffTime ? formatKickoff(match.kickoffTime) : "TBD"}
+                </div>
+                <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
+                  vs
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-ff-display text-[32px] font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
+                  {scoreLine}
+                </div>
+                <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
+                  vs
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right">
+            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+              {resolveFlag(match.t2) ? (
+                <img
+                  src={resolveFlag(match.t2)}
+                  alt={t2Name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
+                  {match.t2?.substring(0, 2).toUpperCase() ?? "—"}
+                </span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
+                {t2Name}
+              </div>
+              <div className="flex flex-row-reverse items-center gap-1.5 mt-0.5">
+                {isUserTeam(match.t2) ? (
+                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
+                ) : null}
+                {(match.yellowCards?.[1] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                    {match.yellowCards![1] > 1 ? `×${match.yellowCards![1]}` : ""}
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
+                  </span>
+                )}
+                {(match.redCards?.[1] ?? 0) > 0 && (
+                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                    {match.redCards![1] > 1 ? `×${match.redCards![1]}` : ""}
+                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {match.impact && tab === "live" ? (
+          <p className="mt-2 text-center font-ff-ui text-xs font-semibold text-[var(--ff-accent-text)]">
+            {match.impact}
+          </p>
+        ) : null}
+      </div>
+    );
   };
 
   return (
-    <div className="h-full flex flex-col gap-6">
-      {/* Live Points Banner */}
-      {liveYourTeamCount > 0 && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/30 rounded-xl p-4 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-5 h-5 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">Points Gained Live</p>
-                <p className="text-xs text-muted-foreground">From your teams currently playing</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">+12</span>
-            </div>
-          </div>
+    <div className="flex h-full flex-col gap-4 font-ff-ui text-[var(--ff-fg-primary)]">
+      <div>
+        <div className="mb-2 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
+          Tournament stage
         </div>
-      )}
-
-      <div className="mb-2 flex flex-col items-center gap-2 text-center">
-        <div className="relative">
-          <div className="w-11 h-11 rounded-xl bg-destructive/20 flex items-center justify-center">
-            <Tv className="w-5 h-5 text-destructive" />
-          </div>
-          {totalLiveMatchCount > 0 && (
-            <>
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full animate-ping" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full" />
-            </>
-          )}
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto pb-0.5">
+          {stagesToUse.map((stage, idx) => {
+            const selected = stage.id === activeStage?.id;
+            const dimmed = idx < safeStageIndex;
+            return (
+              <button
+                key={stage.id}
+                type="button"
+                onClick={() => {
+                  if (onStageChange) onStageChange(stage.id);
+                  else setActiveStageIdx(idx);
+                }}
+                className={cn(
+                  "shrink-0 rounded-[20px] border px-3 py-1.5 font-ff-ui text-[11px] transition-colors",
+                  selected
+                    ? "border-[var(--ff-accent-border)] bg-[var(--ff-accent-dim)] font-semibold text-[var(--ff-accent-text)]"
+                    : "border-[rgba(255,255,255,0.08)] font-normal text-[#5a6472] hover:border-[var(--ff-accent-border)]",
+                  dimmed && !selected && "opacity-50"
+                )}
+              >
+                {stage.name ?? stageLabel(stage.id)}
+              </button>
+            );
+          })}
         </div>
-        <h2 className="text-2xl md:text-3xl font-bold text-foreground">
-          Match Center
-        </h2>
-        <p className="text-sm md:text-base text-muted-foreground">
-          {hasRealStages
-            ? `${totalLiveMatchCount} match${totalLiveMatchCount === 1 ? "" : "es"} live`
-            : "Feed unavailable"}
-        </p>
       </div>
 
-      {liveMatchCount > 0 && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-transparent border border-primary/30 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Zap className="w-5 h-5 text-primary" />
-              <div>
-                <p className="font-medium text-foreground">
-                  {liveYourTeamCount > 0 ? "Teams Live" : "Matches Live"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {liveYourTeamCount > 0
-                    ? "Your teams currently playing"
-                    : "Live matches underway"}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold text-primary">
-                {liveYourTeamCount > 0 ? liveYourTeamCount : liveMatchCount}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between bg-card/70 p-3 rounded-xl border border-border">
-        <button
-          onClick={() => navigate("prev")}
-          disabled={safeStageIndex === 0}
-          className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft size={18} />
-        </button>
-
-        <div className="text-center text-base font-semibold text-foreground">
-          {activeStage?.name ?? stageLabel(activeStage?.id ?? "")}
-        </div>
-
-        <button
-          onClick={() => navigate("next")}
-          disabled={safeStageIndex === stagesToUse.length - 1}
-          className="p-2 rounded-lg hover:bg-white/5 text-muted-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight size={18} />
-        </button>
-      </div>
-
-      {/* Enhanced Tabs */}
-      <div className="inline-flex bg-muted/50 rounded-lg p-1 border border-border">
-        <button
-          onClick={() => setActiveTab("live")}
-          className={[
-            "flex items-center justify-center gap-2 px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "live"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          <span
-            className={[
-              "w-2 h-2 rounded-full bg-destructive",
-              liveMatchCount > 0 ? "animate-pulse" : "",
-            ].join(" ")}
-          />
-          Live
-        </button>
-        <button
-          onClick={() => setActiveTab("upcoming")}
-          className={[
-            "px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "upcoming"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setActiveTab("results")}
-          className={[
-            "px-6 py-2.5 rounded-md text-sm font-semibold transition-all",
-            activeTab === "results"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
-          ].join(" ")}
-        >
-          Results
-        </button>
-      </div>
-
-      {activeTab === "live" && (
-        <div className="space-y-4">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : liveMatches.length > 0 ? (
-            liveMatches.map((match) => {
-              const yourTeam = isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
-
-              return (
-                <div
-                  key={match.id}
-                  className={[
-                    "bg-card border rounded-xl overflow-hidden",
-                    yourTeam ? "border-primary/50" : "border-border",
-                  ].join(" ")}
-                >
-                  <div className="bg-white/5 px-4 py-2 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
-                      <span className="text-sm font-medium text-destructive">
-                        LIVE
-                      </span>
-                    </div>
-                    {yourTeam && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your Team Playing
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 text-center">
-                        <div className="w-12 h-12 rounded-full bg-white/5 border border-border flex items-center justify-center mx-auto mb-2 overflow-hidden">
-                          {resolveFlag(match.t1) ? (
-                            <img
-                              src={resolveFlag(match.t1)}
-                              alt={resolveName(match.t1)}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {t1Code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-bold text-foreground">{t1Code}</p>
-                      </div>
-
-                      <div className="px-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-4xl font-bold text-foreground">
-                            {match.s1 !== undefined ? match.s1 : "-"}
-                          </span>
-                          <span className="text-2xl text-muted-foreground">
-                            -
-                          </span>
-                          <span className="text-4xl font-bold text-foreground">
-                            {match.s2 !== undefined ? match.s2 : "-"}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex-1 text-center">
-                        <div className="w-12 h-12 rounded-full bg-white/5 border border-border flex items-center justify-center mx-auto mb-2 overflow-hidden">
-                          {resolveFlag(match.t2) ? (
-                            <img
-                              src={resolveFlag(match.t2)}
-                              alt={resolveName(match.t2)}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-xs text-muted-foreground">
-                              {t2Code}
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-bold text-foreground">{t2Code}</p>
-                      </div>
-                    </div>
-
-                    {match.impact ? (
-                      <div className="mt-4 text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 text-primary text-xs font-semibold px-2 py-1">
-                          <TrendingUp size={14} />
-                          {match.impact}
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <div className="border-t border-border px-4 py-3">
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Match Events
-                    </p>
-                    <div className="text-sm text-muted-foreground">
-                      Live events will appear here.
-                    </div>
-                  </div>
-
-                  {(match.kickoffTime || match.updatedAt) && (
-                    <div className="border-t border-border px-4 py-2 flex items-center gap-2 text-xs text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      {match.kickoffTime
-                        ? `Kickoff ${formatKickoff(match.kickoffTime)}`
-                        : `Updated ${formatUpdated(match.updatedAt)}`}
-                    </div>
+      <div className="flex border-b border-[rgba(255,255,255,0.07)]">
+        {(["live", "upcoming", "results"] as const).map((tab) => {
+          const label =
+            tab === "live" ? "Live" : tab === "upcoming" ? "Upcoming" : "Results";
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => { setActiveTab(tab); setFixtureSearch(""); }}
+              className={cn(
+                "relative -mb-px flex min-h-[44px] items-center gap-2 border-b-2 bg-transparent px-4 py-2 font-ff-ui text-[13px] transition-colors",
+                activeTab === tab
+                  ? "z-[1] border-[var(--ff-accent-text)] font-semibold text-[#e8eaed]"
+                  : "border-transparent font-normal text-[#5a6472] hover:text-[var(--ff-fg-secondary)]"
+              )}
+            >
+              {tab === "live" ? (
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full bg-[var(--ff-danger)]",
+                    activeTab === "live" && "ff-live-dot"
                   )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No live matches right now</p>
-              <p className="text-sm mt-1">
-                Live games will appear here when they start
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+                  aria-hidden
+                />
+              ) : null}
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       {activeTab === "upcoming" && (
-        <div className="space-y-3">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : upcomingMatches.length > 0 ? (
-            upcomingMatches.map((match) => {
-              const yourTeam =
-                isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
-              const kickoffLabel = match.kickoffTime
-                ? formatKickoff(match.kickoffTime)
-                : "Time TBD";
-
-              return (
-                <div
-                  key={match.id}
-                  className={[
-                    "bg-card border rounded-xl p-4",
-                    yourTeam ? "border-primary/30" : "border-border",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Clock className="w-4 h-4" />
-                      {kickoffLabel}
-                    </div>
-                    <button
-                      onClick={() => toggleNotify(match.id)}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      {notifyMap[match.id] ? (
-                        <>
-                          <Bell className="w-4 h-4 text-primary fill-primary" />
-                          <span>On</span>
-                        </>
-                      ) : (
-                        <>
-                          <BellOff className="w-4 h-4" />
-                          <span>Notify</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t1) ? (
-                          <img
-                            src={resolveFlag(match.t1)}
-                            alt={resolveName(match.t1)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t1Code}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-bold text-foreground">{t1Code}</span>
-                    </div>
-                    <span className="text-muted-foreground">vs</span>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-foreground">{t2Code}</span>
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t2) ? (
-                          <img
-                            src={resolveFlag(match.t2)}
-                            alt={resolveName(match.t2)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t2Code}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {yourTeam && (
-                    <div className="mt-3 pt-3 border-t border-border">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your team playing
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No upcoming matches in this stage</p>
-              <p className="text-sm mt-1">
-                Upcoming fixtures will appear here
-              </p>
-            </div>
-          )}
+        <div className="relative">
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ff-fg-faint)]"
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            aria-hidden
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input
+            type="search"
+            placeholder="Search fixtures…"
+            value={fixtureSearch}
+            onChange={(e) => setFixtureSearch(e.target.value)}
+            className="w-full rounded-xl border border-[rgba(255,255,255,0.08)] bg-[var(--ff-bg-card)] py-2.5 pl-9 pr-4 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)] placeholder:text-[var(--ff-fg-faint)] focus:border-[var(--ff-accent-border)] focus:outline-none"
+          />
         </div>
       )}
 
-      {activeTab === "results" && (
-        <div className="space-y-3">
-          {isLoading ? (
-            <div className="text-center py-10 text-muted-foreground/70">
-              Loading matches...
-            </div>
-          ) : finishedMatches.length > 0 ? (
-            finishedMatches.map((match) => {
-              const yourTeam =
-                isUserTeam(match.t1) || isUserTeam(match.t2);
-              const t1Code =
-                match.t1?.substring(0, 3).toUpperCase() || "TBD";
-              const t2Code =
-                match.t2?.substring(0, 3).toUpperCase() || "TBD";
+      <div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2">
+        {isLoading ? (
+          <div className="py-10 text-center font-ff-ui text-sm text-[var(--ff-fg-quiet)]">
+            Loading matches…
+          </div>
+        ) : visibleMatches.length > 0 ? (
+          visibleMatches.map((match, index) =>
+            renderFfMatchCard(match, index, activeTab)
+          )
+        ) : activeTab === "live" ? (
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">No Live Matches</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">Check Upcoming for next fixtures</p>
+          </div>
+        ) : activeTab === "upcoming" ? (
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">{fixtureSearch.trim() ? "No matches found" : "No Upcoming Matches"}</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">{fixtureSearch.trim() ? "Try a different team name or group" : "Fixtures will appear here when scheduled"}</p>
+          </div>
+        ) : (
+          <div className="col-span-full px-2 pb-6 pt-10 text-center">
+            <div className="mb-3 text-[42px] leading-none" aria-hidden>⚽</div>
+            <p className="font-ff-display text-2xl font-bold text-[var(--ff-fg-faint)]">No Results Yet</p>
+            <p className="mt-1 font-ff-ui text-[13px] text-[var(--ff-fg-secondary)]">Results appear here after matches finish</p>
+          </div>
+        )}
+      </div>
 
-              return (
-                <div
-                  key={match.id}
-                  className="bg-card border border-border rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs text-muted-foreground uppercase tracking-widest">
-                      Final
-                    </span>
-                    {yourTeam && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30 uppercase tracking-wider">
-                        Your team played
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t1) ? (
-                          <img
-                            src={resolveFlag(match.t1)}
-                            alt={resolveName(match.t1)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t1Code}
-                          </span>
-                        )}
-                      </div>
-                      <span className="font-bold text-foreground">{t1Code}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-2xl font-bold text-foreground">
-                      <span>{match.s1 ?? "-"}</span>
-                      <span className="text-muted-foreground">-</span>
-                      <span>{match.s2 ?? "-"}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-bold text-foreground">{t2Code}</span>
-                      <div className="w-10 h-10 rounded-full bg-white/5 border border-border flex items-center justify-center overflow-hidden">
-                        {resolveFlag(match.t2) ? (
-                          <img
-                            src={resolveFlag(match.t2)}
-                            alt={resolveName(match.t2)}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t2Code}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <p>No completed matches yet</p>
-              <p className="text-sm mt-1">
-                Results will appear here after matches finish
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {!hasRealStages ? (
+        <p className="text-center font-ff-ui text-[11px] text-[var(--ff-fg-quieter)]">
+          Match feed unavailable — check back after fixtures load.
+        </p>
+      ) : null}
     </div>
   );
 };

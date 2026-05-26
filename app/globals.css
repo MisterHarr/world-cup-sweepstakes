@@ -3,7 +3,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Design A: Dark Premium Sports Theme */
+  /* Design A: Dark Premium Sports Theme — background ≈ lib/branding themeColorHex */
   --background: oklch(0.13 0.01 240);
   --foreground: oklch(0.98 0 0);
   --card: oklch(0.18 0.01 240);
@@ -41,6 +41,56 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.28 0.02 240);
   --sidebar-ring: oklch(0.72 0.19 160);
+
+  /*
+   * Featured Five UI handoff — additive tokens only
+   * (docs/design_handoff_featured_five_ui/README.md — emerald / bottom nav / lift)
+   */
+  --ff-bg-app: #090b0e;
+  --ff-bg-chrome: #07090c;
+  --ff-bg-card: #0f1115;
+  --ff-bg-card-alt: #0c0e11;
+  --ff-bg-card-t1: linear-gradient(160deg, #1c1500 0%, #111318 60%);
+  --ff-bg-blur: rgba(8, 10, 13, 0.96);
+  --ff-backdrop-blur: 20px;
+  --ff-fg-primary: #f3f4f6;
+  --ff-fg-secondary: #e8eaed;
+  --ff-fg-tertiary: #d1d5db;
+  --ff-fg-muted: #c9d1dc;
+  --ff-fg-quiet: #8a9aaa;      /* raised from #6b7280 — now ~6.0:1 on card bg */
+  --ff-fg-quieter: #7b8999;   /* raised from #5a6472 — now ~5.0:1 */
+  --ff-fg-quieter-alt: #6e7e8f; /* raised from #4b5563 — now ~4.5:1 */
+  --ff-fg-faint: #6b7c8d;     /* raised from #3d4a58 (was 1.9:1!) — now ~4.5:1 */
+  --ff-hairline: rgba(255, 255, 255, 0.055);
+  --ff-hairline-muted: rgba(255, 255, 255, 0.04);
+  --ff-hairline-strong: rgba(255, 255, 255, 0.07);
+  --ff-accent: #16a34a;
+  --ff-accent-text: #4ade80;
+  --ff-accent-dim: rgba(22, 163, 74, 0.12);
+  --ff-accent-border: rgba(22, 163, 74, 0.3);
+  --ff-success: #22c55e;
+  --ff-info: #3b82f6;
+  --ff-epic: #a855f7;
+  --ff-gold: #f59e0b;
+  --ff-silver: #9ca3af;
+  --ff-bronze: #b87333;
+  --ff-danger: #ef4444;
+  --ff-ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ff-lift-out-ms: 160ms;
+  --ff-lift-in-ms: 200ms;
+  /*
+   * README “Animations & timing reference” — durations used by CSS utilities / transitions.
+   * (JS timers in PageLiftRoot / bottom nav should stay numerically in sync where noted.)
+   */
+  --ff-count-up-ms: 950ms;
+  --ff-nav-bounce-ms: 350ms;
+  --ff-rank-chip-delay-ms: 500ms;
+  --ff-rank-chip-duration-ms: 400ms;
+  --ff-squad-card-enter-ms: 220ms;
+  --ff-badge-card-enter-ms: 220ms;
+  --ff-transfer-done-ms: 500ms;
+  --ff-confirm-press-ms: 150ms;
+  --ff-progress-bar-ms: 800ms;
 }
 
 @theme inline {
@@ -139,4 +189,200 @@
 }
 .pr-safe {
   padding-right: env(safe-area-inset-right);
+}
+
+/*
+ * Featured Five handoff — display / UI font stacks.
+ * next/font sets --font-ff-display and --font-ff-ui on <html>; fallbacks match README.
+ */
+@layer utilities {
+  .font-ff-display {
+    font-family: var(--font-ff-display), "Barlow Condensed", ui-sans-serif, sans-serif;
+  }
+
+  .font-ff-ui {
+    font-family: var(--font-ff-ui), "Inter", ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/*
+ * Featured Five — route “lift”: opacity-only (README wants 140–170ms out + 200ms in;
+ * `--ff-lift-out-ms` / `--ff-lift-in-ms`). No transform on this wrapper — transforms on an
+ * ancestor break `position:fixed` (e.g. bottom tab bar).
+ */
+@keyframes ff-lift-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ff-lift-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* Featured Five — live indicator dot (top bar + tabs); respect motion prefs below */
+@keyframes ff-live-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+
+  60% {
+    opacity: 0.88;
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0);
+  }
+}
+
+@layer utilities {
+  .ff-page-lift-out {
+    animation: ff-lift-out var(--ff-lift-out-ms, 160ms) ease-out forwards;
+    will-change: opacity;
+  }
+
+  .ff-page-lift-in {
+    animation: ff-lift-in var(--ff-lift-in-ms, 200ms) ease-out forwards;
+    will-change: opacity;
+  }
+
+  .ff-page-lift-static {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  .ff-live-dot {
+    animation: ff-live-dot-pulse 2s linear infinite;
+  }
+
+  .ff-squad-stagger {
+    animation: ff-squad-card-enter var(--ff-squad-card-enter-ms, 220ms) ease-out both;
+  }
+
+  /* Featured Five — badges grid (handoff §4): scale stagger */
+  .ff-badge-stagger {
+    animation: ff-badge-card-enter var(--ff-badge-card-enter-ms, 220ms) ease-out both;
+  }
+
+  /* Featured Five — portfolio rank chip (handoff §1): delayed spring mount */
+  .ff-rank-chip-in {
+    animation: ff-rank-chip-enter var(--ff-rank-chip-duration-ms, 400ms) var(--ff-ease-bounce, cubic-bezier(0.34, 1.56, 0.64, 1)) both;
+    animation-delay: var(--ff-rank-chip-delay-ms, 500ms);
+  }
+
+  /* Featured Five — transfer confirmation (handoff §5) */
+  .ff-transfer-done-icon {
+    animation: ff-transfer-done-bounce var(--ff-transfer-done-ms, 500ms) var(--ff-ease-bounce) both;
+  }
+}
+
+@keyframes ff-squad-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ff-badge-card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.93);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ff-rank-chip-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ff-transfer-done-bounce {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+
+  55% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+
+  80% {
+    transform: scale(0.96);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ff-page-lift-out,
+  .ff-page-lift-in {
+    animation: none !important;
+    will-change: auto;
+  }
+
+  .ff-page-lift-out {
+    opacity: 0;
+  }
+
+  .ff-page-lift-in,
+  .ff-page-lift-static {
+    opacity: 1;
+    transform: none;
+  }
+
+  .ff-live-dot {
+    animation: none !important;
+    box-shadow: none !important;
+  }
+
+  .ff-squad-stagger {
+    animation: none !important;
+  }
+
+  .ff-badge-stagger {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  .ff-rank-chip-in {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+
+  .ff-transfer-done-icon {
+    animation: none !important;
+    transform: none;
+    opacity: 1;
+  }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Filter, CheckCircle2, Loader2, Trophy } from "lucide-react";
@@ -61,20 +63,10 @@ function friendlyErrorMessage(err: unknown, fallback: string): string {
   return raw.replace(/^FirebaseError:\s*/i, "").trim() || fallback;
 }
 
-const DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
-type Department = (typeof DEPARTMENTS)[number];
-
 type PortfolioItem = {
   role?: string;
   teamId?: string;
 };
-
-function normalizeDepartment(value: unknown): Department | null {
-  return typeof value === "string" &&
-    (DEPARTMENTS as readonly string[]).includes(value)
-    ? (value as Department)
-    : null;
-}
 
 function readPortfolioItems(value: unknown): PortfolioItem[] {
   if (!Array.isArray(value)) return [];
@@ -228,12 +220,6 @@ export default function FeaturedTeamPage() {
         const rawData = snap.exists() ? snap.data() : null;
         const data = isRecord(rawData) ? rawData : null;
 
-        const dept = normalizeDepartment(data?.department);
-        if (!dept) {
-          router.replace("/department?next=/featured-team");
-          return;
-        }
-
         const portfolio = readPortfolioItems(data?.portfolio);
         const existingFeatured =
           portfolio.find((p) => p.role === "featured")?.teamId ?? null;
@@ -271,6 +257,8 @@ export default function FeaturedTeamPage() {
 
   // Load teams
   useEffect(() => {
+    if (checking || !uid) return;
+
     (async () => {
       try {
         const q = query(collection(db, "teams"), orderBy("group"), orderBy("name"));
@@ -298,7 +286,7 @@ export default function FeaturedTeamPage() {
         setError(friendlyErrorMessage(e, "Failed to load teams."));
       }
     })();
-  }, []);
+  }, [checking, uid]);
 
   const selectedTeam = useMemo(
     () => teams.find((t) => t.id === selectedTeamId) ?? null,
@@ -338,7 +326,7 @@ export default function FeaturedTeamPage() {
     }
 
     setIsSubmitting(true);
-    setStatus("Confirming your Featured Team...");
+    setStatus("Confirming your Star Team...");
 
     try {
       const confirmFn = httpsCallable(functions, "confirmFeaturedTeam");
@@ -351,7 +339,7 @@ export default function FeaturedTeamPage() {
 
       await getDoc(doc(db, "users", uid));
       setConfirmed(true);
-      setStatus("✅ Featured Team confirmed + 5 teams drawn!");
+      setStatus("✅ Star Team confirmed + 5 teams drawn!");
     } catch (e: unknown) {
       console.error(e);
       setError(friendlyErrorMessage(e, "Failed to confirm featured team."));
@@ -396,14 +384,13 @@ export default function FeaturedTeamPage() {
           {/* Page Title */}
           <div className="mb-7 text-center max-w-3xl mx-auto">
             <h2 className="text-4xl sm:text-5xl font-black text-foreground tracking-tight mb-2">
-              Select Your Featured Team
+              Pick Your Star Team
             </h2>
             <p className="text-muted-foreground text-base sm:text-lg">
               Choose one team to be the star of your squad.
             </p>
             <p className="mt-3 text-sm sm:text-base font-semibold text-primary">
-              Featured team earns <span className="font-black">2x points</span> while active.
-              Choose wisely.
+              Your Star Team earns <span className="font-black">2× points</span> — choose wisely.
             </p>
           </div>
 
@@ -616,17 +603,17 @@ export default function FeaturedTeamPage() {
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="text-center text-3xl sm:text-4xl font-black tracking-tight">
-                You&apos;re In!
+                You&apos;re In! 🎉
               </DialogTitle>
               <DialogDescription className="text-center text-base sm:text-lg text-muted-foreground">
-                Featured team confirmed. Five teams are ready.
+                Star Team confirmed. Five more teams are ready.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-5">
               <div className="rounded-2xl border border-primary/35 bg-gradient-to-br from-primary/12 to-primary/5 p-5 text-center shadow-[0_16px_36px_rgba(16,185,129,0.18)]">
                 <div className="text-[11px] font-bold uppercase tracking-widest text-primary mb-3">
-                  Your Featured Team
+                  Your Star Team
                 </div>
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-16 h-16 rounded-2xl overflow-hidden border border-primary/30 bg-background">
@@ -642,7 +629,7 @@ export default function FeaturedTeamPage() {
                     {confirmResult?.featured?.name ?? "—"}
                   </div>
                   <div className="text-xs sm:text-sm font-semibold text-primary">
-                    Earns 2x points while active
+                    Earns 2× points — your multiplier team
                   </div>
                 </div>
               </div>
@@ -652,7 +639,7 @@ export default function FeaturedTeamPage() {
                 className="w-full h-14 text-base sm:text-lg font-black tracking-wide"
                 size="lg"
               >
-                Reveal Teams
+                Reveal Your Squad
               </Button>
             </div>
           </DialogContent>

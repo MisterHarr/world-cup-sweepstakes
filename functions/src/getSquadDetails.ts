@@ -30,6 +30,26 @@ function uniq(arr: string[]): string[] {
   return Array.from(new Set(arr));
 }
 
+function toInitials(value: string | null): string | null {
+  if (!value) return null;
+  const parts = value
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.replace(/[^A-Za-z0-9]/g, ""))
+    .filter((part) => part.length > 0);
+
+  if (parts.length === 0) return null;
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
 /**
  * Calculate total points contributed by a team from aggregate fields
  * using the same formula as scoring/dashboard:
@@ -157,11 +177,11 @@ export const getSquadDetails = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  const displayName =
-    asString(user.displayName) ??
-    asString(user.name) ??
-    asString(user.email) ??
-    "Anonymous";
+  const preferredName = asString(user.displayName) ?? asString(user.name);
+  const initials =
+    toInitials(preferredName) ??
+    toInitials(asString(user.email)?.split("@")[0] ?? null);
+  const displayName = preferredName ?? initials ?? "Player";
 
   const featured = featuredId
     ? teamsById[featuredId] ?? { id: featuredId, contribution: 0 }

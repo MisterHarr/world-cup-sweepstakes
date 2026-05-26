@@ -32,6 +32,8 @@
   ],
   "exclude": [
     "node_modules",
+    "functions",
+    "scripts",
     "archive",
     "sweepstakes-game-ux",
     "docs/sweepstakes-game-ux",

@@ -1,13 +1,15 @@
 import type { AppShellNavItem } from "@/components/app-shell-v0";
 import {
   ArrowLeftRight,
-  Award,
+  BookOpen,
   Briefcase,
+  HandHeart,
   LogIn,
   LogOut,
   Tv,
   Users,
 } from "lucide-react";
+import { FEATURES } from "@/lib/features";
 
 type BuildMainNavOptions = {
   signedIn: boolean;
@@ -32,7 +34,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
     onLive,
   } = options;
 
-  return [
+  const navItems: AppShellNavItem[] = [
     {
       id: "auth",
       label: signedIn ? "Sign out" : "Sign in",
@@ -61,19 +63,40 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       icon: Tv,
       href: "/dashboard?tab=bracket",
       onClick: onLive,
-    },
-    {
-      id: "badges",
-      label: "Badges",
-      icon: Award,
-      href: "/badges",
-    },
-    {
-      id: "transfer",
-      label: "Transfer",
-      icon: ArrowLeftRight,
-      href: "/dashboard?tab=market",
-      onClick: onTransfer,
+      badgeVariant: "live" as const,
     },
   ];
+
+  if (!signedIn) {
+    return navItems;
+  }
+
+  if (FEATURES.userGuide) {
+    navItems.push({
+      id: "guide",
+      label: "Guide",
+      icon: BookOpen,
+      href: "/guide",
+    });
+  }
+
+  if (FEATURES.charityPot) {
+    navItems.push({
+      id: "charity",
+      label: "Charity",
+      icon: HandHeart,
+      href: "/charity",
+    });
+  }
+
+  navItems.push({
+    id: "transfer",
+    label: "Transfer",
+    icon: ArrowLeftRight,
+    href: "/dashboard?tab=market",
+    onClick: onTransfer,
+    badgeVariant: "amber" as const,
+  });
+
+  return navItems;
 }

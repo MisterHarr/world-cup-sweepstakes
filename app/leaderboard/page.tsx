@@ -1,16 +1,19 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { AppShellV0 } from "@/components/app-shell-v0";
+import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
+import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
 import LeaderboardPanel, {
   type LBUser,
   type SquadTeamVM,
   type SquadVM,
 } from "@/components/leaderboard/LeaderboardPanel";
 import { BRANDING } from "@/lib/branding";
-import { normalizeDepartment, type Department } from "@/lib/departments";
 import { auth, db, functions } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
@@ -68,17 +71,8 @@ export default function StandaloneLeaderboardPage() {
 
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
-  const [departmentByUserId, setDepartmentByUserId] = useState<
-    Record<string, Department | null>
-  >({});
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
-  const userDocData = useMemo<Record<string, unknown>>(
-    () => (isRecord(userDoc) ? userDoc : {}),
-    [userDoc]
-  );
-  const department = normalizeDepartment(userDocData.department);
-
   async function handleGoogleSignIn() {
     if (authBusy) return;
 
@@ -86,11 +80,7 @@ export default function StandaloneLeaderboardPage() {
     setStatus("Opening Google sign-in...");
     setAuthBusy(true);
     try {
-      const mode = await signInWithGoogle(auth);
-      if (mode === "redirect") {
-        setStatus("Redirecting to Google sign-in...");
-        return;
-      }
+      await signInWithGoogle(auth);
       setStatus("");
     } catch (err: unknown) {
       console.error(err);
@@ -128,7 +118,7 @@ export default function StandaloneLeaderboardPage() {
     const featured: SquadTeamVM | null = featuredRaw
       ? {
           id: String(featuredRaw.id ?? featuredRaw.teamId ?? ""),
-          name: String(featuredRaw.name ?? "Featured"),
+          name: String(featuredRaw.name ?? "Star Team"),
           group: String(featuredRaw.group ?? ""),
           tier: Number(featuredRaw.tier ?? 4),
           flagUrl: String(featuredRaw.flagUrl ?? ""),
@@ -178,7 +168,6 @@ export default function StandaloneLeaderboardPage() {
       setError("");
       setStatus("");
       setLeaderboardData([]);
-      setDepartmentByUserId({});
 
       if (!user) return;
 
@@ -198,52 +187,6 @@ export default function StandaloneLeaderboardPage() {
 
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (!signedIn) return;
-    if (loadingUser) return;
-    if (checkingAuth) return;
-    if (error) return;
-    if (!department) router.replace("/department?next=/leaderboard");
-  }, [signedIn, loadingUser, checkingAuth, error, department, router]);
-
-  useEffect(() => {
-    if (!signedIn) {
-      setDepartmentByUserId({});
-      return;
-    }
-
-    let cancelled = false;
-
-    async function loadDepartmentMap() {
-      try {
-        const fn = httpsCallable(functions, "getLeaderboard");
-        const res = await fn({ limit: 500 });
-        const payload = isRecord(res.data) ? res.data : {};
-        const rows = Array.isArray(payload.rows) ? payload.rows : [];
-
-        const map: Record<string, Department | null> = {};
-        rows.forEach((row: unknown) => {
-          const rowData = isRecord(row) ? row : {};
-          const id = resolveLeaderboardUserId(rowData);
-          if (!id) return;
-          map[id] = normalizeDepartment(rowData.department);
-        });
-
-        if (!cancelled) {
-          setDepartmentByUserId(map);
-        }
-      } catch (err: unknown) {
-        console.error(err);
-      }
-    }
-
-    loadDepartmentMap();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn) {
@@ -272,19 +215,11 @@ export default function StandaloneLeaderboardPage() {
           .map((row: unknown, idx: number) => {
             const rowData = isRecord(row) ? row : {};
             const id = resolveLeaderboardUserId(rowData);
-            const department =
-              normalizeDepartment(rowData.department) ??
-              normalizeDepartment(rowData.dept) ??
-              departmentByUserId[id] ??
-              null;
             return {
               id,
               rank: Number(rowData.rank ?? idx + 1),
               name: String(rowData.displayName ?? rowData.name ?? "Anonymous"),
               totalScore: Number(rowData.totalScore ?? 0),
-              badgeCount: Number(rowData.badgeCount ?? 0),
-              department,
-              dept: department,
               teams: [],
             };
           })
@@ -314,7 +249,7 @@ export default function StandaloneLeaderboardPage() {
     return () => {
       unsub();
     };
-  }, [departmentByUserId, signedIn]);
+  }, [signedIn]);
 
   const navItems = buildMainNavItems({
     signedIn,
@@ -329,41 +264,23 @@ export default function StandaloneLeaderboardPage() {
 
   return (
     <AppShellV0 navItems={navItems} activeId="leaderboard">
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-20 md:pb-0">
-        <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-4xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
-                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                    e.currentTarget.style.display = "none";
-                  }}
+      <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
+        <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+          <div className="pt-safe">
+            <FeaturedFiveTopBar
+              className="mx-auto max-w-4xl px-4"
+              brand={
+                <AppBrandBlock
+                  variant="ff-chrome"
+                  title={BRANDING.shortName}
                 />
-              </div>
-              <h1 className="font-bold text-lg tracking-tight">
-                {BRANDING.shortName} <span className="text-muted-foreground/70 font-normal">LEADERBOARD</span>
-              </h1>
-            </div>
-
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
-              {signedIn ? (
-                displayName ? (
-                  <>
-                    <span className="sm:hidden">{displayName}</span>
-                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
-                  </>
-                ) : (
-                  "Signed in"
-                )
-              ) : checkingAuth ? (
-                "Checking session..."
-              ) : (
-                "Signed out"
-              )}
-            </div>
+              }
+              liveCount={0}
+              userDisplayName={signedIn ? displayName || null : null}
+              userEmail={auth?.currentUser?.email ?? null}
+              showUserTile={signedIn}
+              trailing={<AppOverflowMenuButton />}
+            />
           </div>
         </header>
 

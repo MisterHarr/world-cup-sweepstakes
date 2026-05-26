@@ -21,10 +21,12 @@ export interface TransferCostCalculation {
   transferType: 'upgrade' | 'downgrade' | 'lateral';
 }
 
-const BASE_COST = 10;
-const UPGRADE_MULTIPLIER = 15; // Cost per tier when upgrading
-const DOWNGRADE_DISCOUNT = 3; // Discount per tier when downgrading
-const MINIMUM_COST = 5; // Floor for any transfer
+// Calibrated for post-group-stage window: top teams earn ~15-20 pts across
+// remaining knockout matches, so costs must stay well below that ceiling.
+const BASE_COST = 3;           // Flat fee for any transfer
+const UPGRADE_MULTIPLIER = 4;  // Per tier step when upgrading
+const FLAT_DOWNGRADE_COST = 2; // Flat cost when moving to a lower tier
+const MINIMUM_COST = 2;        // Floor
 
 /**
  * Calculate the cost of a transfer based on team tiers
@@ -51,23 +53,22 @@ export function calculateTransferCost(
   let transferType: 'upgrade' | 'downgrade' | 'lateral';
 
   if (tierDifference < 0) {
-    // UPGRADING: Picking a better team (lower tier number)
-    // Example: Tier 4 → Tier 1 (difference = -3)
+    // UPGRADING: base + per-tier penalty
     transferType = 'upgrade';
     tierPenalty = Math.abs(tierDifference) * UPGRADE_MULTIPLIER;
   } else if (tierDifference > 0) {
-    // DOWNGRADING: Picking a worse team (higher tier number)
-    // Example: Tier 1 → Tier 4 (difference = +3)
+    // DOWNGRADING: flat cost regardless of tiers dropped
     transferType = 'downgrade';
-    tierPenalty = -(tierDifference * DOWNGRADE_DISCOUNT);
+    tierPenalty = 0;
   } else {
-    // LATERAL: Same tier
+    // LATERAL: same tier
     transferType = 'lateral';
     tierPenalty = 0;
   }
 
-  // Calculate total cost with minimum floor
-  const totalCost = Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
+  const totalCost = transferType === 'downgrade'
+    ? FLAT_DOWNGRADE_COST
+    : Math.max(MINIMUM_COST, BASE_COST + tierPenalty);
 
   return {
     totalCost,

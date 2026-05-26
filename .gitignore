@@ -44,3 +44,11 @@ next-env.d.ts
 
 # local archive payload (not tracked)
 archive/
+
+# persisted local Firebase emulator state
+.local/firebase-emulators/
+
+# design reference / handoff trees (not part of the shipped app)
+docs/sweepstakes-game-ux*/
+docs/design_handoff_featured_five_ui/
+docs/featured-five-production-readiness-sprint-plan-updated-model-instructions.md

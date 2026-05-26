@@ -1,10 +1,14 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Clock3, TrendingDown } from "lucide-react";
 
-import { AppShellV0 } from "@/components/app-shell-v0";
+import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
+import { AppOverflowMenuButton, AppShellV0 } from "@/components/app-shell-v0";
 import { BRANDING } from "@/lib/branding";
 import { auth, db, functions } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
@@ -17,8 +21,6 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
-
-type Department = "Primary" | "Secondary" | "Admin";
 
 type TransferHistoryRow = {
   id: string;
@@ -86,12 +88,6 @@ export default function TransferHistoryPage() {
     () => (isRecord(userDoc) ? userDoc : {}),
     [userDoc]
   );
-  const department: Department | null =
-    userDocData.department === "Primary" ||
-    userDocData.department === "Secondary" ||
-    userDocData.department === "Admin"
-      ? userDocData.department
-      : null;
   const remainingTransfers = Math.max(
     0,
     Number(userDocData.remainingTransfers ?? 0)
@@ -103,11 +99,7 @@ export default function TransferHistoryPage() {
     setStatus("Opening Google sign-in...");
     setAuthBusy(true);
     try {
-      const mode = await signInWithGoogle(auth);
-      if (mode === "redirect") {
-        setStatus("Redirecting to Google sign-in...");
-        return;
-      }
+      await signInWithGoogle(auth);
       setStatus("");
     } catch (err: unknown) {
       setStatus("");
@@ -159,12 +151,6 @@ export default function TransferHistoryPage() {
 
     return () => unsub();
   }, []);
-
-  useEffect(() => {
-    if (!signedIn) return;
-    if (checkingAuth || loadingUser || error) return;
-    if (!department) router.replace("/department?next=/transfer-history");
-  }, [signedIn, checkingAuth, loadingUser, error, department, router]);
 
   useEffect(() => {
     if (!signedIn) {
@@ -252,38 +238,23 @@ export default function TransferHistoryPage() {
 
   return (
     <AppShellV0 navItems={navItems} activeId="transfer">
-      <div className="min-h-screen bg-gradient-to-br from-zinc-600/90 via-zinc-700/70 to-zinc-800/50 text-foreground selection:bg-primary/20 pb-8">
-        <header className="sticky top-0 z-20 bg-card/60 backdrop-blur-md text-foreground border-b border-border shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-          <div className="max-w-6xl mx-auto px-4 pr-16 sm:pr-4 h-16 flex items-center justify-between lg:pr-[34rem]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center shadow-md p-1 overflow-hidden border border-white/10">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
-                  onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
-                    e.currentTarget.style.display = "none";
-                  }}
+      <div className="min-h-screen bg-[var(--ff-bg-app)] text-[var(--ff-fg-primary)] selection:bg-primary/20 pb-[calc(62px+env(safe-area-inset-bottom)+12px)]">
+        <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+          <div className="pt-safe">
+            <FeaturedFiveTopBar
+              className="mx-auto max-w-6xl px-4"
+              brand={
+                <AppBrandBlock
+                  variant="ff-chrome"
+                  title={BRANDING.shortName}
                 />
-              </div>
-              <h1 className="font-bold text-lg tracking-tight">
-                Transfer History
-              </h1>
-            </div>
-            <div className="text-[11px] sm:text-[12px] text-muted-foreground max-w-[50vw] sm:max-w-[280px] truncate text-right leading-tight">
-              {signedIn ? (
-                displayName ? (
-                  <>
-                    <span className="sm:hidden">{displayName}</span>
-                    <span className="hidden sm:inline">{`Signed in as ${displayName}`}</span>
-                  </>
-                ) : (
-                  "Signed in"
-                )
-              ) : (
-                "Signed out"
-              )}
-            </div>
+              }
+              liveCount={0}
+              userDisplayName={signedIn ? displayName || null : null}
+              userEmail={auth?.currentUser?.email ?? null}
+              showUserTile={signedIn}
+              trailing={<AppOverflowMenuButton />}
+            />
           </div>
         </header>
 

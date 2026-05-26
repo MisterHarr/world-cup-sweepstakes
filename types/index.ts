@@ -26,6 +26,7 @@ export interface Team {
   export interface User {
     uid: string;
     displayName: string;
+    username?: string;
     email: string;
     photoURL?: string;
 

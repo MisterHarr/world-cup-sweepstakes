@@ -1,6 +1,8 @@
 "use client";
 
 import { ReactNode } from "react";
+import { AppBrandBlock } from "@/components/AppBrandBlock";
+import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
 import { auth } from "@/lib/firebase";
 import { BRANDING } from "@/lib/branding";
 import { signOut } from "firebase/auth";
@@ -23,48 +25,35 @@ export function AppShell({ children, user, showAuth = true }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b border-border/50 bg-card/80 backdrop-blur-xl">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo + Title */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white shadow-md p-1 overflow-hidden">
-                <img
-                  src={BRANDING.logoSrc}
-                  alt={BRANDING.logoAlt}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    const target = e.currentTarget as HTMLImageElement;
-                    target.style.display = "none";
-                  }}
-                />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold text-foreground">{BRANDING.shortName}</h1>
-                <p className="text-xs text-muted-foreground">{BRANDING.tagline}</p>
-              </div>
-            </div>
-
-            {/* Auth Actions */}
-            {showAuth && user && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm text-muted-foreground max-w-[44vw] sm:max-w-[240px] truncate leading-tight">
-                  {user.displayName ? (
-                    <>
-                      <span className="sm:hidden">{user.displayName}</span>
-                      <span className="hidden sm:inline">{`Signed in as ${user.displayName}`}</span>
-                    </>
-                  ) : (
-                    user.email || "Signed in"
-                  )}
-                </span>
-                <Button variant="outline" size="sm" onClick={handleSignOut}>
-                  Sign Out
+      {/* Header — Featured Five handoff chrome */}
+      <header className="sticky top-0 z-40 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
+        <div className="pt-safe">
+          <FeaturedFiveTopBar
+            className="container mx-auto max-w-6xl px-4"
+            brand={
+              <AppBrandBlock
+                variant="ff-chrome"
+                title={BRANDING.shortName}
+                logoTone="elevated"
+              />
+            }
+            liveCount={0}
+            userDisplayName={user?.displayName ?? null}
+            userEmail={user?.email ?? null}
+            showUserTile={Boolean(user)}
+            trailing={
+              showAuth && user ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="font-ff-ui h-8 border-[var(--ff-hairline-strong)] bg-transparent text-[11px] text-[var(--ff-fg-secondary)] hover:bg-white/[0.06]"
+                  onClick={handleSignOut}
+                >
+                  Sign out
                 </Button>
-              </div>
-            )}
-          </div>
+              ) : null
+            }
+          />
         </div>
       </header>
 

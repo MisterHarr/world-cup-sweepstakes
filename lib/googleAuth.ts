@@ -1,23 +1,16 @@
 import {
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
   type Auth,
 } from "firebase/auth";
 
-type GoogleSignInMode = "popup" | "redirect";
+type GoogleSignInMode = "popup";
 let inFlightSignIn: Promise<GoogleSignInMode> | null = null;
 
 function buildGoogleProvider(): GoogleAuthProvider {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
   return provider;
-}
-
-function isLocalhost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname.toLowerCase();
-  return host === "localhost" || host === "127.0.0.1";
 }
 
 export async function signInWithGoogle(
@@ -27,12 +20,8 @@ export async function signInWithGoogle(
 
   inFlightSignIn = (async (): Promise<GoogleSignInMode> => {
     const provider = buildGoogleProvider();
-    if (isLocalhost()) {
-      await signInWithPopup(auth, provider);
-      return "popup";
-    }
-    await signInWithRedirect(auth, provider);
-    return "redirect";
+    await signInWithPopup(auth, provider);
+    return "popup";
   })();
 
   try {
