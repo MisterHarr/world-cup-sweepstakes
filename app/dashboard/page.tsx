@@ -1413,10 +1413,10 @@ function DashboardPageContent() {
                 />
               }
               liveCount={liveMatchCount}
-              userDisplayName={signedIn ? topBarDisplayName : null}
+              userDisplayName={signedIn && !loadingUser ? topBarDisplayName : null}
               userEmail={auth?.currentUser?.email ?? null}
               showUserTile={signedIn}
-              onSetDisplayName={signedIn && !userHasUsername ? () => setUsernameModalOpen(true) : undefined}
+              onSetDisplayName={signedIn && !loadingUser && !userHasUsername ? () => setUsernameModalOpen(true) : undefined}
               trailing={<AppOverflowMenuButton />}
             />
           </div>
@@ -1425,7 +1425,7 @@ function DashboardPageContent() {
         {/* Main */}
         <main className="max-w-6xl mx-auto p-4 md:p-8">
         {/* Username banner — shown until user sets a display name or dismisses for session */}
-        {signedIn && !userHasUsername && (
+        {signedIn && !loadingUser && !userHasUsername && (
           <>
             {!usernameBannerDismissed && (
               <div className="mb-4">
