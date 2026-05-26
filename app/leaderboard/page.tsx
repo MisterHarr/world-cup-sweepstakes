@@ -24,7 +24,7 @@ import {
   signOut
 } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDoc, onSnapshot, query, where } from "firebase/firestore";
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
   if (!err || typeof err !== "object") return fallback;
@@ -71,6 +71,8 @@ export default function StandaloneLeaderboardPage() {
 
   const [leaderboardData, setLeaderboardData] = useState<LBUser[]>([]);
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
+  const [liveMatchCount, setLiveMatchCount] = useState(0);
+  const [remainingTransfers, setRemainingTransfers] = useState(0);
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
   async function handleGoogleSignIn() {
@@ -251,6 +253,23 @@ export default function StandaloneLeaderboardPage() {
     };
   }, [signedIn]);
 
+  // Live match count
+  useEffect(() => {
+    const q = query(collection(db, "matches"), where("status", "==", "LIVE"));
+    const unsub = onSnapshot(q, (snap) => setLiveMatchCount(snap.size), () => {});
+    return () => unsub();
+  }, []);
+
+  // Remaining transfers from user doc
+  useEffect(() => {
+    if (!uid) { setRemainingTransfers(0); return; }
+    const unsub = onSnapshot(doc(db, "users", uid), (snap) => {
+      const data = snap.data() ?? {};
+      setRemainingTransfers(Math.max(0, Number(data.remainingTransfers ?? 0)));
+    }, () => {});
+    return () => unsub();
+  }, [uid]);
+
   const navItems = buildMainNavItems({
     signedIn,
     authBusy: checkingAuth || authBusy,
@@ -260,6 +279,18 @@ export default function StandaloneLeaderboardPage() {
     onTransfer: () => router.push("/dashboard?tab=market"),
     onLeaderboard: () => router.push("/leaderboard"),
     onLive: () => router.push("/dashboard?tab=bracket"),
+  }).map((item) => {
+    if (item.id === "live") return {
+      ...item,
+      badge: String(liveMatchCount),
+      badgeVariant: liveMatchCount > 0 ? "live-active" as const : "live" as const,
+    };
+    if (item.id === "transfer") return {
+      ...item,
+      badge: remainingTransfers > 0 ? String(remainingTransfers) : "",
+      badgeVariant: "amber" as const,
+    };
+    return item;
   });
 
   return (

@@ -383,12 +383,6 @@ export function AuthLandingPage() {
             <>
               {authMethod !== "email" && (
               <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-center">
-                <p className="text-sm text-foreground/90 font-medium">
-                  New here?
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Read a quick, simple explanation first.
-                </p>
                 <Button
                   type="button"
                   variant="outline"
