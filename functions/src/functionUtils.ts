@@ -33,7 +33,7 @@ export function uniqueByTeamId<T extends { id: string }>(rows: T[]): T[] {
 }
 
 /**
- * Draw `count` teams with a tier-balanced spread.
+ * Draw `count` teams with a tier-balanced, group-unique spread.
  *
  * Target squad composition (star + 5 drawn) is always:
  *   1×T1 · 1×T2 · 2×T3 · 2×T4
@@ -42,13 +42,17 @@ export function uniqueByTeamId<T extends { id: string }>(rows: T[]): T[] {
  * can subtract it from the draw quota, ensuring every player ends up with
  * the same spread regardless of which team they picked as their star.
  *
+ * `starGroup` ensures no drawn team shares a group with the star team or
+ * with any other drawn team — every squad has teams from 6 distinct groups.
+ *
  * Example: T1 star → draw 0×T1, 1×T2, 2×T3, 2×T4
  *          T3 star → draw 1×T1, 1×T2, 1×T3, 2×T4
  */
-export function drawTierBalanced<T extends { id: string; tier: number }>(
+export function drawTierBalanced<T extends { id: string; tier: number; group?: string }>(
   eligibleTeams: T[], // already excludes the star team
   count = 5,
-  starTier = 0 // 0 = no compensation (legacy / unknown)
+  starTier = 0, // 0 = no compensation (legacy / unknown)
+  starGroup = ""  // group of the star team; drawn teams must be from different groups
 ): T[] {
   // Full-squad target: 1×T1, 1×T2, 2×T3, 2×T4
   const targets: Record<number, number> = { 1: 1, 2: 1, 3: 2, 4: 2 };
@@ -58,27 +62,47 @@ export function drawTierBalanced<T extends { id: string; tier: number }>(
     targets[starTier] = Math.max(0, (targets[starTier] ?? 0) - 1);
   }
 
-  const byTier: Record<number, T[]> = {
-    1: shuffle(eligibleTeams.filter((t) => t.tier === 1)),
-    2: shuffle(eligibleTeams.filter((t) => t.tier === 2)),
-    3: shuffle(eligibleTeams.filter((t) => t.tier === 3)),
-    4: shuffle(eligibleTeams.filter((t) => t.tier === 4)),
-  };
+  // Pick teams one at a time, tracking used groups to prevent duplicates.
+  // We draw tier-by-tier (T1 → T2 → T3 → T4) to preserve tier balance.
+  const usedGroups = new Set<string>(starGroup ? [starGroup] : []);
+  const result: T[] = [];
 
-  const seeded = uniqueByTeamId([
-    ...(byTier[1] ?? []).slice(0, targets[1] ?? 0),
-    ...(byTier[2] ?? []).slice(0, targets[2] ?? 0),
-    ...(byTier[3] ?? []).slice(0, targets[3] ?? 0),
-    ...(byTier[4] ?? []).slice(0, targets[4] ?? 0),
-  ]);
-
-  if (seeded.length >= count) {
-    return seeded.slice(0, count);
+  function pickFromPool(pool: T[], needed: number): T[] {
+    const picked: T[] = [];
+    for (const team of pool) {
+      if (picked.length >= needed) break;
+      const g = team.group ?? "";
+      if (g && usedGroups.has(g)) continue; // skip same-group teams
+      usedGroups.add(g);
+      picked.push(team);
+    }
+    return picked;
   }
 
-  // Fallback: fill any remaining slots from the full pool (handles edge cases
-  // where a tier doesn't have enough teams to satisfy the quota)
-  const seededIds = new Set(seeded.map((t) => t.id));
-  const pool = shuffle(eligibleTeams.filter((t) => !seededIds.has(t.id)));
-  return uniqueByTeamId([...seeded, ...pool]).slice(0, count);
+  for (const tier of [1, 2, 3, 4]) {
+    const needed = targets[tier] ?? 0;
+    if (needed <= 0) continue;
+    const pool = shuffle(eligibleTeams.filter((t) => t.tier === tier));
+    result.push(...pickFromPool(pool, needed));
+  }
+
+  if (result.length >= count) {
+    return uniqueByTeamId(result).slice(0, count);
+  }
+
+  // Fallback: fill remaining slots from the full pool respecting group constraint
+  // (handles edge cases where tier pools run dry due to group exclusions)
+  const resultIds = new Set(result.map((t) => t.id));
+  const fallbackPool = shuffle(eligibleTeams.filter((t) => !resultIds.has(t.id)));
+  result.push(...pickFromPool(fallbackPool, count - result.length));
+
+  // Final safety net: if group constraint makes it impossible (shouldn't happen
+  // with 16 groups and only 6 picks), fill without group check
+  if (result.length < count) {
+    const resultIds2 = new Set(result.map((t) => t.id));
+    const remainder = shuffle(eligibleTeams.filter((t) => !resultIds2.has(t.id)));
+    result.push(...remainder.slice(0, count - result.length));
+  }
+
+  return uniqueByTeamId(result).slice(0, count);
 }

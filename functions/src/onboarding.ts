@@ -243,7 +243,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
     throw new HttpsError("failed-precondition", "Not enough teams to draw from.");
   }
 
-  const drawnTeams = drawTierBalanced(eligibleForDraw, 5, featuredTeam.tier);
+  const drawnTeams = drawTierBalanced(eligibleForDraw, 5, featuredTeam.tier, featuredTeam.group);
   if (drawnTeams.length < 5) {
     throw new HttpsError(
       "failed-precondition",
