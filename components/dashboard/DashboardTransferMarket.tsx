@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Search, Zap } from "lucide-react";
+import { AlertTriangle, History, Lock, Search, Unlock } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -50,38 +50,112 @@ export type TradeResult = {
   message?: string;
 };
 
-function Flag22({ team }: { team: MarketTeam }) {
-  const code = team.id.slice(0, 2).toUpperCase();
+/** Small inline flag for the replacement list and status bar */
+function FlagInline({ team, size = 22 }: { team: MarketTeam; size?: number }) {
+  const code = team.id.slice(0, 3).toUpperCase();
+  const cls = `h-[${size}px] w-[${size}px]`;
   if (team.flagUrl) {
     return (
       <img
         src={team.flagUrl}
         alt=""
-        className="h-[22px] w-[22px] shrink-0 rounded-sm border border-[var(--ff-hairline)] object-cover"
+        style={{ width: size, height: size }}
+        className="shrink-0 rounded-sm border border-[var(--ff-hairline)] object-cover"
       />
     );
   }
   return (
-    <span className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-sm border border-[var(--ff-hairline)] bg-black/25 font-ff-ui text-[9px] font-bold text-[var(--ff-fg-faint)]">
+    <span
+      style={{ width: size, height: size }}
+      className={cn("flex shrink-0 items-center justify-center rounded-sm border border-[var(--ff-hairline)] bg-black/25 font-ff-ui text-[9px] font-bold text-[var(--ff-fg-faint)]", cls)}
+    >
       {code}
     </span>
   );
 }
 
-function Flag32({ team }: { team: MarketTeam }) {
-  const code = team.id.slice(0, 2).toUpperCase();
+/** Full flag-background card — matches My Teams SquadCard aesthetic */
+function SquadReleaseCard({
+  team,
+  selected,
+  onClick,
+}: {
+  team: MarketTeam;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const scoreFmtLocal = (n: number) =>
+    Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "group relative w-full overflow-hidden rounded-xl border text-left transition-all duration-200",
+        "aspect-[3/2] shadow-[0_8px_20px_rgba(0,0,0,0.28)]",
+        selected
+          ? "scale-[0.96] border-[rgba(239,68,68,0.6)] ring-1 ring-[rgba(239,68,68,0.35)]"
+          : "border-white/10 hover:border-white/25"
+      )}
+    >
+      {/* Flag background */}
+      {team.flagUrl ? (
+        <img
+          src={team.flagUrl}
+          alt={team.name}
+          className="absolute inset-0 h-full w-full object-cover opacity-55 transition-transform duration-300 group-hover:scale-[1.03]"
+        />
+      ) : (
+        <div className="absolute inset-0 bg-white/5 flex items-center justify-center">
+          <span className="text-xl font-black text-white/10 tracking-tight">{team.id.slice(0, 3).toUpperCase()}</span>
+        </div>
+      )}
+      {/* Gradient overlay */}
+      <div className={cn(
+        "absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent",
+        selected && "from-[#1a0505]/95 via-[#1a0505]/55"
+      )} />
+      {/* Content */}
+      <div className="absolute bottom-0 inset-x-0 z-10 px-2.5 pb-2 pt-5">
+        <div className="flex items-end justify-between gap-1">
+          <p className={cn(
+            "min-w-0 truncate font-black leading-tight text-[13px]",
+            selected ? "text-[#ef4444]" : "text-white"
+          )}>
+            {team.name}
+          </p>
+          <div className="shrink-0 text-right">
+            <div className="text-[7px] uppercase tracking-wider text-white/50 font-semibold leading-none mb-0.5">pts</div>
+            <div className={cn(
+              "font-ff-display font-black leading-none tabular-nums text-[22px]",
+              selected ? "text-[#ef4444]" : "text-white"
+            )}>
+              {scoreFmtLocal(team.points ?? 0)}
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Selected indicator */}
+      {selected && (
+        <div className="absolute top-2 right-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-[#ef4444]">
+          <span className="font-ff-ui text-[10px] font-bold text-white">✕</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
+/** Small flag for the cost modal */
+function FlagModal({ team }: { team: MarketTeam }) {
   if (team.flagUrl) {
     return (
-      <img
-        src={team.flagUrl}
-        alt=""
-        className="h-8 w-8 shrink-0 rounded-md border border-[var(--ff-hairline)] object-cover"
-      />
+      <img src={team.flagUrl} alt="" className="h-8 w-8 shrink-0 rounded-md border border-[var(--ff-hairline)] object-cover" />
     );
   }
   return (
     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--ff-hairline)] bg-black/25 font-ff-ui text-[10px] font-bold text-[var(--ff-fg-faint)]">
-      {code}
+      {team.id.slice(0, 3).toUpperCase()}
     </span>
   );
 }
@@ -217,12 +291,12 @@ const DashboardTransferMarket = ({
         <div className="flex min-w-0 flex-1 items-center gap-2 font-ff-ui text-[13px]">
           {selectedDrop ? (
             <>
-              <Flag22 team={selectedDrop} />
+              <FlagInline team={selectedDrop} />
               <span className="truncate font-semibold text-[#ef4444]">{selectedDrop.name}</span>
               <span className="text-[var(--ff-fg-muted)]">→</span>
               {selectedPickup ? (
                 <>
-                  <Flag22 team={selectedPickup} />
+                  <FlagInline team={selectedPickup} />
                   <span className="truncate font-semibold text-[var(--ff-accent-text)]">
                     {selectedPickup.name}
                   </span>
@@ -291,14 +365,14 @@ const DashboardTransferMarket = ({
             {/* Teams swap */}
             <div className="mb-6 flex items-center justify-center gap-4">
               <div className="flex flex-col items-center gap-2">
-                <Flag32 team={selectedDrop} />
+                <FlagModal team={selectedDrop} />
                 <span className="max-w-[90px] text-center font-ff-ui text-[13px] font-semibold leading-tight text-[#ef4444]">
                   {selectedDrop.name}
                 </span>
               </div>
               <span className="font-ff-ui text-[18px] text-[var(--ff-fg-faint)]">→</span>
               <div className="flex flex-col items-center gap-2">
-                <Flag32 team={selectedPickup} />
+                <FlagModal team={selectedPickup} />
                 <span className="max-w-[90px] text-center font-ff-ui text-[13px] font-semibold leading-tight text-[var(--ff-accent-text)]">
                   {selectedPickup.name}
                 </span>
@@ -384,78 +458,71 @@ const DashboardTransferMarket = ({
         </div>
       ) : (
         <>
-          <div className="mb-6 flex shrink-0 flex-wrap items-start gap-2">
-            <Zap
-              className={cn(
-                "mt-0.5 h-5 w-5 shrink-0",
-                transferWindowOpen ? "text-[var(--ff-gold)]" : "text-[var(--ff-danger)]"
-              )}
-              aria-hidden
-            />
-            <div className="min-w-0">
-              <p className="font-ff-display text-[20px] font-bold leading-tight text-[#f59e0b]">
-                {transferWindowOpen ? "Transfer Window Open" : "Transfer Window Closed"}
-              </p>
-              <p className="mt-1 font-ff-ui text-[11px] text-[#4b5563]">
-                {transfersRemaining} transfer{transfersRemaining === 1 ? "" : "s"} remaining · Current score:{" "}
+          {/* ── Transfer status header ── */}
+          <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-[rgba(255,255,255,0.06)] bg-[#0f1115] px-4 py-3.5">
+            <div className="flex items-center gap-3 min-w-0">
+              {transferWindowOpen
+                ? <Unlock className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden />
+                : <Lock className="h-5 w-5 shrink-0 text-[var(--ff-danger)]" aria-hidden />
+              }
+              <div className="min-w-0">
+                <p className={cn(
+                  "font-ff-display text-[18px] font-bold leading-tight",
+                  transferWindowOpen ? "text-emerald-400" : "text-[var(--ff-fg-primary)]"
+                )}>
+                  {transferWindowOpen ? "Window Open" : "Window Closed"}
+                </p>
+                {transferWindowLabel ? (
+                  <p className="mt-0.5 font-ff-ui text-[11px] text-[var(--ff-fg-faint)] truncate">{transferWindowLabel}</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className={cn(
+                "rounded-full border px-3 py-1 font-ff-ui text-[11px] font-semibold",
+                transfersRemaining > 0
+                  ? "border-[var(--ff-gold)]/40 bg-[rgba(245,158,11,0.1)] text-[var(--ff-gold)]"
+                  : "border-[var(--ff-hairline)] bg-white/[0.03] text-[var(--ff-fg-quieter)]"
+              )}>
+                {transfersRemaining} left
+              </span>
+              <span className="rounded-full border border-[var(--ff-hairline)] bg-white/[0.03] px-3 py-1 font-ff-ui text-[11px] font-semibold text-[var(--ff-fg-secondary)]">
                 {scoreFmt(userScore)} pts
-              </p>
-              <p className="mt-0.5 font-ff-ui text-[11px] text-[var(--ff-fg-quiet)]">{transferWindowLabel}</p>
+              </span>
               <Link
                 href="/transfer-history"
-                className="mt-1 inline-block font-ff-ui text-[10px] font-medium text-[var(--ff-accent-text)] underline underline-offset-2"
+                className="flex items-center gap-1 rounded-full border border-[var(--ff-hairline)] bg-white/[0.03] px-3 py-1 font-ff-ui text-[11px] text-[var(--ff-fg-quieter)] transition-colors hover:text-[var(--ff-accent-text)]"
               >
-                View transfer history
+                <History className="h-3 w-3" aria-hidden />
+                History
               </Link>
             </div>
           </div>
 
           <div className="flex min-h-0 flex-col lg:min-h-0 lg:flex-1">
             <div className="mb-6 flex min-h-0 max-h-none flex-col gap-6 lg:mb-0 lg:max-h-[min(640px,calc(100dvh-15rem))] lg:flex-1 lg:flex-row lg:items-stretch lg:gap-6 lg:overflow-hidden">
-              <div className="lg:flex lg:min-h-0 lg:w-[38%] lg:max-w-sm lg:shrink-0 lg:flex-col">
-                <p className="mb-2 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
-                  ① Release a team
+              <div className="lg:flex lg:min-h-0 lg:w-[40%] lg:max-w-sm lg:shrink-0 lg:flex-col">
+                <p className="mb-2.5 font-ff-ui text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--ff-fg-faint)]">
+                  Release a team
                 </p>
                 {releaseTeams.length === 0 ? (
                   <div className="rounded-xl border border-[var(--ff-hairline)] bg-[var(--ff-bg-card-alt)] p-8 text-center font-ff-ui text-sm text-[var(--ff-fg-quiet)]">
                     No squad teams available.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-3 gap-2 lg:max-h-full lg:auto-rows-min lg:grid-cols-2 lg:gap-2 lg:overflow-y-auto xl:grid-cols-3">
-                    {releaseTeams.map((team) => {
-                      const selected = selectedDrop?.id === team.id;
-                      return (
-                        <button
-                          key={team.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedDrop(team);
-                            setSelectedPickup(null);
-                            prevPickupId.current = null;
-                          }}
-                          className={cn(
-                            "flex flex-col items-center rounded-xl border px-2 py-2.5 text-center transition-transform duration-150 motion-reduce:transition-none",
-                            "bg-[#0f1115]",
-                            selected
-                              ? "scale-[0.96] border-[rgba(239,68,68,0.35)] bg-[rgba(239,68,68,0.08)]"
-                              : "border-[rgba(255,255,255,0.06)] hover:border-[var(--ff-hairline-strong)]"
-                          )}
-                        >
-                          <Flag22 team={team} />
-                          <p
-                            className={cn(
-                              "mt-1 line-clamp-2 font-ff-ui text-[11px] font-semibold leading-tight",
-                              selected ? "text-[#ef4444]" : "text-[var(--ff-fg-secondary)]"
-                            )}
-                          >
-                            {team.name}
-                          </p>
-                          <p className="font-ff-display text-[15px] font-bold leading-none text-[var(--ff-fg-primary)]">
-                            {scoreFmt(team.points ?? 0)}
-                          </p>
-                        </button>
-                      );
-                    })}
+                  <div className="grid grid-cols-2 gap-2.5 lg:max-h-full lg:auto-rows-min lg:overflow-y-auto xl:grid-cols-3">
+                    {releaseTeams.map((team) => (
+                      <SquadReleaseCard
+                        key={team.id}
+                        team={team}
+                        selected={selectedDrop?.id === team.id}
+                        onClick={() => {
+                          setSelectedDrop(team);
+                          setSelectedPickup(null);
+                          prevPickupId.current = null;
+                        }}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
@@ -505,7 +572,7 @@ const DashboardTransferMarket = ({
                               : "border-l-[3px] border-l-transparent hover:bg-white/[0.03]"
                           )}
                         >
-                          <Flag22 team={team} />
+                          <FlagInline team={team} />
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-ff-ui text-[13px] font-semibold text-[var(--ff-fg-tertiary)]">
                               {team.name}
