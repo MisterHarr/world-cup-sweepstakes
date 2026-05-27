@@ -11,6 +11,7 @@
     "test:emulator:ingest-validation": "node scripts/test-ingest-validation-quarantine.cjs",
     "test:emulator:shadow-routing": "node scripts/test-shadow-mode-routing.cjs",
     "test:emulator:dirty-retry": "node scripts/test-dirty-recompute-retry.cjs",
+    "test:emulator:rules": "node scripts/test-rules-security.cjs",
     "create-local-admin": "node create-local-admin.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
@@ -31,6 +32,7 @@
     "firebase-functions": "^7.2.5"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@typescript-eslint/eslint-plugin": "^5.12.0",
     "@typescript-eslint/parser": "^5.12.0",
     "eslint": "^8.9.0",

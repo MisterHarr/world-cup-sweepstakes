@@ -442,6 +442,19 @@ function DashboardPageContent() {
     matchTeamFlagsRef.current = matchTeamFlags;
   }, [matchTeamFlags]);
 
+  // Stamp ?tab= into the URL on first mount when it's absent.
+  // Without this, the first click on any tab from /dashboard (no param)
+  // triggers a null→value searchParam transition that can briefly re-init
+  // the Suspense boundary — causing it to land back on the "portfolio"
+  // default before the URL update commits.  All subsequent tab clicks
+  // are param→param transitions, which never have this problem.
+  useEffect(() => {
+    if (!tabParam) {
+      router.replace(`/dashboard?tab=${activeTab}`, { scroll: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally mount-only — tabParam value at mount is what matters
+
   useEffect(() => {
     const tabFromUrl = parseDashboardTab(tabParam);
     setActiveTab((prev) => (prev === tabFromUrl ? prev : tabFromUrl));

@@ -21,7 +21,8 @@
     "test:provider:football-data": "npx tsx scripts/test-football-data-shadow-proof.ts",
     "rehearse:provider:football-data:local": "npx tsx scripts/rehearse-football-data-local.ts",
     "test:badges": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only auth,firestore,functions \"cd functions && npm run test:emulator:badges\"",
-    "test:rehearsal": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only auth,firestore,functions \"cd functions && npm run test:emulator:transfer && npm run test:emulator:transfer-closed && npm run test:emulator:squad-authz && npm run test:emulator:ingest-validation && npm run test:emulator:shadow-routing && npm run test:emulator:dirty-retry\""
+    "test:rehearsal": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only auth,firestore,functions \"cd functions && npm run test:emulator:transfer && npm run test:emulator:transfer-closed && npm run test:emulator:squad-authz && npm run test:emulator:ingest-validation && npm run test:emulator:shadow-routing && npm run test:emulator:dirty-retry\"",
+    "test:rules": "FIREBASE_EMULATOR_PROJECT=demo-worldcup-loadtest firebase emulators:exec --project demo-worldcup-loadtest --only firestore \"cd functions && npm run test:emulator:rules\""
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
