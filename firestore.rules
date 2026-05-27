@@ -140,10 +140,15 @@ service cloud.firestore {
 
     // Prize pot entries.
     // Players can self-declare payment (create their own pending doc).
-    // Admins can read all entries for the confirmation panel.
+    // Any signed-in user can read confirmed entries (for the public participants list).
+    // Admins can read all entries including pending ones (for the confirmation panel).
     // All status transitions (pending→confirmed) and deletes go through Cloud Functions only.
     match /potEntries/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow read: if signedIn() && (
+        request.auth.uid == uid              // own entry (any status)
+        || isAdmin()                          // admin sees all
+        || resource.data.status == "confirmed" // anyone sees confirmed entries
+      );
 
       // Self-declaration: player creates their own pending entry.
       // Strict field validation prevents them from marking themselves as confirmed.

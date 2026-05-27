@@ -36,6 +36,13 @@ export const PRIZE_POT_CONFIG = {
   qrCodeImageUrl: asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_QR_IMAGE_URL),
   /** Optional WhatsApp deep-link for players to notify admin after paying. */
   whatsappConfirmUrl: asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_WHATSAPP_URL),
+  /**
+   * Admin's Touch 'n Go / DuitNow registered phone number.
+   * Shown to mobile users who can't scan their own screen —
+   * they use TnG "Send Money" → enter this number instead.
+   * Format: +601X-XXXXXXX
+   */
+  tngPhone: asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_TNG_PHONE),
   /** If true the /pot page lists participant display names; if false shows count only. */
   showParticipants:
     asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_SHOW_PARTICIPANTS)

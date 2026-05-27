@@ -10,6 +10,7 @@ import {
   Clock,
   Coins,
   Copy,
+  Phone,
   QrCode,
 } from "lucide-react";
 
@@ -84,6 +85,11 @@ export default function PrizePotPageClient() {
   const [declaring, setDeclaring] = useState(false);
   const [declareError, setDeclareError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    setIsMobile(/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent));
+  }, []);
 
   // ── Auth ───────────────────────────────────────────────────────────────────
 
@@ -347,28 +353,60 @@ export default function PrizePotPageClient() {
                 </div>
               ) : null}
 
-              {/* QR image */}
-              <div className="flex justify-center">
-                {PRIZE_POT_CONFIG.qrCodeImageUrl ? (
-                  <div className="rounded-2xl border-2 border-[var(--ff-gold)]/40 bg-white p-3 shadow-lg">
-                    <Image
-                      src={PRIZE_POT_CONFIG.qrCodeImageUrl}
-                      alt="Touch 'n Go / DuitNow QR code"
-                      width={220}
-                      height={220}
-                      className="rounded-xl"
-                      unoptimized
-                    />
+              {/* QR or Send Money — switches based on device */}
+              {isMobile && PRIZE_POT_CONFIG.tngPhone ? (
+                /* Mobile: can't scan own screen — show Send Money instructions */
+                <div className="rounded-xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/5 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Phone className="size-4 shrink-0 text-[var(--ff-gold)]" aria-hidden />
+                    <p className="text-sm font-semibold text-[var(--ff-fg-primary)]">
+                      Pay via Touch &apos;n Go — Send Money
+                    </p>
                   </div>
-                ) : (
-                  <div className="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
-                    <div className="text-center">
-                      <QrCode className="size-10 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
-                      <p className="mt-2 text-xs text-[var(--ff-fg-quieter-alt)]">QR code coming soon</p>
+                  <p className="text-sm text-[var(--ff-fg-secondary)]">
+                    Open TnG → <strong className="text-[var(--ff-fg-primary)]">Send Money</strong> → search or enter this number:
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xl font-black tracking-wider text-[var(--ff-gold)]">
+                      {PRIZE_POT_CONFIG.tngPhone}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(PRIZE_POT_CONFIG.tngPhone!)}
+                      className="flex items-center gap-1.5 rounded-lg border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--ff-gold)] hover:bg-[var(--ff-gold)]/20"
+                    >
+                      <Copy className="size-3" aria-hidden />
+                      Copy
+                    </button>
+                  </div>
+                  <p className="text-xs text-[var(--ff-fg-quieter-alt)]">
+                    Remember to enter your code <span className="font-mono font-bold text-[var(--ff-gold)]">{myCode}</span> as the payment note.
+                  </p>
+                </div>
+              ) : (
+                /* Desktop (or no phone number configured): show QR code */
+                <div className="flex justify-center">
+                  {PRIZE_POT_CONFIG.qrCodeImageUrl ? (
+                    <div className="rounded-2xl border-2 border-[var(--ff-gold)]/40 bg-white p-3 shadow-lg">
+                      <Image
+                        src={PRIZE_POT_CONFIG.qrCodeImageUrl}
+                        alt="Touch 'n Go / DuitNow QR code"
+                        width={220}
+                        height={220}
+                        className="rounded-xl"
+                        unoptimized
+                      />
                     </div>
-                  </div>
-                )}
-              </div>
+                  ) : (
+                    <div className="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
+                      <div className="text-center">
+                        <QrCode className="size-10 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
+                        <p className="mt-2 text-xs text-[var(--ff-fg-quieter-alt)]">QR code coming soon</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Amount */}
               <div className="flex justify-center">
@@ -380,12 +418,20 @@ export default function PrizePotPageClient() {
               {/* Steps */}
               {!isPending ? (
                 <ol className="space-y-2.5 text-sm text-[var(--ff-fg-secondary)]">
-                  {[
-                    "Open Touch 'n Go or your banking app",
-                    "Scan the QR code above",
-                    `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — enter your code (${myCode ?? "—"}) as the payment reference`,
-                    "Tap the button below once your payment is sent",
-                  ].map((step, i) => (
+                  {(isMobile && PRIZE_POT_CONFIG.tngPhone
+                    ? [
+                        "Open Touch 'n Go",
+                        `Tap Send Money and search for ${PRIZE_POT_CONFIG.tngPhone}`,
+                        `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — enter your code (${myCode ?? "—"}) as the payment note`,
+                        "Tap the button below once your payment is sent",
+                      ]
+                    : [
+                        "Open Touch 'n Go or your banking app on your phone",
+                        "Scan the QR code above",
+                        `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — enter your code (${myCode ?? "—"}) as the payment reference`,
+                        "Tap the button below once your payment is sent",
+                      ]
+                  ).map((step, i) => (
                     <li key={i} className="flex gap-3">
                       <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--ff-gold)]/15 text-[10px] font-bold text-[var(--ff-gold)]">
                         {i + 1}
