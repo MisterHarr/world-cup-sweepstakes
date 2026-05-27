@@ -138,6 +138,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Prize pot entries: written only by the confirmPotEntry admin Cloud Function
+    // (Admin SDK bypasses these rules). Clients may only read their own entry status.
+    match /potEntries/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

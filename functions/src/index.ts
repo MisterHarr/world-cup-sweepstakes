@@ -34,3 +34,4 @@ export {
   adminPreviewOrphanTeamDeletion,
   adminDeleteOrphanTeamDocs,
 } from "./adminSafety";
+export { confirmPotEntry } from "./pot";
