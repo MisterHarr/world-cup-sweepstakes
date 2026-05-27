@@ -442,19 +442,6 @@ function DashboardPageContent() {
     matchTeamFlagsRef.current = matchTeamFlags;
   }, [matchTeamFlags]);
 
-  // Stamp ?tab= into the URL on first mount when it's absent.
-  // Without this, the first click on any tab from /dashboard (no param)
-  // triggers a null→value searchParam transition that can briefly re-init
-  // the Suspense boundary — causing it to land back on the "portfolio"
-  // default before the URL update commits.  All subsequent tab clicks
-  // are param→param transitions, which never have this problem.
-  useEffect(() => {
-    if (!tabParam) {
-      router.replace(`/dashboard?tab=${activeTab}`, { scroll: false });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally mount-only — tabParam value at mount is what matters
-
   useEffect(() => {
     const tabFromUrl = parseDashboardTab(tabParam);
     setActiveTab((prev) => (prev === tabFromUrl ? prev : tabFromUrl));
@@ -1043,19 +1030,33 @@ function DashboardPageContent() {
     authBusy: checkingAuth || authBusy,
     onSignIn: handleGoogleSignIn,
     onSignOut: handleSignOut,
+    // Within the dashboard, tab navigation uses router.replace rather than the
+    // href-based <Link> component.  Using <Link> causes a null→value searchParam
+    // transition on the very first click (from /dashboard with no ?tab= param)
+    // which can briefly re-initialise the Suspense boundary and snap the tab
+    // back to the "portfolio" default.  router.replace is a pure URL update;
+    // the immediate setActiveTab call keeps the UI snappy.
     onPortfolio: () => {
       setActiveTab("portfolio");
+      router.replace("/dashboard?tab=portfolio", { scroll: false });
       if (typeof window !== "undefined") {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }
     },
-    onTransfer: () => setActiveTab("market"),
+    onTransfer: () => {
+      setActiveTab("market");
+      router.replace("/dashboard?tab=market", { scroll: false });
+    },
     onLeaderboard: () => setActiveTab("leaderboard"),
-    onLive: () => setActiveTab("bracket"),
+    onLive: () => {
+      setActiveTab("bracket");
+      router.replace("/dashboard?tab=bracket", { scroll: false });
+    },
   }).map((item) => {
     if (item.id === "live") {
       return {
         ...item,
+        href: undefined, // strip href — navigation handled by router.replace in onClick
         badge: String(liveMatchCount),
         badgeVariant: liveMatchCount > 0 ? "live-active" as const : "live" as const,
       };
@@ -1063,9 +1064,13 @@ function DashboardPageContent() {
     if (item.id === "transfer") {
       return {
         ...item,
+        href: undefined, // strip href — navigation handled by router.replace in onClick
         badge: remainingTransfers > 0 ? String(remainingTransfers) : "",
         badgeVariant: "amber" as const,
       };
+    }
+    if (item.id === "portfolio") {
+      return { ...item, href: undefined }; // strip href — navigation handled by router.replace in onClick
     }
     return item;
   });
