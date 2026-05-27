@@ -232,7 +232,7 @@ export function AppShellV0({ children, navItems, activeId }: AppShellV0Props) {
               type="button"
               className={cn(
                 barClass,
-                "border-0 bg-transparent text-left outline-offset-[-2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ff-accent-text)]"
+                "border-l-0 border-r-0 border-b-0 bg-transparent text-left outline-offset-[-2px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ff-accent-text)]"
               )}
               aria-current={active ? "page" : undefined}
               title={item.title}

@@ -443,6 +443,11 @@ function DashboardPageContent() {
   }, [matchTeamFlags]);
 
   useEffect(() => {
+    // Skip the null/empty case (initial load with no ?tab= param).
+    // parseDashboardTab(null) = "portfolio", and if the user clicks a tab
+    // before this effect fires, the null-fire would overwrite their choice.
+    // The useState initializer already handles the correct default from null.
+    if (!tabParam) return;
     const tabFromUrl = parseDashboardTab(tabParam);
     setActiveTab((prev) => (prev === tabFromUrl ? prev : tabFromUrl));
   }, [tabParam]);

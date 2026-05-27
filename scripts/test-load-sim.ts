@@ -219,7 +219,7 @@ async function main() {
       email: `loadsim.${i}@sim.test`,
       portfolio: [],
       totalScore: 0,
-      remainingTransfers: 2,
+      remainingTransfers: 1,
       transferPenaltyPoints: 0,
       isAdmin: false,
       hasSeenReveal: false,
@@ -354,7 +354,7 @@ async function main() {
     `${transferFailed.length} executeTransfer call(s) failed`
   );
 
-  // Verify remainingTransfers decremented (seeded at 2, should now be 1)
+  // Verify remainingTransfers decremented (seeded at 1, should now be 0)
   const transferSnaps = await Promise.all(
     transferArgs.map((a) => db.collection("users").doc(a.uid).get())
   );
@@ -362,9 +362,9 @@ async function main() {
   for (const snap of transferSnaps) {
     const data = (snap.data() ?? {}) as Record<string, unknown>;
     const remaining = Number(data.remainingTransfers);
-    if (remaining !== 1) {
+    if (remaining !== 0) {
       console.error(
-        `           ✗ User ${snap.id}: remainingTransfers=${remaining} (expected 1)`
+        `           ✗ User ${snap.id}: remainingTransfers=${remaining} (expected 0)`
       );
       transferErrors++;
     }
@@ -374,7 +374,7 @@ async function main() {
     `${transferErrors} user(s) had incorrect remainingTransfers after transfer`
   );
   console.log(
-    `           ✓ all ${TRANSFER_USERS} users: remainingTransfers 2→1\n`
+    `           ✓ all ${TRANSFER_USERS} users: remainingTransfers 1→0\n`
   );
 
   // ── Phase 6: Leaderboard consistency check ────────────────────────────────
@@ -434,7 +434,7 @@ async function main() {
   console.log("══════════════════════════════════════════════════════");
   console.log(`PASS  Load simulation complete in ${totalSec}s`);
   console.log(`  Phase 4: ${CONCURRENT_USERS} concurrent confirmFeaturedTeam — all succeeded`);
-  console.log(`  Phase 5: ${TRANSFER_USERS} concurrent executeTransfer — all succeeded`);
+  console.log(`  Phase 5: ${TRANSFER_USERS} concurrent executeTransfer — all succeeded (remainingTransfers 1→0)`);
   console.log(`  Phase 6: leaderboard consistent`);
   console.log(`  Phase 7: all ${CONCURRENT_USERS} mock users cleaned up`);
   console.log("══════════════════════════════════════════════════════\n");
