@@ -21,6 +21,13 @@ type BuildMainNavOptions = {
   onTransfer?: () => void;
   onLeaderboard?: () => void;
   onLive?: () => void;
+  /**
+   * When true, the Live and Transfer nav items are returned without
+   * badgeVariant / badge — so no coloured pip appears on secondary pages
+   * that don't have live-count or transfer-count data.
+   * Default: false (pips shown, caller is responsible for setting badge text).
+   */
+  suppressBadges?: boolean;
 };
 
 export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem[] {
@@ -33,6 +40,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
     onTransfer,
     onLeaderboard,
     onLive,
+    suppressBadges = false,
   } = options;
 
   const navItems: AppShellNavItem[] = [
@@ -64,7 +72,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       icon: Tv,
       href: "/dashboard?tab=bracket",
       onClick: onLive,
-      badgeVariant: "live" as const,
+      ...(suppressBadges ? {} : { badgeVariant: "live" as const }),
     },
   ];
 
@@ -105,7 +113,7 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
     icon: ArrowLeftRight,
     href: "/dashboard?tab=market",
     onClick: onTransfer,
-    badgeVariant: "amber" as const,
+    ...(suppressBadges ? {} : { badgeVariant: "amber" as const }),
   });
 
   return navItems;
