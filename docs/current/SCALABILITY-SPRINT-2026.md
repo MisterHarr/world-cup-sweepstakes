@@ -75,7 +75,7 @@ Full audit report produced by Claude Code on 2026-05-27. Issues by severity:
 ---
 
 ### Bundle 2 — Fix `assignDrawnTeams` Race Condition
-**Status:** ☐ Pending
+**Status:** ✅ Complete
 
 **Problem (C2):** `assignDrawnTeams` (onboarding.ts:146) reads the portfolio, checks `existingDrawn.length < 5`, draws 5 teams, then writes back. This read→check→write is not atomic. If two calls arrive within the same second (client double-tap, network retry, or admin tool), both pass the check independently and both write — leaving the user with 10 drawn teams.
 
@@ -260,7 +260,7 @@ npm run test:in-app-browser     # UA detection
 | Bundle | Status | Commit | Notes |
 |--------|--------|--------|-------|
 | 1 — Function config | ✅ | `bundle-1-function-config` | All 29 functions; heavy 512MiB/120s, standard 256MiB/30s |
-| 2 — assignDrawnTeams tx | ☐ | — | |
+| 2 — assignDrawnTeams tx | ✅ | `bundle-2-assignDrawnTeams-race-fix` | Firestore transaction; stale test penalty updated 10→3 |
 | 3 — setUsername tx + migration | ☐ | — | |
 | 4 — Rules test suite | ☐ | — | |
 | 5 — Load simulation | ☐ | — | |
