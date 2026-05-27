@@ -109,6 +109,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Username uniqueness locks: document ID is lowercase username, data is { uid }.
+    // Created/deleted atomically by the setUsername Cloud Function (Admin SDK bypasses
+    // these rules). Rules here prevent direct client manipulation.
+    match /usernames/{username} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["uid"])
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid;
+      allow update: if false;
+    }
+
     match /users/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
 

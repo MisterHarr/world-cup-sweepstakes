@@ -349,46 +349,69 @@ export const setUsername = onCall(CALL_OPTS, async (request) => {
   }
 
   const db = admin.firestore();
-  const userRef = db.collection("users").doc(uid);
-
-  // Read user doc to enforce one-time setting
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new HttpsError("not-found", "User profile not found.");
-  }
-  const userData = (userSnap.data() ?? {}) as Record<string, unknown>;
-  const isAdmin = request.auth?.token?.admin === true;
-
-  if (userData.username && !isAdmin) {
-    throw new HttpsError(
-      "already-exists",
-      "Display name already set. It can only be chosen once."
-    );
-  }
-
-  // Case-insensitive duplicate check
   const rawLower = raw.toLowerCase();
-  const dupSnap = await db
-    .collection("users")
-    .where("usernameLower", "==", rawLower)
-    .limit(1)
-    .get();
+  const userRef = db.collection("users").doc(uid);
+  // Use lowercase as the document ID so uniqueness is case-insensitive.
+  // usernames/{lowerName} → { uid } acts as an atomic ownership lock.
+  const newLockRef = db.collection("usernames").doc(rawLower);
+  const isAdminToken = request.auth?.token?.admin === true;
 
-  const taken = dupSnap.docs.some((d) => d.id !== uid);
-  if (taken) {
-    throw new HttpsError(
-      "already-exists",
-      "That name is already taken — please choose another."
-    );
-  }
+  // Atomically: read user doc + username lock → validate → write lock + user doc.
+  // If two calls race to claim the same name, the second transaction will see the
+  // lock document already written by the first and throw "username taken".
+  await db.runTransaction(async (tx) => {
+    const [userSnap, lockSnap] = await Promise.all([
+      tx.get(userRef),
+      tx.get(newLockRef),
+    ]);
 
-  await userRef.update({
-    username: raw,
-    usernameLower: rawLower,
-    updatedAt: FieldValue.serverTimestamp(),
+    if (!userSnap.exists) {
+      throw new HttpsError("not-found", "User profile not found.");
+    }
+
+    const userData = (userSnap.data() ?? {}) as Record<string, unknown>;
+    const existingUsername = asTrimmedString(userData.username);
+    const existingLower = asTrimmedString(userData.usernameLower);
+
+    if (existingUsername && !isAdminToken) {
+      throw new HttpsError(
+        "already-exists",
+        "Display name already set. It can only be chosen once."
+      );
+    }
+
+    // Check if this lowercase slot is claimed by a different user
+    if (lockSnap.exists) {
+      const lockData = (lockSnap.data() ?? {}) as Record<string, unknown>;
+      if (lockData.uid !== uid) {
+        throw new HttpsError(
+          "already-exists",
+          "That name is already taken — please choose another."
+        );
+      }
+      // lockData.uid === uid means the user already owns this name — allow re-claim
+    }
+
+    // Release the old lock when an admin is changing the user to a different name
+    if (existingLower && existingLower !== rawLower) {
+      const oldLockRef = db.collection("usernames").doc(existingLower);
+      tx.delete(oldLockRef);
+    }
+
+    // Claim the new lock
+    tx.set(newLockRef, { uid });
+
+    // Update the user doc
+    tx.update(userRef, {
+      username: raw,
+      usernameLower: rawLower,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   });
 
-  // Patch the leaderboard immediately so the name appears at once
+  // Patch the leaderboard immediately so the display name appears at once.
+  // Intentionally outside the transaction — leaderboard is eventually consistent;
+  // a missed patch here is harmless (next recompute will correct it).
   const lbRef = db.collection("leaderboard").doc("current");
   const lbSnap = await lbRef.get();
   if (lbSnap.exists) {
