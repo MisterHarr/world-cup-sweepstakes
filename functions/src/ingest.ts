@@ -33,7 +33,7 @@ import type {
   ProviderMatch,
 } from "./providers/providerTypes";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
 const SCHEDULE = "every 10 minutes";
 
 export type LiveScoresProvider =
@@ -786,7 +786,7 @@ async function deleteFixtureMatches(
 
 export const ingestLiveScores = onSchedule(
   {
-    region: REGION,
+    ...HEAVY_CALL_OPTS,
     schedule: SCHEDULE,
     timeZone: "UTC",
     secrets: [FOOTBALL_DATA_TOKEN],
@@ -853,7 +853,7 @@ export const ingestLiveScores = onSchedule(
 );
 
 export const adminIngestFixture = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 
@@ -916,7 +916,7 @@ export const adminIngestFixture = onCall(
 );
 
 export const adminResetFixtureIngest = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 
@@ -996,7 +996,7 @@ export const adminResetFixtureIngest = onCall(
 );
 
 export const adminIngestPreTournament = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 

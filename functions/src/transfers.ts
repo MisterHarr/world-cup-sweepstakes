@@ -4,8 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { requireAuth } from "./auth";
 import { getErrorMessage, markScoresDirty } from "./ingestHealth";
 import { recomputeScoresCore } from "./scoring";
-
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 const TRANSFER_WINDOW_DOC = "transferWindow";
 const TRANSFER_SCORING_VERSION = "v2-tiered-cost";
 
@@ -135,7 +134,7 @@ function getSquadFromUser(userData: unknown): {
   return { featuredTeamId, drawnTeamIds };
 }
 
-export const executeTransfer = onCall({ region: REGION }, async (request) => {
+export const executeTransfer = onCall(CALL_OPTS, async (request) => {
   const auth = requireAuth(request);
   const uid = auth.uid;
   const payload = isRecord(request.data) ? request.data : {};

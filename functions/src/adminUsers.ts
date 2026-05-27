@@ -11,7 +11,7 @@ import {
   uniqueByTeamId,
 } from "./functionUtils";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 type SeedDepartmentMode =
   | "round-robin"
@@ -143,7 +143,7 @@ function pickDepartmentForSeed(
   return departments[index % departments.length];
 }
 
-export const adminListUsers = onCall({ region: REGION }, async (request) => {
+export const adminListUsers = onCall(CALL_OPTS, async (request) => {
   const isAdmin = request.auth?.token?.admin === true;
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Admin access required.");
@@ -179,7 +179,7 @@ export const adminListUsers = onCall({ region: REGION }, async (request) => {
   }
 });
 
-export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request) => {
+export const adminAssignTeamsToUser = onCall(CALL_OPTS, async (request) => {
   const isAdmin = request.auth?.token?.admin === true;
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Admin access required.");
@@ -275,7 +275,7 @@ export const adminAssignTeamsToUser = onCall({ region: REGION }, async (request)
   };
 });
 
-export const adminSeedMockUsers = onCall({ region: REGION }, async (request) => {
+export const adminSeedMockUsers = onCall(CALL_OPTS, async (request) => {
   const isAdmin = request.auth?.token?.admin === true;
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Admin access required.");

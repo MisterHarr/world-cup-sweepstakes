@@ -6,7 +6,7 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 const ALLOWED = ["Primary", "Secondary", "Admin"] as const;
 
 type Dept = (typeof ALLOWED)[number];
@@ -21,7 +21,7 @@ function asDept(value: unknown): Dept | null {
     : null;
 }
 
-export const setDepartment = onCall({ region: REGION }, async (request) => {
+export const setDepartment = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");

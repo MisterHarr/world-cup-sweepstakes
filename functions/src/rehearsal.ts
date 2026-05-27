@@ -12,7 +12,7 @@ import { getLocalLiveSimulatorWave } from "./providers/localLiveSimulatorProvide
 import { getFixtureReplayWave } from "./providers/fixtureReplayProvider";
 import { applyNormalizedMatchUpdates, writeLiveOpsHealth } from "./ingest";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 type PublicRehearsalResetResult = {
   deletedMatches: number;
@@ -142,7 +142,7 @@ async function resetPublicRehearsalState(): Promise<PublicRehearsalResetResult> 
 }
 
 export const adminResetPublicRehearsalState = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 
@@ -188,7 +188,7 @@ export const adminResetPublicRehearsalState = onCall(
 );
 
 export const adminRunLocalLiveSimulatorWave = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 
@@ -272,7 +272,7 @@ export const adminRunLocalLiveSimulatorWave = onCall(
 );
 
 export const adminReplayFixtureWave = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 
@@ -328,7 +328,7 @@ export const adminReplayFixtureWave = onCall(
 );
 
 export const adminResetFixtureReplay = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 

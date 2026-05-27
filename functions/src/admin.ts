@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import { requireAdmin } from "./auth";
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -20,7 +20,7 @@ if (!admin.apps.length) {
  * - Caller MUST already be admin
  * - This avoids using a writable Firestore `admins` collection
  */
-export const setAdminClaim = onCall({ region: REGION }, async (request) => {
+export const setAdminClaim = onCall(CALL_OPTS, async (request) => {
   requireAdmin(request);
 
   const payload = isRecord(request.data) ? request.data : {};

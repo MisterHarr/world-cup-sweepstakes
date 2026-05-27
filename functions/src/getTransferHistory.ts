@@ -1,8 +1,7 @@
 import * as admin from "firebase-admin";
 import { onCall } from "firebase-functions/v2/https";
 import { requireAuth } from "./auth";
-
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 
@@ -73,7 +72,7 @@ function resolveLimit(data: unknown): number {
   return normalized;
 }
 
-export const getTransferHistory = onCall({ region: REGION }, async (request) => {
+export const getTransferHistory = onCall(CALL_OPTS, async (request) => {
   const auth = requireAuth(request);
   const uid = auth.uid;
   const limit = resolveLimit(request.data);

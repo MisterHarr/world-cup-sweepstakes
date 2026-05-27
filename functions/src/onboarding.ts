@@ -10,7 +10,7 @@ import {
   type TeamSeedRow,
 } from "./functionUtils";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 type PortfolioItem = { teamId: string; role: "featured" | "drawn" };
 
@@ -111,7 +111,7 @@ function buildUserBootstrapPatch(params: {
   return patch;
 }
 
-export const ensureUserProfile = onCall({ region: REGION }, async (request) => {
+export const ensureUserProfile = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
@@ -143,7 +143,7 @@ export const ensureUserProfile = onCall({ region: REGION }, async (request) => {
   };
 });
 
-export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
+export const assignDrawnTeams = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
 
@@ -208,7 +208,7 @@ export const assignDrawnTeams = onCall({ region: REGION }, async (request) => {
   return { ok: true, picked };
 });
 
-export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) => {
+export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
@@ -318,7 +318,7 @@ export const confirmFeaturedTeam = onCall({ region: REGION }, async (request) =>
   }
 });
 
-export const setUsername = onCall({ region: REGION }, async (request) => {
+export const setUsername = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
 
@@ -388,7 +388,7 @@ export const setUsername = onCall({ region: REGION }, async (request) => {
   return { ok: true, username: raw };
 });
 
-export const setDepartment = onCall({ region: REGION }, async (request) => {
+export const setDepartment = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");

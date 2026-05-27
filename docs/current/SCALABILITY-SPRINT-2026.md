@@ -259,7 +259,7 @@ npm run test:in-app-browser     # UA detection
 
 | Bundle | Status | Commit | Notes |
 |--------|--------|--------|-------|
-| 1 — Function config | ☐ | — | |
+| 1 — Function config | ✅ | `bundle-1-function-config` | All 29 functions; heavy 512MiB/120s, standard 256MiB/30s |
 | 2 — assignDrawnTeams tx | ☐ | — | |
 | 3 — setUsername tx + migration | ☐ | — | |
 | 4 — Rules test suite | ☐ | — | |

@@ -15,7 +15,7 @@ import {
 } from "./ingest/validateMatchUpdate";
 import type { NormalizedMatchUpdate } from "./providers/providerTypes";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS, HEAVY_CALL_OPTS } from "./runtimeConfig";
 const DEFAULT_TRANSFER_PENALTY_POINTS = 15;
 
 type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
@@ -101,7 +101,7 @@ function cleanUndefined<T extends Record<string, unknown>>(obj: T): T {
   return next;
 }
 
-export const adminUpsertMatch = onCall({ region: REGION }, async (request) => {
+export const adminUpsertMatch = onCall(CALL_OPTS, async (request) => {
   requireAdmin(request);
 
   const input = (request.data ?? {}) as MatchInput;
@@ -633,7 +633,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
   }
 }
 
-export const recomputeScores = onCall({ region: REGION }, async (request) => {
+export const recomputeScores = onCall(HEAVY_CALL_OPTS, async (request) => {
   requireAdmin(request);
 
   const payload =
@@ -647,7 +647,7 @@ export const recomputeScores = onCall({ region: REGION }, async (request) => {
   return recomputeScoresCore({ includeLive, scoringVersion, initiatedBy });
 });
 
-export const retryDirtyRecompute = onCall({ region: REGION }, async (request) => {
+export const retryDirtyRecompute = onCall(HEAVY_CALL_OPTS, async (request) => {
   requireAdmin(request);
 
   const payload =
@@ -682,7 +682,7 @@ export const retryDirtyRecompute = onCall({ region: REGION }, async (request) =>
 });
 
 export const recomputeShadowScores = onCall(
-  { region: REGION },
+  HEAVY_CALL_OPTS,
   async (request) => {
     requireAdmin(request);
 

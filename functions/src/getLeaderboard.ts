@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import admin from "firebase-admin";
+import { CALL_OPTS } from "./runtimeConfig";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -33,7 +34,7 @@ function asDepartment(value: unknown): "Primary" | "Secondary" | "Admin" | null 
 }
 
 export const getLeaderboard = onCall(
-  { region: "asia-southeast1" },
+  CALL_OPTS,
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "You must be signed in.");

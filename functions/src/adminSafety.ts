@@ -5,7 +5,7 @@ import { requireAdmin } from "./auth";
 import { recordAdminEvent } from "./adminAudit";
 import { recomputeScoresCore } from "./scoring";
 
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -42,7 +42,7 @@ function readUserTeamRefs(user: Record<string, unknown>): string[] {
   return Array.from(refs);
 }
 
-export const adminDeleteMockUsersByBatch = onCall({ region: REGION }, async (request) => {
+export const adminDeleteMockUsersByBatch = onCall(CALL_OPTS, async (request) => {
   const auth = requireAdmin(request);
   const payload = isRecord(request.data) ? request.data : {};
   const batchId = asTrimmedString(payload.batchId);
@@ -122,7 +122,7 @@ export const adminDeleteMockUsersByBatch = onCall({ region: REGION }, async (req
 });
 
 export const adminPreviewOrphanTeamDeletion = onCall(
-  { region: REGION },
+  CALL_OPTS,
   async (request) => {
     requireAdmin(request);
     const payload = isRecord(request.data) ? request.data : {};
@@ -180,7 +180,7 @@ export const adminPreviewOrphanTeamDeletion = onCall(
   }
 );
 
-export const adminDeleteOrphanTeamDocs = onCall({ region: REGION }, async (request) => {
+export const adminDeleteOrphanTeamDocs = onCall(CALL_OPTS, async (request) => {
   const auth = requireAdmin(request);
   const payload = isRecord(request.data) ? request.data : {};
   const allowedTeamIds = Array.isArray(payload.allowedTeamIds)

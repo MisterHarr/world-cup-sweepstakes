@@ -1,8 +1,6 @@
 import * as admin from "firebase-admin";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-
-// Keep region consistent with the rest of your functions
-const REGION = "asia-southeast1";
+import { CALL_OPTS } from "./runtimeConfig";
 
 type TeamOut = {
   id: string;
@@ -67,7 +65,7 @@ function calculateTeamContributionFromDoc(data: unknown): number {
   return wins * 3 + draws + goalsScored + cleanSheets - redCards - yellowCards * 0.5;
 }
 
-export const getSquadDetails = onCall({ region: REGION }, async (request) => {
+export const getSquadDetails = onCall(CALL_OPTS, async (request) => {
   const auth = request.auth;
   if (!auth?.uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
