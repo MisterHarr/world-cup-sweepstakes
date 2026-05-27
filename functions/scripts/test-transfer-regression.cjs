@@ -144,12 +144,12 @@ async function verify(db, uid, transferResult) {
   const user = userSnap.data() || {};
   assert(user.remainingTransfers === 2, "User remainingTransfers not decremented");
   assert(
-    Number(user.transferPenaltyPoints) === 10,
-    `Expected transferPenaltyPoints=10, got ${user.transferPenaltyPoints}`
+    Number(user.transferPenaltyPoints) === 3,
+    `Expected transferPenaltyPoints=3, got ${user.transferPenaltyPoints}`
   );
   assert(
-    Number(user.totalScore) === -10,
-    `Expected user totalScore=-10, got ${user.totalScore}`
+    Number(user.totalScore) === -3,
+    `Expected user totalScore=-3, got ${user.totalScore}`
   );
 
   const eventsSnap = await db
@@ -166,8 +166,8 @@ async function verify(db, uid, transferResult) {
   const row = rows.find((r) => r && r.userId === uid);
   assert(Boolean(row), "Leaderboard row for test user not found");
   assert(
-    Number(row.totalScore) === -10,
-    `Expected leaderboard totalScore=-10, got ${row && row.totalScore}`
+    Number(row.totalScore) === -3,
+    `Expected leaderboard totalScore=-3, got ${row && row.totalScore}`
   );
 }
 

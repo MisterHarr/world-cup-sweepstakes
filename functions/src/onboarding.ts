@@ -148,25 +148,10 @@ export const assignDrawnTeams = onCall(CALL_OPTS, async (request) => {
   if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
 
   const db = admin.firestore();
-  const userRef = db.collection("users").doc(uid);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new HttpsError("failed-precondition", "User profile missing.");
-  }
 
-  const user = userSnap.data() as Record<string, unknown>;
-  const portfolio = readPortfolio(user.portfolio);
-
-  const featured = portfolio.find((p) => p.role === "featured");
-  if (!featured?.teamId) {
-    throw new HttpsError("failed-precondition", "Select a Featured Team first.");
-  }
-
-  const existingDrawn = portfolio.filter((p) => p.role === "drawn");
-  if (existingDrawn.length >= 5) {
-    return { ok: true, message: "Drawn teams already assigned." };
-  }
-
+  // Read the static teams collection outside the transaction — 48 docs, never
+  // mutated during onboarding, so there is no benefit to locking them inside
+  // the transaction and it would only slow it down.
   const teamsSnap = await db.collection("teams").get();
   const allTeamIds = Array.from(
     new Set(
@@ -179,32 +164,63 @@ export const assignDrawnTeams = onCall(CALL_OPTS, async (request) => {
     )
   );
 
-  const exclude = new Set<string>([
-    featured.teamId,
-    ...existingDrawn.map((p) => p.teamId),
-  ]);
+  const userRef = db.collection("users").doc(uid);
 
-  const candidates = allTeamIds.filter((id) => !exclude.has(id));
+  // Run the read → check → write as an atomic transaction so that two
+  // simultaneous calls cannot both pass the "drawn < 5" guard and assign
+  // duplicate teams.
+  const picked = await db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) {
+      throw new HttpsError("failed-precondition", "User profile missing.");
+    }
 
-  if (candidates.length < 5) {
-    throw new HttpsError(
-      "failed-precondition",
-      `Not enough teams to draw 5. Candidates=${candidates.length} TotalTeams=${allTeamIds.length}. Seed /admin/seed-teams (Firestore teams collection).`
-    );
-  }
+    const user = userSnap.data() as Record<string, unknown>;
+    const portfolio = readPortfolio(user.portfolio);
 
-  const picked = shuffle(candidates).slice(0, 5);
+    const featured = portfolio.find((p) => p.role === "featured");
+    if (!featured?.teamId) {
+      throw new HttpsError("failed-precondition", "Select a Featured Team first.");
+    }
 
-  const nextPortfolio = [
-    { teamId: featured.teamId, role: "featured" as const },
-    ...picked.map((teamId) => ({ teamId, role: "drawn" as const })),
-  ];
+    const existingDrawn = portfolio.filter((p) => p.role === "drawn");
+    if (existingDrawn.length >= 5) {
+      // Already fully assigned — idempotent success, no write needed.
+      return null;
+    }
 
-  await userRef.update({
-    portfolio: nextPortfolio,
-    updatedAt: FieldValue.serverTimestamp(),
+    const exclude = new Set<string>([
+      featured.teamId,
+      ...existingDrawn.map((p) => p.teamId),
+    ]);
+
+    const candidates = allTeamIds.filter((id) => !exclude.has(id));
+    if (candidates.length < 5) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Not enough teams to draw 5. Candidates=${candidates.length} TotalTeams=${allTeamIds.length}. Seed /admin/seed-teams (Firestore teams collection).`
+      );
+    }
+
+    // Spread before shuffle so the original array is never mutated inside tx.
+    const pickedIds = shuffle([...candidates]).slice(0, 5);
+
+    const nextPortfolio = [
+      { teamId: featured.teamId, role: "featured" as const },
+      ...pickedIds.map((teamId) => ({ teamId, role: "drawn" as const })),
+    ];
+
+    tx.update(userRef, {
+      portfolio: nextPortfolio,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    return pickedIds;
   });
 
+  if (picked === null) {
+    return { ok: true, message: "Drawn teams already assigned." };
+  }
   return { ok: true, picked };
 });
 
