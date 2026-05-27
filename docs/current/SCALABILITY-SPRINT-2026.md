@@ -230,7 +230,7 @@ match /usernames/{username} {
 ---
 
 ### Bundle 6 — Full Deploy & Test Gate
-**Status:** ☐ Pending
+**Status:** ✅ Complete
 
 **Purpose (I3):** A single verified deploy of all changes accumulated in Bundles 1–5, with a full end-to-end test run as the acceptance gate. This is the bundle that takes the hardened build to production.
 
@@ -264,7 +264,7 @@ npm run test:in-app-browser     # UA detection
 | 3 — setUsername tx + migration | ✅ | `bundle-3-setUsername-race-fix` | usernames/{lower} lock; 3 users migrated pre-deploy |
 | 4 — Rules test suite | ✅ | `bundle-4-rules-tests + fix live tab first-click UX` | 24 cases; npm run test:rules |
 | 5 — Load simulation | ✅ | `bundle-5-load-simulation` | 30 concurrent confirm + 10 concurrent transfer; 12.3s; all passed |
-| 6 — Deploy + test gate | ☐ | — | |
+| 6 — Deploy + test gate | ✅ | `bundle-6-deploy-test-gate` | 30 functions deployed; 7+24+7+16=54 tests green; memory/timeout confirmed |
 
 ---
 
