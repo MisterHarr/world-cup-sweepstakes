@@ -97,7 +97,7 @@ Full audit report produced by Claude Code on 2026-05-27. Issues by severity:
 ---
 
 ### Bundle 3 — Fix `setUsername` Race Condition
-**Status:** ☐ Pending
+**Status:** ✅ Complete
 
 **Problem (C3):** `setUsername` (onboarding.ts:321) queries `users` collection for duplicate usernames, then writes if none found. This query→write is non-atomic. Two users simultaneously picking "Player1" can both pass the uniqueness check and both succeed.
 
@@ -261,7 +261,7 @@ npm run test:in-app-browser     # UA detection
 |--------|--------|--------|-------|
 | 1 — Function config | ✅ | `bundle-1-function-config` | All 29 functions; heavy 512MiB/120s, standard 256MiB/30s |
 | 2 — assignDrawnTeams tx | ✅ | `bundle-2-assignDrawnTeams-race-fix` | Firestore transaction; stale test penalty updated 10→3 |
-| 3 — setUsername tx + migration | ☐ | — | |
+| 3 — setUsername tx + migration | ✅ | `bundle-3-setUsername-race-fix` | usernames/{lower} lock; 3 users migrated pre-deploy |
 | 4 — Rules test suite | ☐ | — | |
 | 5 — Load simulation | ☐ | — | |
 | 6 — Deploy + test gate | ☐ | — | |
