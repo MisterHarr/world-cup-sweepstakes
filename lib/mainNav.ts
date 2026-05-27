@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   BookOpen,
   Briefcase,
+  Coins,
   HandHeart,
   LogIn,
   LogOut,
@@ -86,6 +87,15 @@ export function buildMainNavItems(options: BuildMainNavOptions): AppShellNavItem
       label: "Charity",
       icon: HandHeart,
       href: "/charity",
+    });
+  }
+
+  if (FEATURES.prizePot) {
+    navItems.push({
+      id: "pot",
+      label: "Pot",
+      icon: Coins,
+      href: "/pot",
     });
   }
 

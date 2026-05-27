@@ -7,6 +7,7 @@ function asEnabled(value: string | undefined): boolean {
 export const FEATURES = {
   userGuide: true,
   charityPot: asEnabled(process.env.NEXT_PUBLIC_ENABLE_CHARITY_POT),
+  prizePot: asEnabled(process.env.NEXT_PUBLIC_ENABLE_PRIZE_POT),
 } as const;
 
 export type FeatureKey = keyof typeof FEATURES;
