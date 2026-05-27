@@ -138,11 +138,26 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Prize pot entries: written only by the confirmPotEntry admin Cloud Function
-    // (Admin SDK bypasses these rules). Clients may only read their own entry status.
+    // Prize pot entries.
+    // Players can self-declare payment (create their own pending doc).
+    // Admins can read all entries for the confirmation panel.
+    // All status transitions (pending→confirmed) and deletes go through Cloud Functions only.
     match /potEntries/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
-      allow write: if false;
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+
+      // Self-declaration: player creates their own pending entry.
+      // Strict field validation prevents them from marking themselves as confirmed.
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.selfDeclared == true
+        && request.resource.data.keys().hasOnly([
+            "uid", "displayName", "code", "selfDeclaredAt", "status", "selfDeclared"
+          ]);
+
+      // No client updates or deletes — handled by Cloud Functions via Admin SDK.
+      allow update, delete: if false;
     }
 
     match /{document=**} {

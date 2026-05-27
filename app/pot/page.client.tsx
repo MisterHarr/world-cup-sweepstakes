@@ -5,7 +5,13 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Coins, MessageCircle, QrCode } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  Coins,
+  Copy,
+  QrCode,
+} from "lucide-react";
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
@@ -14,7 +20,7 @@ import { BRANDING } from "@/lib/branding";
 import { auth, db } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
-import { PRIZE_POT_CONFIG } from "@/lib/prizePot";
+import { generatePotCode, PRIZE_POT_CONFIG } from "@/lib/prizePot";
 import {
   onAuthStateChanged,
   signOut,
@@ -25,6 +31,9 @@ import {
   doc,
   onSnapshot,
   query,
+  serverTimestamp,
+  setDoc,
+  where,
 } from "firebase/firestore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -32,14 +41,18 @@ import {
 interface PotEntry {
   uid: string;
   displayName: string;
-  paidAt: { seconds: number } | null;
-  amount: number;
-  currency: string;
+  code?: string;
+  selfDeclaredAt?: { seconds: number } | null;
+  selfDeclared?: boolean;
+  status: "pending" | "confirmed";
+  paidAt?: { seconds: number } | null;
+  amount?: number;
+  currency?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatDate(ts: { seconds: number } | null): string {
+function formatDate(ts: { seconds: number } | null | undefined): string {
   if (!ts) return "";
   return new Date(ts.seconds * 1000).toLocaleDateString("en-MY", {
     day: "numeric",
@@ -63,11 +76,14 @@ export default function PrizePotPageClient() {
   const [authError, setAuthError] = useState("");
   const [redirecting, setRedirecting] = useState(false);
 
-  // The current user's own pot entry (null = not paid in yet)
+  // undefined = still loading, null = not declared, PotEntry = has entry
   const [myEntry, setMyEntry] = useState<PotEntry | null | undefined>(undefined);
+  const [allConfirmed, setAllConfirmed] = useState<PotEntry[]>([]);
+  const [allEntryCount, setAllEntryCount] = useState(0);
 
-  // All entries (for count + optional participant list)
-  const [allEntries, setAllEntries] = useState<PotEntry[]>([]);
+  const [declaring, setDeclaring] = useState(false);
+  const [declareError, setDeclareError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // ── Auth ───────────────────────────────────────────────────────────────────
 
@@ -89,39 +105,28 @@ export default function PrizePotPageClient() {
   // ── My entry ──────────────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!user) {
-      setMyEntry(undefined);
-      return;
-    }
+    if (!user) { setMyEntry(undefined); return; }
     const ref = doc(db, "potEntries", user.uid);
     const unsub = onSnapshot(
       ref,
-      (snap) => {
-        if (snap.exists()) {
-          setMyEntry(snap.data() as PotEntry);
-        } else {
-          setMyEntry(null);
-        }
-      },
+      (snap) => setMyEntry(snap.exists() ? (snap.data() as PotEntry) : null),
       () => setMyEntry(null)
     );
     return () => unsub();
   }, [user]);
 
-  // ── All entries (count + optional list) ──────────────────────────────────
+  // ── All confirmed entries (for public display) ────────────────────────────
 
   useEffect(() => {
     if (!user) return;
-    const q = query(collection(db, "potEntries"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setAllEntries(
-          snap.docs.map((d) => d.data() as PotEntry)
-        );
-      },
-      () => setAllEntries([])
+    const q = query(
+      collection(db, "potEntries"),
+      where("status", "==", "confirmed")
     );
+    const unsub = onSnapshot(q, (snap) => {
+      setAllConfirmed(snap.docs.map((d) => d.data() as PotEntry));
+      setAllEntryCount(snap.size);
+    }, () => {});
     return () => unsub();
   }, [user]);
 
@@ -131,26 +136,50 @@ export default function PrizePotPageClient() {
     if (authBusy) return;
     setAuthBusy(true);
     setAuthError("");
-    try {
-      await signInWithGoogle(auth);
-    } catch {
-      setAuthError("Sign-in failed. Please try again.");
-    } finally {
-      setAuthBusy(false);
-    }
+    try { await signInWithGoogle(auth); }
+    catch { setAuthError("Sign-in failed. Please try again."); }
+    finally { setAuthBusy(false); }
   }
 
   async function handleSignOut() {
     if (authBusy) return;
     setAuthBusy(true);
     setAuthError("");
+    try { await signOut(auth); }
+    catch { setAuthError("Sign-out failed. Please try again."); }
+    finally { setAuthBusy(false); }
+  }
+
+  // ── Self-declaration ──────────────────────────────────────────────────────
+
+  async function handleSelfDeclare() {
+    if (!user || declaring) return;
+    setDeclaring(true);
+    setDeclareError("");
     try {
-      await signOut(auth);
+      const code = generatePotCode(user.uid);
+      await setDoc(doc(db, "potEntries", user.uid), {
+        uid: user.uid,
+        displayName: user.displayName || user.uid,
+        code,
+        selfDeclaredAt: serverTimestamp(),
+        status: "pending",
+        selfDeclared: true,
+      });
     } catch {
-      setAuthError("Sign-out failed. Please try again.");
+      setDeclareError("Couldn't record your payment — please try again.");
     } finally {
-      setAuthBusy(false);
+      setDeclaring(false);
     }
+  }
+
+  // ── Copy code ─────────────────────────────────────────────────────────────
+
+  function handleCopyCode(code: string) {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   // ── Nav ───────────────────────────────────────────────────────────────────
@@ -164,12 +193,13 @@ export default function PrizePotPageClient() {
 
   // ── Derived ───────────────────────────────────────────────────────────────
 
-  const entryCount = allEntries.length;
-  const potTotal = entryCount * PRIZE_POT_CONFIG.amountPerEntry;
-  const isPaid = myEntry != null;
+  const myCode = user ? generatePotCode(user.uid) : null;
+  const potTotal = allEntryCount * PRIZE_POT_CONFIG.amountPerEntry;
+  const isPending = myEntry?.status === "pending";
+  const isConfirmed = myEntry?.status === "confirmed";
   const myEntryLoaded = myEntry !== undefined;
 
-  // ── Loading / redirect ────────────────────────────────────────────────────
+  // ── Spinner ───────────────────────────────────────────────────────────────
 
   if (loading || redirecting) {
     return (
@@ -208,7 +238,7 @@ export default function PrizePotPageClient() {
             </div>
           ) : null}
 
-          {/* ── Hero — pot summary ─────────────────────────────────────── */}
+          {/* ── Hero ─────────────────────────────────────────────────── */}
           <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -216,13 +246,12 @@ export default function PrizePotPageClient() {
                   {PRIZE_POT_CONFIG.potName}
                 </h1>
                 <p className="mt-1 text-sm text-[var(--ff-fg-secondary)]">
-                  Optional entry · {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} per person
+                  Optional · {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} per entry
                 </p>
               </div>
               <Coins className="size-8 shrink-0 text-[var(--ff-gold)] mt-0.5" aria-hidden />
             </div>
 
-            {/* Pot total */}
             <div className="mt-5 flex items-baseline gap-2">
               <span className="text-4xl sm:text-5xl font-black tracking-tight text-[var(--ff-gold)]">
                 {formatAmount(potTotal, PRIZE_POT_CONFIG.currency)}
@@ -230,54 +259,101 @@ export default function PrizePotPageClient() {
               <span className="text-sm text-[var(--ff-fg-secondary)]">current pot</span>
             </div>
             <p className="mt-1 text-xs text-[var(--ff-fg-quieter-alt)]">
-              {entryCount === 0
+              {allEntryCount === 0
                 ? "No entries yet — be the first in."
-                : entryCount === 1
-                ? "1 player has entered"
-                : `${entryCount} players have entered`}
+                : allEntryCount === 1
+                ? "1 confirmed player"
+                : `${allEntryCount} confirmed players`}
             </p>
           </section>
 
-          {/* ── Your status ───────────────────────────────────────────── */}
+          {/* ── Status card ──────────────────────────────────────────── */}
           {myEntryLoaded ? (
-            isPaid ? (
+            isConfirmed ? (
+              /* ✓ Confirmed */
               <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 sm:p-6">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="size-6 shrink-0 text-emerald-400" aria-hidden />
                   <div>
                     <p className="font-bold text-emerald-300">You&apos;re in the pot!</p>
                     <p className="text-xs text-[var(--ff-fg-secondary)] mt-0.5">
-                      {formatAmount(myEntry!.amount, myEntry!.currency)} confirmed
-                      {myEntry!.paidAt ? ` · ${formatDate(myEntry!.paidAt)}` : ""}
+                      {myEntry?.amount != null && myEntry?.currency
+                        ? `${formatAmount(myEntry.amount, myEntry.currency)} confirmed`
+                        : "Payment confirmed"}
+                      {myEntry?.paidAt ? ` · ${formatDate(myEntry.paidAt)}` : ""}
                     </p>
                   </div>
                 </div>
               </section>
+            ) : isPending ? (
+              /* ⏳ Pending */
+              <section className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <Clock className="size-5 shrink-0 text-amber-400 mt-0.5" aria-hidden />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-amber-300">Pending confirmation</p>
+                    <p className="text-xs text-[var(--ff-fg-secondary)] mt-0.5">
+                      Your payment has been recorded. The admin will confirm it shortly.
+                    </p>
+                    {myEntry?.code ? (
+                      <p className="mt-2 text-xs text-[var(--ff-fg-secondary)]">
+                        Your code:{" "}
+                        <span className="font-mono font-bold text-amber-300 tracking-widest">
+                          {myEntry.code}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
             ) : (
+              /* Not entered yet — shown above the QR section */
               <section className="rounded-2xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/5 p-5 sm:p-6">
                 <p className="font-bold text-[var(--ff-fg-primary)]">Not yet entered</p>
                 <p className="mt-1 text-sm text-[var(--ff-fg-secondary)]">
-                  Scan the QR code below, pay {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)}, then notify the admin. Your status will update automatically once confirmed.
+                  Follow the steps below to join the pot.
                 </p>
               </section>
             )
           ) : null}
 
-          {/* ── QR payment ────────────────────────────────────────────── */}
-          {!isPaid ? (
-            <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
+          {/* ── QR + payment (only when not yet confirmed) ────────────── */}
+          {!isConfirmed ? (
+            <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 space-y-5">
               <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
                 <QrCode className="size-5 shrink-0" aria-hidden />
-                How to enter
+                {isPending ? "Your payment details" : "How to enter"}
               </h2>
 
+              {/* Your unique code */}
+              {myCode ? (
+                <div className="rounded-xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/8 p-4">
+                  <p className="text-xs text-[var(--ff-fg-secondary)] mb-2">
+                    Your unique payment code — include this as the reference when you pay
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-3xl font-black tracking-[0.2em] text-[var(--ff-gold)]">
+                      {myCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCode(myCode)}
+                      className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--ff-gold)] transition-colors hover:bg-[var(--ff-gold)]/20"
+                    >
+                      <Copy className="size-3" aria-hidden />
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
               {/* QR image */}
-              <div className="mt-4 flex justify-center">
+              <div className="flex justify-center">
                 {PRIZE_POT_CONFIG.qrCodeImageUrl ? (
                   <div className="rounded-2xl border-2 border-[var(--ff-gold)]/40 bg-white p-3 shadow-lg">
                     <Image
                       src={PRIZE_POT_CONFIG.qrCodeImageUrl}
-                      alt="Touch 'n Go / DuitNow QR code — scan to pay"
+                      alt="Touch 'n Go / DuitNow QR code"
                       width={220}
                       height={220}
                       className="rounded-xl"
@@ -285,66 +361,73 @@ export default function PrizePotPageClient() {
                     />
                   </div>
                 ) : (
-                  <div className="flex h-[220px] w-[220px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
+                  <div className="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
                     <div className="text-center">
-                      <QrCode className="size-12 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
+                      <QrCode className="size-10 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
                       <p className="mt-2 text-xs text-[var(--ff-fg-quieter-alt)]">QR code coming soon</p>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Amount badge */}
-              <div className="mt-4 flex justify-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ff-gold)] px-4 py-1.5 text-sm font-bold text-black">
+              {/* Amount */}
+              <div className="flex justify-center">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ff-gold)] px-5 py-1.5 text-sm font-bold text-black">
                   {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)}
                 </span>
               </div>
 
               {/* Steps */}
-              <ol className="mt-5 space-y-2.5 text-sm text-[var(--ff-fg-secondary)]">
-                {[
-                  "Open Touch ’n Go or your banking app",
-                  "Scan the QR code above",
-                  `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — use your display name as the payment reference`,
-                  "Notify the admin so your entry can be confirmed",
-                ].map((step, i) => (
-                  <li key={i} className="flex gap-3">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--ff-gold)]/15 text-[10px] font-bold text-[var(--ff-gold)]">
-                      {i + 1}
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
+              {!isPending ? (
+                <ol className="space-y-2.5 text-sm text-[var(--ff-fg-secondary)]">
+                  {[
+                    "Open Touch 'n Go or your banking app",
+                    "Scan the QR code above",
+                    `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — enter your code (${myCode ?? "—"}) as the payment reference`,
+                    "Tap the button below once your payment is sent",
+                  ].map((step, i) => (
+                    <li key={i} className="flex gap-3">
+                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--ff-gold)]/15 text-[10px] font-bold text-[var(--ff-gold)]">
+                        {i + 1}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : null}
 
-              {/* WhatsApp CTA */}
-              {PRIZE_POT_CONFIG.whatsappConfirmUrl ? (
-                <div className="mt-5">
-                  <a
-                    href={PRIZE_POT_CONFIG.whatsappConfirmUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#25D366]/40 bg-[#25D366]/10 px-4 py-3 text-sm font-semibold text-[#25D366] transition-colors hover:bg-[#25D366]/20"
+              {/* I've paid button */}
+              {!isPending ? (
+                <div className="pt-1">
+                  {declareError ? (
+                    <p className="mb-3 text-sm text-destructive">{declareError}</p>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => void handleSelfDeclare()}
+                    disabled={declaring}
+                    className="w-full rounded-xl bg-[var(--ff-gold)] px-4 py-3.5 text-base font-bold text-black transition-opacity disabled:opacity-50 hover:opacity-90"
                   >
-                    <MessageCircle className="size-4 shrink-0" aria-hidden />
-                    Message admin on WhatsApp
-                  </a>
+                    {declaring ? "Recording…" : "I've paid — enter me"}
+                  </button>
+                  <p className="mt-2 text-center text-xs text-[var(--ff-fg-quieter-alt)]">
+                    Only tap this after your payment is sent. An admin will confirm it shortly.
+                  </p>
                 </div>
               ) : null}
             </section>
           ) : null}
 
-          {/* ── Participants ──────────────────────────────────────────── */}
-          {entryCount > 0 ? (
+          {/* ── Confirmed participants ────────────────────────────────── */}
+          {allConfirmed.length > 0 ? (
             <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-              <h2 className="text-xl font-black tracking-tight">
+              <h2 className="text-xl font-black tracking-tight mb-3">
                 {PRIZE_POT_CONFIG.showParticipants ? "Who&apos;s in" : "Entries"}
               </h2>
 
               {PRIZE_POT_CONFIG.showParticipants ? (
-                <ul className="mt-3 space-y-2">
-                  {allEntries.map((entry) => (
+                <ul className="space-y-2">
+                  {allConfirmed.map((entry) => (
                     <li
                       key={entry.uid}
                       className="flex items-center justify-between rounded-xl border border-border bg-background/40 px-4 py-2.5 text-sm"
@@ -352,16 +435,16 @@ export default function PrizePotPageClient() {
                       <span className="font-medium">{entry.displayName}</span>
                       <span className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
                         <CheckCircle2 className="size-3.5" aria-hidden />
-                        Entered
+                        Confirmed
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="mt-2 text-sm text-[var(--ff-fg-secondary)]">
-                  {entryCount === 1
+                <p className="text-sm text-[var(--ff-fg-secondary)]">
+                  {allEntryCount === 1
                     ? "1 player has entered the pot."
-                    : `${entryCount} players have entered the pot.`}
+                    : `${allEntryCount} players have entered the pot.`}
                 </p>
               )}
             </section>

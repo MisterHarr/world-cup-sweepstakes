@@ -9,6 +9,21 @@ function asNumber(value: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/**
+ * Derives a stable 4-digit confirmation code from a Firebase UID.
+ * Deterministic — same UID always produces the same code.
+ * Used so players can include their code as a TnG payment reference,
+ * making admin batch-confirmation trivial without any manual name matching.
+ */
+export function generatePotCode(uid: string): string {
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) {
+    hash = ((hash << 5) - hash) + uid.charCodeAt(i);
+    hash |= 0;
+  }
+  return (Math.abs(hash) % 9000 + 1000).toString();
+}
+
 export const PRIZE_POT_CONFIG = {
   enabled: FEATURES.prizePot,
   potName:

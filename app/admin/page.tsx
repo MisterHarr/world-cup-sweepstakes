@@ -52,6 +52,12 @@ export default function AdminHomePage() {
                     >
                       Tournament Runbook
                     </a>
+                    <a
+                      href="/admin/pot"
+                      className="rounded-xl border border-yellow-500/40 bg-yellow-500/5 px-4 py-3 text-yellow-200 shadow-sm transition hover:border-yellow-400/60 hover:text-yellow-100"
+                    >
+                      🏆 Prize Pot — Confirmation Panel
+                    </a>
                   </div>
                 </>
               )}
