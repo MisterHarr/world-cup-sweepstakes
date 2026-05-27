@@ -263,7 +263,7 @@ npm run test:in-app-browser     # UA detection
 | 2 — assignDrawnTeams tx | ✅ | `bundle-2-assignDrawnTeams-race-fix` | Firestore transaction; stale test penalty updated 10→3 |
 | 3 — setUsername tx + migration | ✅ | `bundle-3-setUsername-race-fix` | usernames/{lower} lock; 3 users migrated pre-deploy |
 | 4 — Rules test suite | ✅ | `bundle-4-rules-tests + fix live tab first-click UX` | 24 cases; npm run test:rules |
-| 5 — Load simulation | ☐ | — | |
+| 5 — Load simulation | ✅ | `bundle-5-load-simulation` | 30 concurrent confirm + 10 concurrent transfer; 12.3s; all passed |
 | 6 — Deploy + test gate | ☐ | — | |
 
 ---
