@@ -151,7 +151,7 @@ match /usernames/{username} {
 ---
 
 ### Bundle 4 — Firestore Security Rules Unit Test Suite
-**Status:** ☐ Pending
+**Status:** ✅ Complete
 
 **Problem (I1):** `firestore.rules` is hand-verified only. Any future edit to the rules file has no regression harness — a typo or logic error silently exposes or locks out data.
 
@@ -262,7 +262,7 @@ npm run test:in-app-browser     # UA detection
 | 1 — Function config | ✅ | `bundle-1-function-config` | All 29 functions; heavy 512MiB/120s, standard 256MiB/30s |
 | 2 — assignDrawnTeams tx | ✅ | `bundle-2-assignDrawnTeams-race-fix` | Firestore transaction; stale test penalty updated 10→3 |
 | 3 — setUsername tx + migration | ✅ | `bundle-3-setUsername-race-fix` | usernames/{lower} lock; 3 users migrated pre-deploy |
-| 4 — Rules test suite | ☐ | — | |
+| 4 — Rules test suite | ✅ | `bundle-4-rules-tests + fix live tab first-click UX` | 24 cases; npm run test:rules |
 | 5 — Load simulation | ☐ | — | |
 | 6 — Deploy + test gate | ☐ | — | |
 
