@@ -463,6 +463,13 @@ function toNormalizedMatchUpdate(
     awayYellowCards: match.awayYellowCards,
     homeRedCards: match.homeRedCards,
     awayRedCards: match.awayRedCards,
+    minute: match.minute ?? null,
+    homeScoreHT: match.homeScoreHT ?? null,
+    awayScoreHT: match.awayScoreHT ?? null,
+    homeScorePens: match.homeScorePens ?? null,
+    awayScorePens: match.awayScorePens ?? null,
+    winner: match.winner ?? null,
+    goals: match.goals ?? [],
     providerUpdatedAt: nowIso,
     ingestReceivedAt: nowIso,
     revision: Date.now(),
@@ -562,6 +569,12 @@ function isDifferent(
     | "homeYellowCards"
     | "awayRedCards"
     | "awayYellowCards"
+    | "minute"
+    | "homeScoreHT"
+    | "awayScoreHT"
+    | "homeScorePens"
+    | "awayScorePens"
+    | "winner"
     | "providerRevision"
   > = [
     "homeTeamId",
@@ -575,6 +588,12 @@ function isDifferent(
     "homeYellowCards",
     "awayRedCards",
     "awayYellowCards",
+    "minute",
+    "homeScoreHT",
+    "awayScoreHT",
+    "homeScorePens",
+    "awayScorePens",
+    "winner",
     "providerRevision",
   ];
 
@@ -674,6 +693,13 @@ export async function applyNormalizedMatchUpdates(
         homeYellowCards: match.homeYellowCards,
         awayRedCards: match.awayRedCards,
         awayYellowCards: match.awayYellowCards,
+        minute: match.minute ?? null,
+        homeScoreHT: match.homeScoreHT ?? null,
+        awayScoreHT: match.awayScoreHT ?? null,
+        homeScorePens: match.homeScorePens ?? null,
+        awayScorePens: match.awayScorePens ?? null,
+        winner: match.winner ?? null,
+        goals: match.goals ?? [],
         source: options.source,
         provider: match.provider,
         providerMatchId: match.providerMatchId,

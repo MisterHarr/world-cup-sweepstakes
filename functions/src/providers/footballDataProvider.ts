@@ -1,4 +1,4 @@
-import type { MatchStage, MatchStatus, ProviderMatch } from "./providerTypes";
+import type { MatchStage, MatchStatus, ProviderGoal, ProviderMatch } from "./providerTypes";
 import {
   FOOTBALL_DATA_BASE_DEFAULT,
   FOOTBALL_DATA_COMPETITION_DEFAULT,
@@ -121,6 +121,80 @@ function extractCards(
   return result;
 }
 
+/**
+ * Extract goal scorer events from the football-data.org `goals` array.
+ * Own goals are recorded under the benefiting team (the one that "scored").
+ * Penalty shootout goals (type=PENALTY during status=PENALTY_SHOOTOUT) are
+ * excluded — those are reflected in score.penalties, not goal events.
+ */
+function extractGoals(
+  raw: Record<string, unknown>,
+  homeProviderId: unknown,
+  awayProviderId: unknown
+): ProviderGoal[] {
+  const goals = Array.isArray(raw.goals) ? raw.goals : [];
+  if (!goals.length) return [];
+
+  const homeId = String(homeProviderId ?? "");
+  const awayId = String(awayProviderId ?? "");
+  const result: ProviderGoal[] = [];
+
+  for (const goal of goals) {
+    if (!isRecord(goal)) continue;
+
+    const teamRecord = isRecord(goal.team) ? goal.team : {};
+    const teamId = String(teamRecord.id ?? "");
+    const scorerRecord = isRecord(goal.scorer) ? goal.scorer : {};
+    const playerName = asString(scorerRecord.name) ?? null;
+    const minuteRaw = goal.minute;
+    const minute =
+      typeof minuteRaw === "number" && Number.isFinite(minuteRaw)
+        ? Math.floor(minuteRaw)
+        : null;
+    const typeRaw = asString(goal.type)?.toUpperCase() ?? "REGULAR";
+
+    // Skip penalty shootout goals — those belong to score.penalties
+    if (typeRaw === "PENALTY_SHOOTOUT") continue;
+
+    const isHome = homeId && teamId === homeId;
+    const isAway = awayId && teamId === awayId;
+    if (!isHome && !isAway) continue;
+
+    let type: ProviderGoal["type"] = "REGULAR";
+    if (typeRaw === "OWN_GOAL") type = "OWN_GOAL";
+    else if (typeRaw === "PENALTY") type = "PENALTY";
+    else if (typeRaw === "EXTRA_TIME") type = "EXTRA_TIME";
+
+    result.push({
+      minute,
+      playerName,
+      teamSide: isHome ? "home" : "away",
+      type,
+    });
+  }
+
+  return result;
+}
+
+/** Extract a nullable integer score from a half-time / penalty sub-object. */
+function extractSubScore(
+  score: unknown,
+  side: "home" | "away"
+): number | null {
+  const rec = isRecord(score) ? score : {};
+  const val = rec[side];
+  if (typeof val !== "number" || !Number.isFinite(val)) return null;
+  return Math.floor(val);
+}
+
+/** Map API winner string to our canonical form. */
+function toWinner(value: unknown): "HOME" | "AWAY" | null {
+  const w = asString(value)?.toUpperCase();
+  if (w === "HOME_TEAM") return "HOME";
+  if (w === "AWAY_TEAM") return "AWAY";
+  return null;
+}
+
 export async function getFootballDataMatches(
   options: { maxMatches: number; cutoffIso: string | null }
 ): Promise<ProviderMatch[]> {
@@ -193,10 +267,14 @@ export async function getFootballDataMatches(
       return;
     }
 
-    // Extract provider-level team IDs for card attribution
+    // Extract provider-level team IDs for card/goal attribution
     const homeProvId = isRecord(raw.homeTeam) ? raw.homeTeam.id : undefined;
     const awayProvId = isRecord(raw.awayTeam) ? raw.awayTeam.id : undefined;
     const cards = extractCards(raw, homeProvId, awayProvId);
+    const goals = extractGoals(raw, homeProvId, awayProvId);
+
+    const scoreObj = isRecord(raw.score) ? raw.score : {};
+    const minuteRaw = raw.minute;
 
     mapped.push({
       matchId,
@@ -211,6 +289,17 @@ export async function getFootballDataMatches(
       homeYellowCards: cards.homeYellowCards,
       awayRedCards: cards.awayRedCards,
       awayYellowCards: cards.awayYellowCards,
+      // Rich display data
+      minute:
+        typeof minuteRaw === "number" && Number.isFinite(minuteRaw)
+          ? Math.floor(minuteRaw)
+          : null,
+      homeScoreHT: extractSubScore(scoreObj.halfTime, "home"),
+      awayScoreHT: extractSubScore(scoreObj.halfTime, "away"),
+      homeScorePens: extractSubScore(scoreObj.penalties, "home"),
+      awayScorePens: extractSubScore(scoreObj.penalties, "away"),
+      winner: toWinner(scoreObj.winner),
+      goals: goals.length ? goals : undefined,
     });
   });
 

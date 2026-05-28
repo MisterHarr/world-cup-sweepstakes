@@ -164,8 +164,8 @@ const DashboardBracket = ({
     activeStage?.name ?? stageLabel(activeStage?.id ?? "");
 
   const headerMid = (match: BracketMatch, tab: typeof activeTab) => {
-    if (tab === "live") return "LIVE";
-    if (tab === "results") return "FT";
+    if (tab === "live") return match.minute != null ? `${match.minute}'` : "LIVE";
+    if (tab === "results") return match.scorePens ? "FT (Pens)" : "FT";
     return match.kickoffTime ? formatKickoff(match.kickoffTime) : "Scheduled";
   };
 
@@ -191,6 +191,17 @@ const DashboardBracket = ({
     const t1Name = resolveName(match.t1);
     const t2Name = resolveName(match.t2);
     const scoreLine = `${match.s1 ?? "–"}–${match.s2 ?? "–"}`;
+    const isScored = tab === "live" || tab === "results";
+    const t1Goals = isScored ? (match.goals ?? []).filter((g) => g.teamSide === "home") : [];
+    const t2Goals = isScored ? (match.goals ?? []).filter((g) => g.teamSide === "away") : [];
+    const htLabel =
+      isScored && match.scoreHT != null
+        ? `HT ${match.scoreHT[0]}–${match.scoreHT[1]}`
+        : null;
+    const pensLabel =
+      tab === "results" && match.scorePens != null
+        ? `${match.scorePens[0]}–${match.scorePens[1]} on pens`
+        : null;
 
     return (
       <div
@@ -259,6 +270,18 @@ const DashboardBracket = ({
                   </span>
                 )}
               </div>
+              {t1Goals.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {t1Goals.map((g, i) => (
+                    <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-tight">
+                      {g.type === "OWN_GOAL" ? "⚽ OG" : "⚽"}{" "}
+                      {g.playerName ?? "—"}
+                      {g.minute != null ? ` ${g.minute}'` : ""}
+                      {g.type === "PENALTY" ? " (P)" : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -299,7 +322,7 @@ const DashboardBracket = ({
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
+              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)] text-right">
                 {t2Name}
               </div>
               <div className="flex flex-row-reverse items-center gap-1.5 mt-0.5">
@@ -319,10 +342,40 @@ const DashboardBracket = ({
                   </span>
                 )}
               </div>
+              {t2Goals.length > 0 && (
+                <div className="mt-1 space-y-0.5 text-right">
+                  {t2Goals.map((g, i) => (
+                    <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-tight">
+                      {g.type === "OWN_GOAL" ? "OG ⚽" : "⚽"}{" "}
+                      {g.playerName ?? "—"}
+                      {g.minute != null ? ` ${g.minute}'` : ""}
+                      {g.type === "PENALTY" ? " (P)" : ""}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
+        {/* HT score + penalty shootout result */}
+        {(htLabel || pensLabel) && (
+          <div className="mt-2 flex items-center justify-center gap-3">
+            {htLabel && (
+              <span className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)]">
+                {htLabel}
+              </span>
+            )}
+            {htLabel && pensLabel && (
+              <span className="text-[var(--ff-hairline)] text-[10px]">·</span>
+            )}
+            {pensLabel && (
+              <span className="font-ff-ui text-[10px] font-semibold text-[var(--ff-fg-quiet)]">
+                {pensLabel}
+              </span>
+            )}
+          </div>
+        )}
 
         {match.impact && tab === "live" ? (
           <p className="mt-2 text-center font-ff-ui text-xs font-semibold text-[var(--ff-accent-text)]">
