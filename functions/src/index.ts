@@ -34,4 +34,4 @@ export {
   adminPreviewOrphanTeamDeletion,
   adminDeleteOrphanTeamDocs,
 } from "./adminSafety";
-export { confirmPotEntry, removePotEntry } from "./pot";
+export { confirmPotEntry, removePotEntry, exportConfirmedEntrants } from "./pot";

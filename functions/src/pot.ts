@@ -60,7 +60,9 @@ export const confirmPotEntry = onCall(CALL_OPTS, async (request) => {
       ? userData.displayName.trim()
       : targetUid;
 
-  // merge: true preserves self-declaration fields (code, selfDeclaredAt) if present
+  // merge: true preserves self-declaration fields (code, selfDeclaredAt) if present.
+  // eligibleForPot is set here and ONLY here — no client path can set this field
+  // (rules allow create with a fixed field list that excludes it; update is denied).
   await db()
     .collection("potEntries")
     .doc(targetUid)
@@ -69,6 +71,7 @@ export const confirmPotEntry = onCall(CALL_OPTS, async (request) => {
         uid: targetUid,
         displayName,
         status: "confirmed",
+        eligibleForPot: true,
         amount,
         currency,
         paidAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -80,6 +83,38 @@ export const confirmPotEntry = onCall(CALL_OPTS, async (request) => {
     );
 
   return { ok: true, uid: targetUid, displayName, amount, currency };
+});
+
+// ── exportConfirmedEntrants ───────────────────────────────────────────────────
+
+/**
+ * Returns a snapshot of all confirmed, prize-eligible pot entries.
+ * Admin-only. Used to lock the payout list before scoring begins.
+ */
+export const exportConfirmedEntrants = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+
+  const snap = await db()
+    .collection("potEntries")
+    .where("status", "==", "confirmed")
+    .orderBy("confirmedAt", "asc")
+    .get();
+
+  const rows = snap.docs.map((d) => {
+    const data = d.data() as Record<string, unknown>;
+    return {
+      uid:         String(data.uid ?? d.id),
+      displayName: typeof data.displayName === "string" ? data.displayName : "—",
+      code:        typeof data.code === "string" ? data.code : null,
+      amount:      typeof data.amount === "number" ? data.amount : null,
+      currency:    typeof data.currency === "string" ? data.currency : null,
+      confirmedAt: isRecord(data.confirmedAt)
+        ? (data.confirmedAt as { seconds: number }).seconds
+        : null,
+    };
+  });
+
+  return { ok: true, count: rows.length, rows };
 });
 
 // ── removePotEntry ────────────────────────────────────────────────────────────

@@ -5,11 +5,13 @@ import {
   CheckCircle2,
   Clock,
   Coins,
+  LockOpen,
+  Lock,
   RefreshCw,
   Trash2,
   X,
 } from "lucide-react";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, setDoc, Timestamp } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
 import { AdminGate } from "@/components/admin/AdminGate";
@@ -56,8 +58,24 @@ function PotPanel({ uid }: { uid: string }) {
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState("");
   const [batchBusy, setBatchBusy] = useState(false);
+  const [exportText, setExportText] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
 
-  // ── Live listener ────────────────────────────────────────────────────────
+  // null = still loading
+  const [potLocked, setPotLocked] = useState<boolean | null>(null);
+  const [entryDeadline, setEntryDeadline] = useState<{ seconds: number } | null>(null);
+  const [toggleBusy, setToggleBusy] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState("");
+  const [deadlineBusy, setDeadlineBusy] = useState(false);
+
+  // Derived: are entries currently open?
+  const potOpen: boolean | null =
+    potLocked === null
+      ? null
+      : !potLocked &&
+        (entryDeadline === null || Date.now() / 1000 < entryDeadline.seconds);
+
+  // ── Live listener: entries ───────────────────────────────────────────────
 
   useEffect(() => {
     const q = query(collection(db, "potEntries"));
@@ -66,6 +84,86 @@ function PotPanel({ uid }: { uid: string }) {
     });
     return () => unsub();
   }, []);
+
+  // ── Live listener: pot settings ──────────────────────────────────────────
+
+  useEffect(() => {
+    const ref = doc(db, "settings", "prizePot");
+    const unsub = onSnapshot(ref, (snap) => {
+      if (!snap.exists()) {
+        setPotLocked(false);
+        setEntryDeadline(null);
+        return;
+      }
+      const data = snap.data() as {
+        potLocked?: boolean;
+        open?: boolean;
+        entryDeadline?: { seconds: number } | null;
+      };
+      // potLocked is the authoritative lock; fall back to !open for back-compat
+      setPotLocked(data.potLocked === true || data.open === false);
+      setEntryDeadline(data.entryDeadline ?? null);
+
+      // Populate the deadline input with the stored value (only when it hasn't
+      // been edited by the admin this session — use a one-time seed on first load)
+      if (data.entryDeadline) {
+        const d = new Date(data.entryDeadline.seconds * 1000);
+        // datetime-local requires YYYY-MM-DDTHH:MM with no seconds
+        const pad = (n: number) => String(n).padStart(2, "0");
+        const local = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        setDeadlineInput((prev) => prev || local);
+      }
+    }, () => { setPotLocked(false); setEntryDeadline(null); });
+    return () => unsub();
+  }, []);
+
+  async function togglePotOpen() {
+    if (toggleBusy || potLocked === null) return;
+    setToggleBusy(true);
+    try {
+      const nowLocked = !potLocked;
+      // Write both potLocked (new) and open (legacy) so all clients stay in sync
+      await setDoc(
+        doc(db, "settings", "prizePot"),
+        { potLocked: nowLocked, open: !nowLocked },
+        { merge: true }
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setStatus(`❌ ${msg}`);
+    } finally {
+      setToggleBusy(false);
+    }
+  }
+
+  async function savePotDeadline(clear = false) {
+    if (deadlineBusy) return;
+    setDeadlineBusy(true);
+    try {
+      if (clear) {
+        await setDoc(
+          doc(db, "settings", "prizePot"),
+          { entryDeadline: null },
+          { merge: true }
+        );
+        setDeadlineInput("");
+      } else {
+        if (!deadlineInput) return;
+        const ts = Timestamp.fromDate(new Date(deadlineInput));
+        await setDoc(
+          doc(db, "settings", "prizePot"),
+          { entryDeadline: ts },
+          { merge: true }
+        );
+      }
+      setStatus(clear ? "Deadline cleared." : "Deadline saved.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setStatus(`❌ ${msg}`);
+    } finally {
+      setDeadlineBusy(false);
+    }
+  }
 
   const pending = entries.filter((e) => e.status === "pending");
   const confirmed = entries.filter((e) => e.status === "confirmed");
@@ -176,6 +274,39 @@ function PotPanel({ uid }: { uid: string }) {
     setSelected(new Set());
   }
 
+  // ── Export confirmed entrants ────────────────────────────────────────────
+
+  async function handleExport() {
+    if (exportBusy) return;
+    setExportBusy(true);
+    setExportText(null);
+    try {
+      const fn = httpsCallable<Record<string, never>, {
+        ok: boolean;
+        count: number;
+        rows: Array<{ uid: string; displayName: string; code: string | null; amount: number | null; currency: string | null; confirmedAt: number | null }>;
+      }>(functions, "exportConfirmedEntrants");
+      const res = await fn({});
+      const { count, rows } = res.data;
+      const lines = [
+        `Confirmed entrants — snapshot ${new Date().toLocaleString()} (${count} total)`,
+        "",
+        ...rows.map((r, i) => {
+          const date = r.confirmedAt
+            ? new Date(r.confirmedAt * 1000).toLocaleDateString()
+            : "—";
+          return `${i + 1}. ${r.displayName}  code:${r.code ?? "—"}  ${r.currency ?? "RM"} ${r.amount ?? "?"}  confirmed:${date}`;
+        }),
+      ];
+      setExportText(lines.join("\n"));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setExportText(`❌ ${msg}`);
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -197,6 +328,84 @@ function PotPanel({ uid }: { uid: string }) {
           </div>
           <div className="text-xs text-slate-400 mt-0.5">Pot total</div>
         </div>
+      </div>
+
+      {/* ── Entry window controls ─────────────────────────────────── */}
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/70 overflow-hidden">
+
+        {/* Lock toggle row */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2">
+            {potOpen === null ? null : potOpen ? (
+              <LockOpen className="size-4 text-emerald-400 shrink-0" aria-hidden />
+            ) : (
+              <Lock className="size-4 text-rose-400 shrink-0" aria-hidden />
+            )}
+            <div>
+              <span className="text-sm font-semibold text-slate-100">
+                Entries are {potOpen === null ? "…" : potOpen ? "open" : "closed"}
+              </span>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {potLocked
+                  ? "Locked — QR hidden. Rules enforce this; no new entries possible."
+                  : potOpen === false
+                  ? "Past deadline — entries auto-closed."
+                  : "Players can see the QR and enter."}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => void togglePotOpen()}
+            disabled={toggleBusy || potLocked === null}
+            className={`shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition-colors disabled:opacity-50 ${
+              potLocked
+                ? "bg-emerald-500/90 text-emerald-950 hover:bg-emerald-400"
+                : "bg-rose-500/90 text-rose-950 hover:bg-rose-400"
+            }`}
+          >
+            {toggleBusy ? "Saving…" : potLocked ? "Unlock entries" : "Lock entries"}
+          </button>
+        </div>
+
+        {/* Deadline row */}
+        <div className="border-t border-slate-800/60 px-4 py-3 space-y-2">
+          <p className="text-xs text-slate-400">
+            Auto-close deadline — entries stop at this date/time even if not manually locked.
+            {entryDeadline ? (
+              <span className="ml-1 text-amber-300 font-semibold">
+                Set: {new Date(entryDeadline.seconds * 1000).toLocaleString()}
+              </span>
+            ) : (
+              <span className="ml-1 text-slate-500"> None set.</span>
+            )}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="datetime-local"
+              value={deadlineInput}
+              onChange={(e) => setDeadlineInput(e.target.value)}
+              className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-100 disabled:opacity-50"
+              disabled={deadlineBusy}
+            />
+            <button
+              onClick={() => void savePotDeadline(false)}
+              disabled={deadlineBusy || !deadlineInput}
+              className="rounded-xl bg-amber-500/90 px-3 py-1.5 text-sm font-semibold text-amber-950 disabled:opacity-50 hover:bg-amber-400"
+            >
+              {deadlineBusy ? "Saving…" : "Set deadline"}
+            </button>
+            {entryDeadline ? (
+              <button
+                onClick={() => void savePotDeadline(true)}
+                disabled={deadlineBusy}
+                className="rounded-xl border border-slate-700/60 px-3 py-1.5 text-sm text-slate-400 disabled:opacity-50 hover:text-slate-200"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
+
       </div>
 
       {/* ── Status message ─────────────────────────────────────────── */}
@@ -385,6 +594,30 @@ function PotPanel({ uid }: { uid: string }) {
             ))}
           </ul>
         )}
+      </div>
+
+      {/* ── Export confirmed entrants ──────────────────────────── */}
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/70 overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-slate-800/60">
+          <div>
+            <span className="font-semibold text-slate-100 text-sm">Payout list</span>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Snapshot of confirmed entrants — save this before the tournament starts.
+            </p>
+          </div>
+          <button
+            onClick={() => void handleExport()}
+            disabled={exportBusy}
+            className="shrink-0 rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-1.5 text-sm text-slate-200 disabled:opacity-50 hover:bg-slate-800/60"
+          >
+            {exportBusy ? "Loading…" : "Export"}
+          </button>
+        </div>
+        {exportText ? (
+          <pre className="px-4 py-3 text-xs text-slate-300 whitespace-pre-wrap font-mono overflow-x-auto max-h-64 overflow-y-auto">
+            {exportText}
+          </pre>
+        ) : null}
       </div>
 
       <div className="text-xs text-slate-600 text-center pb-2">

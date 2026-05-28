@@ -14,9 +14,11 @@ import LeaderboardPanel, {
   type SquadVM,
 } from "@/components/leaderboard/LeaderboardPanel";
 import { BRANDING } from "@/lib/branding";
+import { cn } from "@/lib/utils";
 import { auth, db, functions } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
+import { PRIZE_POT_CONFIG, PRIZE_SPLIT } from "@/lib/prizePot";
 import type { User } from "@/types";
 
 import {
@@ -73,6 +75,10 @@ export default function StandaloneLeaderboardPage() {
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [liveMatchCount, setLiveMatchCount] = useState(0);
   const [remainingTransfers, setRemainingTransfers] = useState(0);
+
+  // Prize Pot tab
+  const [activeTab, setActiveTab] = useState<"overall" | "pot">("overall");
+  const [confirmedUids, setConfirmedUids] = useState<Set<string>>(new Set());
 
   const signedIn = useMemo(() => Boolean(uid), [uid]);
   async function handleGoogleSignIn() {
@@ -270,6 +276,35 @@ export default function StandaloneLeaderboardPage() {
     return () => unsub();
   }, [uid]);
 
+  // Confirmed pot entrants (for Prize Pot standings tab)
+  useEffect(() => {
+    if (!signedIn || !PRIZE_POT_CONFIG.enabled) {
+      setConfirmedUids(new Set());
+      return;
+    }
+    const q = query(
+      collection(db, "potEntries"),
+      where("status", "==", "confirmed")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setConfirmedUids(new Set(snap.docs.map((d) => d.id)));
+    }, () => setConfirmedUids(new Set()));
+    return () => unsub();
+  }, [signedIn]);
+
+  // Prize Pot derived values
+  const potLeaderboardData = useMemo<LBUser[]>(() => {
+    if (!confirmedUids.size) return [];
+    const filtered = leaderboardData.filter((row) => confirmedUids.has(row.id));
+    // leaderboardData is already score-sorted from the server; preserve that order
+    // and assign fresh ranks 1..N within the paid subset
+    return filtered.map((row, idx) => ({ ...row, rank: idx + 1 }));
+  }, [leaderboardData, confirmedUids]);
+
+  const potTotal = confirmedUids.size * PRIZE_POT_CONFIG.amountPerEntry;
+  const showPotTab = PRIZE_POT_CONFIG.enabled && signedIn && !loadingUser;
+  const activeData = activeTab === "pot" ? potLeaderboardData : leaderboardData;
+
   const navItems = buildMainNavItems({
     signedIn,
     authBusy: checkingAuth || authBusy,
@@ -299,7 +334,7 @@ export default function StandaloneLeaderboardPage() {
         <header className="sticky top-0 z-20 border-b border-[var(--ff-hairline)] bg-[var(--ff-bg-chrome)] text-[var(--ff-fg-primary)]">
           <div className="pt-safe">
             <FeaturedFiveTopBar
-              className="mx-auto max-w-4xl px-4"
+              className="mx-auto max-w-6xl px-4"
               brand={
                 <AppBrandBlock
                   variant="ff-chrome"
@@ -315,7 +350,7 @@ export default function StandaloneLeaderboardPage() {
           </div>
         </header>
 
-        <main className="max-w-4xl mx-auto p-4 md:p-8">
+        <main className="max-w-6xl mx-auto p-4 md:p-8">
           {error && (
             <div className="mb-4 p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
               {error}
@@ -350,12 +385,104 @@ export default function StandaloneLeaderboardPage() {
           ) : null}
 
           {signedIn && !loadingUser && (
-            <LeaderboardPanel
-              data={leaderboardData}
-              isLoading={loadingLeaderboard}
-              fetchSquad={fetchSquadDetails}
-              currentUserId={uid}
-            />
+            <>
+              {/* ── Segmented tab control ── */}
+              {showPotTab ? (
+                <div className="mb-4 inline-flex items-center gap-0.5 rounded-[12px] border border-[var(--ff-hairline)] bg-[var(--ff-bg-card)] p-0.5">
+                  <button
+                    onClick={() => setActiveTab("overall")}
+                    className={cn(
+                      "rounded-[9px] px-4 py-1.5 font-ff-ui text-[13px] font-semibold transition-colors",
+                      activeTab === "overall"
+                        ? "bg-[var(--ff-bg-card-alt)] text-[var(--ff-fg-primary)]"
+                        : "text-[var(--ff-fg-quiet)] hover:text-[var(--ff-fg-secondary)]"
+                    )}
+                  >
+                    Overall
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("pot")}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-[9px] px-4 py-1.5 font-ff-ui text-[13px] font-semibold transition-colors",
+                      activeTab === "pot"
+                        ? "bg-[var(--ff-bg-card-alt)] text-[var(--ff-gold)]"
+                        : "text-[var(--ff-fg-quiet)] hover:text-[var(--ff-fg-secondary)]"
+                    )}
+                  >
+                    The Pot
+                    <span className="text-[11px] leading-none opacity-75">🪙</span>
+                  </button>
+                </div>
+              ) : null}
+
+              {/* ── Prize Pot stats card (pot tab only) ── */}
+              {activeTab === "pot" && showPotTab ? (
+                <div className="mb-4 rounded-[14px] border border-[var(--ff-hairline)] bg-[var(--ff-bg-card)] p-4">
+                  <div className="flex items-start justify-between gap-6 flex-wrap">
+
+                    {/* Left — pot total */}
+                    <div>
+                      <p className="font-ff-ui text-[10px] font-semibold uppercase tracking-widest text-[var(--ff-fg-quiet)]">
+                        Prize pot
+                      </p>
+                      <p className="font-ff-display text-3xl font-black tracking-tight text-[var(--ff-gold)]">
+                        {PRIZE_POT_CONFIG.currency}&nbsp;{potTotal}
+                      </p>
+                      <p className="mt-0.5 font-ff-ui text-[11px] text-[var(--ff-fg-faint)]">
+                        {confirmedUids.size === 0
+                          ? "No confirmed entries yet"
+                          : confirmedUids.size === 1
+                          ? "1 confirmed entry"
+                          : `${confirmedUids.size} confirmed entries`}
+                      </p>
+                    </div>
+
+                    {/* Right — split rows */}
+                    <div className="space-y-2 min-w-[176px]">
+                      {PRIZE_SPLIT.map(({ place, label, pct }) => {
+                        const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
+                        const amount = Math.floor(potTotal * pct / 100);
+                        const amountColour =
+                          place === 1
+                            ? "text-[var(--ff-gold)]"
+                            : place === 2
+                            ? "text-[var(--ff-fg-tertiary)]"
+                            : "text-orange-400";
+                        return (
+                          <div key={place} className="flex items-center gap-2">
+                            <span className="w-5 text-sm leading-none">{medal}</span>
+                            <span className="font-ff-ui text-[12px] font-semibold text-[var(--ff-fg-secondary)] w-7">
+                              {label}
+                            </span>
+                            <span className="font-ff-ui text-[11px] text-[var(--ff-fg-faint)]">
+                              {pct}%
+                            </span>
+                            <span className={cn("ml-auto font-ff-display text-[13px] font-bold tabular-nums", amountColour)}>
+                              {potTotal > 0
+                                ? `${PRIZE_POT_CONFIG.currency} ${amount}`
+                                : "—"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <p className="mt-3 font-ff-ui text-[11px] text-[var(--ff-fg-faint)] border-t border-[var(--ff-hairline)] pt-3">
+                    Only players with confirmed entries before the deadline are eligible.
+                    Ties at the same position share that prize equally.
+                  </p>
+                </div>
+              ) : null}
+
+              <LeaderboardPanel
+                data={activeData}
+                isLoading={loadingLeaderboard}
+                fetchSquad={fetchSquadDetails}
+                currentUserId={uid}
+                modeLabel={activeTab === "pot" ? "Prize Pot" : "Leaderboard"}
+              />
+            </>
           )}
         </main>
       </div>

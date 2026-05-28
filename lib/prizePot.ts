@@ -24,6 +24,12 @@ export function generatePotCode(uid: string): string {
   return (Math.abs(hash) % 9000 + 1000).toString();
 }
 
+export const PRIZE_SPLIT = [
+  { place: 1, label: "1st", pct: 60 },
+  { place: 2, label: "2nd", pct: 30 },
+  { place: 3, label: "3rd", pct: 10 },
+] as const;
+
 export const PRIZE_POT_CONFIG = {
   enabled: FEATURES.prizePot,
   potName:

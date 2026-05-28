@@ -10,6 +10,19 @@ service cloud.firestore {
       return signedIn() && request.auth.token.admin == true;
     }
 
+    // Returns true when players may still submit new pot entries.
+    // Checked on every potEntries create — two reads, but create is low-frequency.
+    function entriesOpen() {
+      let docExists = exists(/databases/$(database)/documents/settings/prizePot);
+      let cfg = docExists
+        ? get(/databases/$(database)/documents/settings/prizePot).data
+        : {};
+      let isLocked = docExists && cfg.get("potLocked", false) == true;
+      let deadline = docExists ? cfg.get("entryDeadline", null) : null;
+      let pastDeadline = deadline != null && request.time >= deadline;
+      return !isLocked && !pastDeadline;
+    }
+
     function isUserCreateValid(uid) {
       return request.resource.data.keys().hasOnly([
           "uid",
@@ -152,7 +165,10 @@ service cloud.firestore {
 
       // Self-declaration: player creates their own pending entry.
       // Strict field validation prevents them from marking themselves as confirmed.
+      // entriesOpen() enforces the server-side lock and deadline — closing
+      // the pot from admin is not just a UI gate, it is rejected here too.
       allow create: if signedIn()
+        && entriesOpen()
         && request.auth.uid == uid
         && request.resource.data.uid == uid
         && request.resource.data.status == "pending"

@@ -10,8 +10,11 @@ import {
   Clock,
   Coins,
   Copy,
+  Lock,
   QrCode,
+  Trophy,
 } from "lucide-react";
+
 
 import { AppBrandBlock } from "@/components/AppBrandBlock";
 import { FeaturedFiveTopBar } from "@/components/FeaturedFiveTopBar";
@@ -20,7 +23,7 @@ import { BRANDING } from "@/lib/branding";
 import { auth, db } from "@/lib/firebase";
 import { signInWithGoogle } from "@/lib/googleAuth";
 import { buildMainNavItems } from "@/lib/mainNav";
-import { generatePotCode, PRIZE_POT_CONFIG } from "@/lib/prizePot";
+import { generatePotCode, PRIZE_POT_CONFIG, PRIZE_SPLIT } from "@/lib/prizePot";
 import {
   onAuthStateChanged,
   signOut,
@@ -80,8 +83,9 @@ export default function PrizePotPageClient() {
 
   // undefined = still loading, null = not declared, PotEntry = has entry
   const [myEntry, setMyEntry] = useState<PotEntry | null | undefined>(undefined);
-  const [allConfirmed, setAllConfirmed] = useState<PotEntry[]>([]);
   const [allEntryCount, setAllEntryCount] = useState(0);
+  // null = still loading; true/false = computed from potLocked + entryDeadline
+  const [potOpen, setPotOpen] = useState<boolean | null>(null);
 
   const [declaring, setDeclaring] = useState(false);
   const [declareError, setDeclareError] = useState("");
@@ -142,11 +146,39 @@ export default function PrizePotPageClient() {
       where("status", "==", "confirmed")
     );
     const unsub = onSnapshot(q, (snap) => {
-      setAllConfirmed(snap.docs.map((d) => d.data() as PotEntry));
       setAllEntryCount(snap.size);
     }, () => {});
     return () => unsub();
   }, [user]);
+
+  // ── Pot open/close state ──────────────────────────────────────────────────
+
+  useEffect(() => {
+    const ref = doc(db, "settings", "prizePot");
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) {
+          setPotOpen(true); // no doc = treat as open (default)
+          return;
+        }
+        const data = snap.data() as {
+          potLocked?: boolean;
+          open?: boolean; // legacy
+          entryDeadline?: { seconds: number } | null;
+        };
+        // potLocked is the authoritative server lock; fall back to !open for
+        // back-compat with docs written before this field existed.
+        const isLocked = data.potLocked === true || data.open === false;
+        const deadline = data.entryDeadline ?? null;
+        const pastDeadline =
+          deadline !== null && Date.now() / 1000 >= deadline.seconds;
+        setPotOpen(!isLocked && !pastDeadline);
+      },
+      () => setPotOpen(true) // error fallback: show as open
+    );
+    return () => unsub();
+  }, []);
 
   // ── Auth actions ──────────────────────────────────────────────────────────
 
@@ -185,7 +217,7 @@ export default function PrizePotPageClient() {
         selfDeclared: true,
       });
     } catch {
-      setDeclareError("Couldn't record your payment — please try again.");
+      setDeclareError("Couldn't record your entry — please try again.");
     } finally {
       setDeclaring(false);
     }
@@ -222,6 +254,8 @@ export default function PrizePotPageClient() {
   const isPending = myEntry?.status === "pending";
   const isConfirmed = myEntry?.status === "confirmed";
   const myEntryLoaded = myEntry !== undefined;
+  // Show QR section only when: entry status loaded, not confirmed, and pot is open
+  const showQrSection = myEntryLoaded && !isConfirmed && potOpen === true;
 
   // ── Spinner ───────────────────────────────────────────────────────────────
 
@@ -254,236 +288,244 @@ export default function PrizePotPageClient() {
           </div>
         </header>
 
-        <main className="max-w-2xl mx-auto p-4 md:p-8 space-y-4">
+        <main className="max-w-5xl mx-auto p-4 md:p-8">
 
           {authError ? (
-            <div className="p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
+            <div className="mb-4 p-3 rounded-xl border border-destructive/40 bg-destructive/10 text-sm text-destructive">
               {authError}
             </div>
           ) : null}
 
-          {/* ── Hero ─────────────────────────────────────────────────── */}
-          <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-                  {PRIZE_POT_CONFIG.potName}
-                </h1>
-                <p className="mt-1 text-sm text-[var(--ff-fg-secondary)]">
-                  Optional · {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} per entry
-                </p>
-              </div>
-              <Coins className="size-8 shrink-0 text-[var(--ff-gold)] mt-0.5" aria-hidden />
-            </div>
+          {/* ── Two-column on md+ when QR is visible ─────────────────── */}
+          <div className={showQrSection ? "md:grid md:grid-cols-2 md:gap-6 md:items-start space-y-4 md:space-y-0" : "space-y-4"}>
 
-            <div className="mt-5 flex items-baseline gap-2">
-              <span className="text-4xl sm:text-5xl font-black tracking-tight text-[var(--ff-gold)]">
-                {formatAmount(potTotal, PRIZE_POT_CONFIG.currency)}
-              </span>
-              <span className="text-sm text-[var(--ff-fg-secondary)]">current pot</span>
-            </div>
-            <p className="mt-1 text-xs text-[var(--ff-fg-quieter-alt)]">
-              {allEntryCount === 0
-                ? "No entries yet — be the first in."
-                : allEntryCount === 1
-                ? "1 confirmed player"
-                : `${allEntryCount} confirmed players`}
-            </p>
-          </section>
+            {/* ── Left: Hero + pending status ──────────────────────────── */}
+            <div className="space-y-4">
 
-          {/* ── Status card ──────────────────────────────────────────── */}
-          {myEntryLoaded ? (
-            isConfirmed ? (
-              /* ✓ Confirmed */
-              <section className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5 sm:p-6">
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="size-6 shrink-0 text-emerald-400" aria-hidden />
-                  <div>
-                    <p className="font-bold text-emerald-300">You&apos;re in the pot!</p>
-                    <p className="text-xs text-[var(--ff-fg-secondary)] mt-0.5">
-                      {myEntry?.amount != null && myEntry?.currency
-                        ? `${formatAmount(myEntry.amount, myEntry.currency)} confirmed`
-                        : "Payment confirmed"}
-                      {myEntry?.paidAt ? ` · ${formatDate(myEntry.paidAt)}` : ""}
-                    </p>
-                  </div>
-                </div>
-              </section>
-            ) : isPending ? (
-              /* ⏳ Pending */
-              <section className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 sm:p-6">
-                <div className="flex items-start gap-3">
-                  <Clock className="size-5 shrink-0 text-amber-400 mt-0.5" aria-hidden />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-amber-300">Pending confirmation</p>
-                    <p className="text-xs text-[var(--ff-fg-secondary)] mt-0.5">
-                      Your payment has been recorded. The admin will confirm it shortly.
-                    </p>
-                    {myEntry?.code ? (
-                      <p className="mt-2 text-xs text-[var(--ff-fg-secondary)]">
-                        Your code:{" "}
-                        <span className="font-mono font-bold text-amber-300 tracking-widest">
-                          {myEntry.code}
-                        </span>
-                      </p>
+              {/* Hero */}
+              <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
+                    {PRIZE_POT_CONFIG.potName}
+                  </h1>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isConfirmed ? (
+                      <span className="flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                        <CheckCircle2 className="size-3.5" aria-hidden />
+                        You&apos;re in
+                      </span>
                     ) : null}
+                    <Coins className="size-7 text-[var(--ff-gold)]" aria-hidden />
                   </div>
                 </div>
-              </section>
-            ) : (
-              /* Not entered yet — shown above the QR section */
-              <section className="rounded-2xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/5 p-5 sm:p-6">
-                <p className="font-bold text-[var(--ff-fg-primary)]">Not yet entered</p>
-                <p className="mt-1 text-sm text-[var(--ff-fg-secondary)]">
-                  Follow the steps below to join the pot.
+
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className="text-4xl sm:text-5xl font-black tracking-tight text-[var(--ff-gold)]">
+                    {formatAmount(potTotal, PRIZE_POT_CONFIG.currency)}
+                  </span>
+                  <span className="text-sm text-[var(--ff-fg-secondary)]">current pot</span>
+                </div>
+                <p className="mt-1 text-xs text-[var(--ff-fg-quieter-alt)]">
+                  {allEntryCount === 0
+                    ? "No entries yet — be the first in."
+                    : allEntryCount === 1
+                    ? "1 confirmed player"
+                    : `${allEntryCount} confirmed players`}
+                  {isConfirmed && myEntry?.paidAt
+                    ? ` · entry confirmed ${formatDate(myEntry.paidAt)}`
+                    : null}
                 </p>
               </section>
-            )
-          ) : null}
 
-          {/* ── QR + payment (only when not yet confirmed) ────────────── */}
-          {!isConfirmed ? (
-            <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 space-y-5">
-              <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-                <QrCode className="size-5 shrink-0" aria-hidden />
-                {isPending ? "Your payment details" : "How to enter"}
-              </h2>
-
-              {/* Your unique code */}
-              {myCode ? (
-                <div className="rounded-xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/8 p-4">
-                  <p className="text-xs text-[var(--ff-fg-secondary)] mb-2">
-                    Your unique payment code — include this as the reference when you pay
-                  </p>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-3xl font-black tracking-[0.2em] text-[var(--ff-gold)]">
-                      {myCode}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyCode(myCode)}
-                      className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--ff-gold)] transition-colors hover:bg-[var(--ff-gold)]/20"
-                    >
-                      <Copy className="size-3" aria-hidden />
-                      {copied ? "Copied!" : "Copy"}
-                    </button>
-                  </div>
+              {/* Prize split */}
+              <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Trophy className="size-4 text-[var(--ff-gold)] shrink-0" aria-hidden />
+                  <h2 className="text-sm font-semibold text-[var(--ff-fg-primary)]">Prize split</h2>
                 </div>
-              ) : null}
+                <div className="space-y-3">
+                  {PRIZE_SPLIT.map(({ place, label, pct }) => {
+                    const medal = place === 1 ? "🥇" : place === 2 ? "🥈" : "🥉";
+                    const barColour =
+                      place === 1
+                        ? "bg-[var(--ff-gold)]"
+                        : place === 2
+                        ? "bg-slate-400"
+                        : "bg-orange-500";
+                    const textColour =
+                      place === 1
+                        ? "text-[var(--ff-gold)]"
+                        : place === 2
+                        ? "text-slate-300"
+                        : "text-orange-400";
+                    const amount = potTotal > 0 ? Math.floor(potTotal * pct / 100) : null;
+                    return (
+                      <div key={place} className="flex items-center gap-3">
+                        <span className="text-base leading-none w-5 shrink-0">{medal}</span>
+                        <span className="text-xs font-semibold text-[var(--ff-fg-secondary)] w-6 shrink-0">{label}</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-border overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${barColour}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-[var(--ff-fg-quieter-alt)] w-7 shrink-0 text-right">{pct}%</span>
+                        <span className={`text-sm font-bold ${textColour} w-16 shrink-0 text-right`}>
+                          {amount !== null
+                            ? formatAmount(amount, PRIZE_POT_CONFIG.currency)
+                            : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-[var(--ff-fg-quieter-alt)]">
+                  Amounts update live as players enter. Ties at the same position share that prize equally.
+                </p>
+              </section>
 
-              {/* QR code — shown on all devices */}
-              <div className="flex justify-center">
-                {PRIZE_POT_CONFIG.qrCodeImageUrl ? (
-                  <div className="rounded-2xl border-2 border-[var(--ff-gold)]/40 bg-white p-3 shadow-lg">
-                    <Image
-                      src={PRIZE_POT_CONFIG.qrCodeImageUrl}
-                      alt="Touch 'n Go / DuitNow QR code"
-                      width={220}
-                      height={220}
-                      className="rounded-xl"
-                      unoptimized
-                    />
-                  </div>
-                ) : (
-                  <div className="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
-                    <div className="text-center">
-                      <QrCode className="size-10 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
-                      <p className="mt-2 text-xs text-[var(--ff-fg-quieter-alt)]">QR code coming soon</p>
+              {/* Pending status */}
+              {myEntryLoaded && isPending ? (
+                <section className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5 sm:p-6">
+                  <div className="flex items-start gap-3">
+                    <Clock className="size-5 shrink-0 text-amber-400 mt-0.5" aria-hidden />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-amber-300">Awaiting confirmation</p>
+                      <p className="text-xs text-[var(--ff-fg-secondary)] mt-0.5">
+                        Entry recorded — you&apos;ll be confirmed soon.
+                      </p>
+                      {myEntry?.code ? (
+                        <p className="mt-2 text-xs text-[var(--ff-fg-secondary)]">
+                          Your reference code:{" "}
+                          <span className="font-mono font-bold text-amber-300 tracking-widest">
+                            {myEntry.code}
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
                   </div>
-                )}
-              </div>
+                </section>
+              ) : null}
 
-              {/* Mobile tip — save QR to photo library, scan from gallery */}
-              {isMobile ? (
-                <div className="rounded-xl border border-[var(--ff-gold)]/20 bg-[var(--ff-gold)]/5 px-4 py-3 text-xs text-[var(--ff-fg-secondary)]">
-                  <strong className="text-[var(--ff-fg-primary)]">On your phone?</strong>{" "}
-                  Long-press the QR above → Save to Photos, then open Touch &apos;n Go →{" "}
-                  <strong className="text-[var(--ff-fg-primary)]">Scan</strong> → tap the{" "}
-                  <strong className="text-[var(--ff-fg-primary)]">Gallery</strong> icon to import it.
+            </div>
+
+            {/* ── Right: closed notice (entry status known, not confirmed, pot closed) ── */}
+            {myEntryLoaded && !isConfirmed && potOpen === false ? (
+              <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 space-y-3">
+                <div className="flex items-center gap-2 text-[var(--ff-fg-secondary)]">
+                  <Lock className="size-4 shrink-0" aria-hidden />
+                  <span className="font-semibold text-sm">Entries closed</span>
                 </div>
-              ) : null}
-
-              {/* Amount */}
-              <div className="flex justify-center">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--ff-gold)] px-5 py-1.5 text-sm font-bold text-black">
-                  {formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)}
-                </span>
-              </div>
-
-              {/* Steps */}
-              {!isPending ? (
-                <ol className="space-y-2.5 text-sm text-[var(--ff-fg-secondary)]">
-                  {[
-                    isMobile
-                      ? "Save the QR to your photos, then open Touch 'n Go → Scan → Gallery"
-                      : "Open Touch 'n Go or your banking app and scan the QR code above",
-                    `Pay ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — enter your code (${myCode ?? "—"}) as the payment reference`,
-                    "Tap the button below once your payment is sent",
-                  ].map((step, i) => (
-                    <li key={i} className="flex gap-3">
-                      <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--ff-gold)]/15 text-[10px] font-bold text-[var(--ff-gold)]">
-                        {i + 1}
-                      </span>
-                      <span>{step}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-
-              {/* I've paid button */}
-              {!isPending ? (
-                <div className="pt-1">
-                  {declareError ? (
-                    <p className="mb-3 text-sm text-destructive">{declareError}</p>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => void handleSelfDeclare()}
-                    disabled={declaring}
-                    className="w-full rounded-xl bg-[var(--ff-gold)] px-4 py-3.5 text-base font-bold text-black transition-opacity disabled:opacity-50 hover:opacity-90"
-                  >
-                    {declaring ? "Recording…" : "I've paid — enter me"}
-                  </button>
-                  <p className="mt-2 text-center text-xs text-[var(--ff-fg-quieter-alt)]">
-                    Only tap this after your payment is sent. An admin will confirm it shortly.
-                  </p>
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          {/* ── Confirmed participants ────────────────────────────────── */}
-          {allConfirmed.length > 0 ? (
-            <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6">
-              <h2 className="text-xl font-black tracking-tight mb-3">
-                {PRIZE_POT_CONFIG.showParticipants ? "Who&apos;s in" : "Entries"}
-              </h2>
-
-              {PRIZE_POT_CONFIG.showParticipants ? (
-                <ul className="space-y-2">
-                  {allConfirmed.map((entry) => (
-                    <li
-                      key={entry.uid}
-                      className="flex items-center justify-between rounded-xl border border-border bg-background/40 px-4 py-2.5 text-sm"
-                    >
-                      <span className="font-medium">{entry.displayName}</span>
-                      <span className="flex items-center gap-1.5 text-emerald-400 text-xs font-semibold">
-                        <CheckCircle2 className="size-3.5" aria-hidden />
-                        Confirmed
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
                 <p className="text-sm text-[var(--ff-fg-secondary)]">
-                  {allEntryCount === 1
-                    ? "1 player has entered the pot."
-                    : `${allEntryCount} players have entered the pot.`}
+                  The pot isn&apos;t accepting new entries at the moment.
                 </p>
-              )}
-            </section>
-          ) : null}
+              </section>
+            ) : null}
+
+            {/* ── Right: QR + steps (hidden once confirmed, not shown until entry status loaded) ── */}
+            {showQrSection ? (
+              <section className="rounded-2xl border border-border bg-card/75 p-5 sm:p-6 space-y-5">
+                <h2 className="text-lg font-black tracking-tight flex items-center gap-2">
+                  <QrCode className="size-4 shrink-0" aria-hidden />
+                  {isPending ? "Your entry details" : "How to enter"}
+                </h2>
+
+                {/* Your unique code */}
+                {myCode ? (
+                  <div className="rounded-xl border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/8 p-4">
+                    <p className="text-xs text-[var(--ff-fg-secondary)] mb-2">
+                      Use this as your entry reference
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-3xl font-black tracking-[0.2em] text-[var(--ff-gold)]">
+                        {myCode}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(myCode)}
+                        className="ml-auto flex items-center gap-1.5 rounded-lg border border-[var(--ff-gold)]/30 bg-[var(--ff-gold)]/10 px-3 py-1.5 text-xs font-semibold text-[var(--ff-gold)] transition-colors hover:bg-[var(--ff-gold)]/20"
+                      >
+                        <Copy className="size-3" aria-hidden />
+                        {copied ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* QR code */}
+                <div className="flex justify-center">
+                  {PRIZE_POT_CONFIG.qrCodeImageUrl ? (
+                    <div className="rounded-2xl border-2 border-[var(--ff-gold)]/40 bg-white p-3 shadow-lg">
+                      <Image
+                        src={PRIZE_POT_CONFIG.qrCodeImageUrl}
+                        alt="Touch 'n Go / DuitNow QR code"
+                        width={220}
+                        height={220}
+                        className="rounded-xl"
+                        unoptimized
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-[200px] w-[200px] items-center justify-center rounded-2xl border-2 border-dashed border-[var(--ff-gold)]/30 bg-[var(--ff-bg-app)]">
+                      <div className="text-center">
+                        <QrCode className="size-10 mx-auto text-[var(--ff-fg-quieter-alt)]" aria-hidden />
+                        <p className="mt-2 text-xs text-[var(--ff-fg-quieter-alt)]">QR code coming soon</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile tip */}
+                {isMobile ? (
+                  <div className="rounded-xl border border-[var(--ff-gold)]/20 bg-[var(--ff-gold)]/5 px-4 py-3 text-xs text-[var(--ff-fg-secondary)]">
+                    <strong className="text-[var(--ff-fg-primary)]">On your phone?</strong>{" "}
+                    Long-press the QR → Save to Photos, then open Touch &apos;n Go →{" "}
+                    <strong className="text-[var(--ff-fg-primary)]">Scan</strong> → tap{" "}
+                    <strong className="text-[var(--ff-fg-primary)]">Gallery</strong>.
+                  </div>
+                ) : null}
+
+                {/* Steps + button */}
+                {!isPending ? (
+                  <>
+                    <ol className="space-y-2.5 text-sm text-[var(--ff-fg-secondary)]">
+                      {[
+                        isMobile
+                          ? "Save the QR to your photos, then open Touch 'n Go → Scan → Gallery"
+                          : "Scan the QR with Touch 'n Go or your banking app",
+                        `Transfer ${formatAmount(PRIZE_POT_CONFIG.amountPerEntry, PRIZE_POT_CONFIG.currency)} — use your code (${myCode ?? "—"}) as the reference`,
+                        "Tap the button below once sent",
+                      ].map((step, i) => (
+                        <li key={i} className="flex gap-3">
+                          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--ff-gold)]/15 text-[10px] font-bold text-[var(--ff-gold)]">
+                            {i + 1}
+                          </span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    <div className="pt-1">
+                      {declareError ? (
+                        <p className="mb-3 text-sm text-destructive">{declareError}</p>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => void handleSelfDeclare()}
+                        disabled={declaring}
+                        className="w-full rounded-xl bg-[var(--ff-gold)] px-4 py-3.5 text-base font-bold text-black transition-opacity disabled:opacity-50 hover:opacity-90"
+                      >
+                        {declaring ? "Recording…" : "I've paid"}
+                      </button>
+                      <p className="mt-2 text-center text-xs text-[var(--ff-fg-quieter-alt)]">
+                        Only tap this once your transfer is sent.
+                      </p>
+                    </div>
+                  </>
+                ) : null}
+              </section>
+            ) : null}
+
+          </div>
 
         </main>
       </div>
