@@ -13,12 +13,13 @@
  *   /users/{uid}           — read, create, update rules
  *   /usernames/{username}  — claim, delete, update rules (Bundle 3 collection)
  *   admin-only collections — matches, leaderboard, teams, settings
+ *   /potEntries/{uid}      — open/locked/deadline/field-list/status/read rules (Phase 1)
  *   catch-all              — all other paths denied
  */
 
 const { initializeTestEnvironment, assertFails, assertSucceeds } =
   require("@firebase/rules-unit-testing");
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } =
+const { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } =
   require("@firebase/firestore");
 const { readFileSync } = require("fs");
 const path = require("path");
@@ -294,6 +295,99 @@ async function main() {
         status: "SCHEDULED",
       })
     );
+  });
+
+  // ── /potEntries/{uid} ───────────────────────────────────────────────────────
+  console.log("\n  ── /potEntries/{uid} ──");
+
+  // Valid self-declaration payload (must match the field allow-list in rules).
+  const validPotEntry = {
+    uid: UID,
+    displayName: "Test User",
+    code: "ABC123",
+    selfDeclaredAt: serverTimestamp(),
+    status: "pending",
+    selfDeclared: true,
+  };
+
+  // 1 — No settings doc: entries are open by default (entriesOpen() returns true).
+  await testEnv.clearFirestore();
+  await test("potEntries: create succeeds when no settings/prizePot doc exists", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertSucceeds(setDoc(doc(db, "potEntries", UID), validPotEntry));
+  });
+
+  // 2 — Explicit potLocked: false: entries open.
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "settings", "prizePot"), { potLocked: false, open: true });
+  });
+  await test("potEntries: create succeeds when potLocked is false", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertSucceeds(setDoc(doc(db, "potEntries", UID), validPotEntry));
+  });
+
+  // 3 — potLocked: true: create must be rejected.
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "settings", "prizePot"), { potLocked: true, open: false });
+  });
+  await test("potEntries: create is rejected when potLocked is true", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertFails(setDoc(doc(db, "potEntries", UID), validPotEntry));
+  });
+
+  // 4 — Past entry deadline: create must be rejected.
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    // Deadline set 1 day in the past.
+    const pastDeadline = Timestamp.fromMillis(Date.now() - 86_400_000);
+    await setDoc(doc(db, "settings", "prizePot"), {
+      potLocked: false,
+      open: true,
+      entryDeadline: pastDeadline,
+    });
+  });
+  await test("potEntries: create is rejected when entryDeadline is in the past", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertFails(setDoc(doc(db, "potEntries", UID), validPotEntry));
+  });
+
+  // 5 — eligibleForPot field is not in the allow-list: client cannot set it.
+  await testEnv.clearFirestore();
+  await test("potEntries: create is rejected if eligibleForPot is included (field not in allow-list)", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertFails(
+      setDoc(doc(db, "potEntries", UID), { ...validPotEntry, eligibleForPot: true })
+    );
+  });
+
+  // 6 — status must be "pending"; "confirmed" must be rejected.
+  await testEnv.clearFirestore();
+  await test("potEntries: create is rejected if status is 'confirmed'", async () => {
+    const db = testEnv.authenticatedContext(UID).firestore();
+    await assertFails(
+      setDoc(doc(db, "potEntries", UID), { ...validPotEntry, status: "confirmed" })
+    );
+  });
+
+  // 7 — Confirmed entry is readable by any signed-in user.
+  await testEnv.clearFirestore();
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, "potEntries", UID), {
+      uid: UID,
+      displayName: "Test User",
+      status: "confirmed",
+      eligibleForPot: true,
+    });
+  });
+  await test("potEntries: confirmed entry is readable by another signed-in user", async () => {
+    const db = testEnv.authenticatedContext(OTHER_UID).firestore();
+    await assertSucceeds(getDoc(doc(db, "potEntries", UID)));
   });
 
   // ── Catch-all ────────────────────────────────────────────────────────────────

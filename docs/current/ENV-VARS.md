@@ -16,6 +16,9 @@
 | `NEXT_PUBLIC_USE_FIREBASE_EMULATORS` | No | `true` connects local browser sessions to Auth/Firestore/Functions emulators; `false` uses the configured real Firebase project. |
 | `NEXT_PUBLIC_ENABLE_CHARITY_POT` | No | `true` / `1` / `on` enables charity feature flag (`lib/features.ts`) |
 | `NEXT_PUBLIC_CHARITY_*` | No | See `lib/charity.ts` — campaign name, beneficiary, Stripe/PayPal links, terms, disclaimer |
+| `NEXT_PUBLIC_ENABLE_PRIZE_POT` | No | `true` enables the Prize Pot feature flag (`lib/prizePot.ts`). Must be `false` or unset until the pot is open. |
+| `NEXT_PUBLIC_PRIZE_POT_AMOUNT` | No | Entry fee in RM. Currently `10`. |
+| `NEXT_PUBLIC_PRIZE_POT_NAME` | No | Display name, e.g. `The Pot`. |
 
 **Standard Node:** `NODE_ENV` is set by Next.js (`development` | `production`).
 
@@ -38,16 +41,28 @@ Used by scheduled ingest and admin tooling (see `functions/src/ingest.ts` and re
 
 | Variable | Purpose |
 |----------|---------|
-| `FOOTBALL_DATA_TOKEN` | External football data API token |
-| `FOOTBALL_DATA_API_BASE` | API base URL override |
-| `FOOTBALL_DATA_COMPETITION` | Competition id |
-| `FOOTBALL_DATA_STATUSES` | Status filter string |
-| `SPORTMONKS_TOKEN` | Sportmonks API token |
-| `SPORTMONKS_API_BASE` | Sportmonks API base URL override |
-| `SPORTMONKS_SEASON_ID` | Season id used for fixture/livescore fetch |
-| `LIVE_SCORES_PROVIDER` | Provider selection |
-| `PROVIDER_TIMEOUT_MS` / `PROVIDER_MAX_RETRIES` | HTTP client limits |
-| `FIXTURE_MAX_MATCHES` / `FIXTURE_CUTOFF` | Ingest limits |
+| `FOOTBALL_DATA_TOKEN` | External football-data.org API token. **Server-only secret — never `NEXT_PUBLIC_*`.** Defined via Firebase Secret Manager (`defineSecret("FOOTBALL_DATA_TOKEN")` in `functions/src/providers/providerUtils.ts`). |
+| `FOOTBALL_DATA_API_BASE` | API base URL override. Default: `https://api.football-data.org/v4`. |
+| `FOOTBALL_DATA_COMPETITION` | Competition id. **2026 World Cup value: `WC`** (verified 2026-05-28 smoke test). Default in code: `WC`. Set explicitly in runtime config so upgrades don't silently change it. |
+| `FOOTBALL_DATA_SEASON` | Season year. **2026 World Cup value: `2026`** (verified 2026-05-28 smoke test — 104 raw matches returned, 24 mapped). Default in code: `"2026"`. Set explicitly. |
+| `FOOTBALL_DATA_STATUSES` | Status filter string. Default: `SCHEDULED,TIMED,IN_PLAY,PAUSED,FINISHED`. |
+| `SPORTMONKS_TOKEN` | Sportmonks API token (fallback provider). |
+| `SPORTMONKS_API_BASE` | Sportmonks API base URL override. |
+| `SPORTMONKS_SEASON_ID` | Season id used for fixture/livescore fetch. |
+| `LIVE_SCORES_PROVIDER` | Active provider selection (`football-data` or `sportmonks`). |
+| `PROVIDER_TIMEOUT_MS` / `PROVIDER_MAX_RETRIES` | HTTP client limits. |
+| `FIXTURE_MAX_MATCHES` / `FIXTURE_CUTOFF` | Ingest limits. |
+
+### 2026 World Cup — confirmed identifiers (from smoke test 2026-05-28)
+
+| Setting | Value | Source |
+|---------|-------|--------|
+| Competition | `WC` | football-data.org `/competitions/WC/matches?season=2026` returned 104 raw matches |
+| Season | `2026` | As above |
+| Unmapped matches | 32 of 104 | Expected — TBD knockout bracket placeholders (`tla: "null"`) that have no assigned teams yet. Will resolve once tournament bracket is set. |
+| Card data (`bookings`) | **Requires Deep Data plan** | See note in `functions/src/providers/footballDataProvider.ts` L69–70. Cannot be verified pre-tournament. |
+
+> **Action required before go-live (Phase 4):** Confirm your football-data.org plan tier includes `bookings` (Deep Data), or remove card-penalty language from the published rules. See `docs/current/PRIZE-POT-LAUNCH-SPRINT.md` Phase 4.
 
 Document the live values only in your **secure deployment** notes (1Password, GCP Secret Manager, etc.), not in git.
 

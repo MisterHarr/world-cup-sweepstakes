@@ -398,22 +398,34 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       const home = statsByTeam[homeTeamId];
       const away = statsByTeam[awayTeamId];
 
+      // homeScore/awayScore are regulation+ET goals only (penalties excluded by provider).
+      // These always count toward goal points regardless of stage.
       home.goalsScored += homeScore;
       home.goalsConceded += awayScore;
       away.goalsScored += awayScore;
       away.goalsConceded += homeScore;
 
-      if (homeScore > awayScore) {
+      // Knockout stages: no draw points. Winner determined by score, or by the
+      // `winner` field when the match was decided on penalties (score tied at FT/AET).
+      const matchStage = asStage(data.stage) ?? "GROUP";
+      const isKnockout = matchStage !== "GROUP";
+      const penWinner = asString(data.winner); // "HOME" | "AWAY" | null
+
+      if (homeScore > awayScore || (isKnockout && homeScore === awayScore && penWinner === "HOME")) {
         home.wins += 1;
         away.losses += 1;
-      } else if (homeScore < awayScore) {
+      } else if (awayScore > homeScore || (isKnockout && homeScore === awayScore && penWinner === "AWAY")) {
         away.wins += 1;
         home.losses += 1;
-      } else {
+      } else if (!isKnockout) {
+        // Group stage draw
         home.draws += 1;
         away.draws += 1;
       }
+      // Knockout tie with no winner field yet (match still in progress or not resolved):
+      // no points awarded — will be recalculated once winner is known.
 
+      // Clean sheets: based on regulation+ET goals only (penalty shootout goals don't count).
       if (awayScore === 0) home.cleanSheets += 1;
       if (homeScore === 0) away.cleanSheets += 1;
 
@@ -509,8 +521,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
         asString(data.username) ??
         asString(data.displayName) ??
         asString(data.name) ??
-        asString(data.email) ??
-        "Anonymous";
+        "Player";
 
       const department = asDepartment(data.department);
 

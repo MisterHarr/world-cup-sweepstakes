@@ -257,10 +257,9 @@ function AdminUsersContent(props: { uid: string }) {
 
     if (
       !confirm(
-        `Create ${count} mock users with seeded squads?\n` +
-          `Department mode: ${seedDepartmentMode}\n` +
-          `Excluded from leaderboard: ${excludeMockUsersFromLeaderboard ? "yes" : "no"}\n` +
-          `Password will be generated for this batch.`
+        `Create ${count} test players with squads assigned?\n` +
+          `Group spread: ${seedDepartmentMode}\n` +
+          `Hidden from leaderboard: ${excludeMockUsersFromLeaderboard ? "yes" : "no"}`
       )
     ) {
       setSeedStatus("Cancelled.");
@@ -268,7 +267,7 @@ function AdminUsersContent(props: { uid: string }) {
     }
 
     setSeeding(true);
-    setSeedStatus("Seeding mock users...");
+    setSeedStatus("Creating test players...");
 
     try {
       const fn = httpsCallable<
@@ -300,8 +299,8 @@ function AdminUsersContent(props: { uid: string }) {
       }
 
       setSeedStatus(
-        `✅ Batch ${tag}: created ${created}, failed ${failures}. ` +
-          `Leaderboard recomputed: ${recomputed}. Excluded from leaderboard: ${excluded}. ` +
+        `✅ Batch ${tag}: created ${created}${failures > 0 ? `, failed ${failures}` : ""}. ` +
+          `Hidden from leaderboard: ${excluded}. ` +
           `Login password: ${password}.` +
           errorPreview
       );
@@ -319,13 +318,13 @@ function AdminUsersContent(props: { uid: string }) {
   async function cleanupMockUsersByBatch() {
     const batchId = cleanupBatchId.trim();
     if (!batchId) {
-      setCleanupStatus("❌ Enter a mock batch id first.");
+      setCleanupStatus("❌ Enter a batch ID first.");
       return;
     }
 
     if (
       !confirm(
-        `Delete all mock users in batch ${batchId}?\nThis removes their auth accounts and user docs, then recomputes the leaderboard.`
+        `Remove all test players in batch ${batchId}?\nThis cannot be undone.`
       )
     ) {
       setCleanupStatus("Cancelled.");
@@ -333,7 +332,7 @@ function AdminUsersContent(props: { uid: string }) {
     }
 
     setCleaningBatch(true);
-    setCleanupStatus(`Deleting mock users from batch ${batchId}...`);
+    setCleanupStatus(`Removing test players from batch ${batchId}...`);
 
     try {
       const fn = httpsCallable<DeleteMockUsersPayload, DeleteMockUsersResponse>(
@@ -343,7 +342,7 @@ function AdminUsersContent(props: { uid: string }) {
       const res = await fn({ batchId });
       const data = res.data;
       setCleanupStatus(
-        `✅ Deleted ${Number(data.deleted ?? 0)} mock users from batch ${String(
+        `✅ Removed ${Number(data.deleted ?? 0)} test players from batch ${String(
           data.batchId ?? batchId
         )}.`
       );
@@ -386,7 +385,7 @@ function AdminUsersContent(props: { uid: string }) {
 
       <div className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 space-y-3">
         <div className="text-sm font-semibold text-slate-100">
-          Mock User Batch Seeding
+          Create Test Players
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1">
@@ -425,13 +424,12 @@ function AdminUsersContent(props: { uid: string }) {
             disabled={seeding || loading || processing !== null || !dangerConfirmed}
             className="px-4 py-2 rounded-xl bg-amber-400/90 text-amber-950 font-semibold disabled:opacity-50"
           >
-            {seeding ? "Seeding..." : "Seed Mock Users"}
+            {seeding ? "Creating..." : "Create Test Players"}
           </button>
         </div>
 
         <p className="text-xs text-slate-400">
-          Creates auth + Firestore users with teams assigned, marks reveal as seen,
-          and recomputes leaderboard.
+          Creates fake players with squads assigned — useful for testing the leaderboard.
         </p>
 
         <label className="flex items-center gap-2 text-sm text-slate-300">
@@ -455,12 +453,12 @@ function AdminUsersContent(props: { uid: string }) {
 
       <div className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 space-y-3">
         <div className="text-sm font-semibold text-slate-100">
-          Mock User Cleanup
+          Remove Test Players
         </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="space-y-1">
             <div className="text-xs text-slate-400 uppercase tracking-wider">
-              Batch Id
+              Batch
             </div>
             <input
               value={cleanupBatchId}
@@ -480,7 +478,7 @@ function AdminUsersContent(props: { uid: string }) {
             disabled={cleaningBatch || seeding || loading || processing !== null || !dangerConfirmed}
             className="px-4 py-2 rounded-xl border border-rose-500/60 text-rose-100 font-semibold hover:bg-rose-500/10 disabled:opacity-50"
           >
-            {cleaningBatch ? "Cleaning..." : "Delete Mock Users by Batch"}
+            {cleaningBatch ? "Removing..." : "Remove Test Players"}
           </button>
         </div>
 
@@ -553,7 +551,7 @@ export default function AdminUsersPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Admin · User Management
+                Admin · Players
               </h1>
               <a
                 href="/admin"

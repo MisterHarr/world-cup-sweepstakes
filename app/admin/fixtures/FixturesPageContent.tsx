@@ -60,7 +60,7 @@ export default function FixtureIngestPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Admin · Fixture Ingest
+                Admin · Match Data
               </h1>
               <a
                 href="/admin"

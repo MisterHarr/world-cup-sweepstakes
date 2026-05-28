@@ -104,11 +104,10 @@ export function LocalVisibleRehearsalPanel({
     }
 
     const summary = [
-      "Reset visible rehearsal state?",
-      "- Users and entries stay.",
-      "- Public matches and transfer events are deleted.",
-      "- Team stats and user scores return to zero.",
-      "- Public leaderboard/current is deleted.",
+      "Reset simulation data?",
+      "- Players and squads stay.",
+      "- Match results and scores reset to zero.",
+      "- Leaderboard is cleared.",
     ].join("\n");
 
     if (typeof window !== "undefined" && !window.confirm(summary)) {
@@ -117,7 +116,7 @@ export function LocalVisibleRehearsalPanel({
     }
 
     setResettingPublicRehearsal(true);
-    setPublicRehearsalStatus("Resetting visible rehearsal state...");
+    setPublicRehearsalStatus("Resetting simulation data...");
     try {
       const fn = httpsCallable<Record<string, never>, PublicRehearsalResetResult>(
         functions,
@@ -144,7 +143,7 @@ export function LocalVisibleRehearsalPanel({
     }
 
     setRunningLiveSimulatorWave(true);
-    setLiveSimulatorStatus("Running next visible live wave...");
+    setLiveSimulatorStatus("Simulating next result...");
     try {
       const fn = httpsCallable<Record<string, never>, LiveSimulatorResult>(
         functions,
@@ -169,10 +168,10 @@ export function LocalVisibleRehearsalPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="font-semibold text-slate-100">
-            Local Visible Rehearsal
+            Score Simulation
           </div>
           <div className="text-xs text-emerald-100/80">
-            Public localhost matches only. Users and entries stay.
+            Simulates live scores step by step. Players and squads are unchanged.
           </div>
         </div>
         <div className="text-xs font-semibold px-2 py-1 rounded-full border border-emerald-400/50 bg-emerald-400/15 text-emerald-100">
@@ -217,7 +216,7 @@ export function LocalVisibleRehearsalPanel({
           }
           className="px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
         >
-          {runningLiveSimulatorWave ? "Running Wave..." : "Run Next Live Wave"}
+          {runningLiveSimulatorWave ? "Simulating..." : "Simulate Next Result"}
         </button>
         <div className="rounded-lg border border-emerald-400/20 bg-slate-950/40 px-3 py-2 text-xs text-emerald-50/90">
           Last:{" "}

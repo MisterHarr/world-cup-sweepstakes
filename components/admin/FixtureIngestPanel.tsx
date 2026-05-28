@@ -58,9 +58,9 @@ export function FixtureIngestPanel({
       cutoffIso
     );
     const summary = [
-      "Run fixture ingest?",
-      hasMax ? `- maxMatches: ${max}` : "- maxMatches: (all)",
-      hasCutoff ? `- cutoffIso: ${trimmedCutoff}` : "- cutoffIso: (none)",
+      "Load match data?",
+      hasMax ? `- Limit: ${max} matches` : "- All matches",
+      hasCutoff ? `- Cut off before: ${trimmedCutoff}` : "- No date cutoff",
     ].join("\n");
 
     if (typeof window !== "undefined" && !window.confirm(summary)) {
@@ -69,7 +69,7 @@ export function FixtureIngestPanel({
     }
 
     setRunning(true);
-    setStatus("Running fixture ingest...");
+    setStatus("Loading match data...");
 
     try {
       const fn = httpsCallable<FixtureIngestPayload, IngestResult>(
@@ -173,10 +173,10 @@ export function FixtureIngestPanel({
       cutoffIso
     );
     const summary = [
-      "Reset fixture state and ingest selection?",
-      "- Existing fixture matches will be deleted first.",
-      hasMax ? `- maxMatches: ${max}` : "- maxMatches: (all)",
-      hasCutoff ? `- cutoffIso: ${trimmedCutoff}` : "- cutoffIso: (none)",
+      "Clear all match data and reload?",
+      "- Existing matches will be deleted first.",
+      hasMax ? `- Limit: ${max} matches` : "- All matches",
+      hasCutoff ? `- Cut off before: ${trimmedCutoff}` : "- No date cutoff",
     ].join("\n");
 
     if (typeof window !== "undefined" && !window.confirm(summary)) {
@@ -274,7 +274,7 @@ export function FixtureIngestPanel({
   return (
     <>
       <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300">
-        Optional controls (leave blank for full fixture):
+        Filters — optional, leave blank to load all matches:
       </div>
 
       <div className="space-y-3">
@@ -291,13 +291,13 @@ export function FixtureIngestPanel({
         </label>
 
         <label className="block text-sm text-slate-300">
-          Cutoff ISO timestamp
+          Cut off before date
           <input
             type="text"
             value={cutoffIso}
             onChange={(e) => onCutoffIsoChange(e.target.value)}
             className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="e.g., 2022-11-22T00:00:00Z"
+            placeholder="e.g., 2026-06-15T00:00:00Z"
           />
         </label>
       </div>
@@ -308,7 +308,7 @@ export function FixtureIngestPanel({
           disabled={!uid || running || !acknowledged || !dangerConfirmed}
           className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
         >
-          {running ? "Running..." : "Run Fixture Ingest"}
+          {running ? "Loading..." : "Load Match Data"}
         </button>
 
         <button
@@ -316,7 +316,7 @@ export function FixtureIngestPanel({
           disabled={!uid || previewing}
           className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
         >
-          {previewing ? "Previewing..." : "Preview Selection"}
+          {previewing ? "Checking..." : "Preview"}
         </button>
       </div>
 
@@ -327,7 +327,7 @@ export function FixtureIngestPanel({
           onChange={(e) => setAcknowledged(e.target.checked)}
           className="h-4 w-4"
         />
-        I understand this will write fixture data to Firestore.
+        I'm ready to load match data.
       </label>
 
       {preview ? <div className="text-sm text-slate-300">{preview}</div> : null}
@@ -335,10 +335,10 @@ export function FixtureIngestPanel({
 
       <div className="border-t border-slate-800/60 pt-4 space-y-3">
         <div className="text-sm font-semibold text-slate-100">
-          Deterministic Reset + Ingest
+          Fresh Load
         </div>
         <p className="text-xs text-slate-400">
-          Deletes all fixture-sourced match docs, then ingests the current selection.
+          Clears all current match data, then loads the selected matches fresh. Use this for a clean reset.
         </p>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <button
@@ -346,7 +346,7 @@ export function FixtureIngestPanel({
             disabled={!uid || resetRunning || running || !acknowledged || !dangerConfirmed}
             className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500/90 text-amber-950 font-semibold disabled:opacity-50"
           >
-            {resetRunning ? "Running..." : "Reset + Ingest"}
+            {resetRunning ? "Loading..." : "Clear & Reload"}
           </button>
 
           <button
@@ -354,7 +354,7 @@ export function FixtureIngestPanel({
             disabled={!uid || resetPreviewing || previewing || resetRunning}
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
           >
-            {resetPreviewing ? "Previewing..." : "Preview Reset"}
+            {resetPreviewing ? "Checking..." : "Preview"}
           </button>
         </div>
         {resetPreview ? (
@@ -367,11 +367,10 @@ export function FixtureIngestPanel({
 
       <div className="border-t border-slate-800/60 pt-4 space-y-3">
         <div className="text-sm font-semibold text-slate-100">
-          Pre-Tournament Match Data
+          Pre-Tournament History
         </div>
         <p className="text-xs text-slate-400">
-          Import pre-tournament friendlies and qualifiers (3-5 matches per team) so
-          users see match history from day one.
+          Import friendlies and qualifiers so players see match history from day one.
         </p>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -380,7 +379,7 @@ export function FixtureIngestPanel({
             disabled={!uid || preTournamentRunning || !acknowledged || !dangerConfirmed}
             className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
           >
-            {preTournamentRunning ? "Importing..." : "Import Pre-Tournament Data"}
+            {preTournamentRunning ? "Importing..." : "Import History"}
           </button>
 
           <button
@@ -388,7 +387,7 @@ export function FixtureIngestPanel({
             disabled={!uid || preTournamentPreviewing}
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
           >
-            {preTournamentPreviewing ? "Previewing..." : "Preview Pre-Tournament"}
+            {preTournamentPreviewing ? "Checking..." : "Preview"}
           </button>
         </div>
 

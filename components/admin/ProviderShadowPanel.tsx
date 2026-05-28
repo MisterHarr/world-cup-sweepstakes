@@ -78,7 +78,7 @@ export function ProviderShadowPanel({ uid, dangerConfirmed }: ProviderShadowPane
       Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 4;
 
     setRunningReplay(true);
-    setReplayStatus("Running fixture replay wave into shadowMatches...");
+    setReplayStatus("Running next replay step...");
 
     try {
       const fn = httpsCallable<{ waveSize: number }, ReplayResult>(
@@ -106,7 +106,7 @@ export function ProviderShadowPanel({ uid, dangerConfirmed }: ProviderShadowPane
     }
 
     setResettingReplay(true);
-    setReplayStatus("Resetting fixture replay shadow...");
+    setReplayStatus("Resetting replay...");
 
     try {
       const fn = httpsCallable<Record<string, never>, ReplayResult>(
@@ -128,15 +128,13 @@ export function ProviderShadowPanel({ uid, dangerConfirmed }: ProviderShadowPane
 
   return (
     <div className="border-t border-slate-800/60 pt-4 space-y-3">
-      <div className="text-sm font-semibold text-slate-100">Fixture Replay Shadow</div>
+      <div className="text-sm font-semibold text-slate-100">Replay Test</div>
       <p className="text-xs text-slate-400">
-        Replays fixture waves through the same validation pipeline into{" "}
-        <code className="mx-1 text-emerald-200/90">shadowMatches</code>
-        without touching public match docs.
+        Replays test match data step by step in a safe sandbox — no changes to public scores.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
         <label className="block text-sm text-slate-300">
-          Wave size
+          Matches per step
           <input
             type="number"
             min="1"
@@ -150,22 +148,22 @@ export function ProviderShadowPanel({ uid, dangerConfirmed }: ProviderShadowPane
           disabled={!uid || runningReplay || resettingReplay || !dangerConfirmed}
           className="px-4 py-2 rounded-xl bg-violet-500/90 text-violet-950 font-semibold disabled:opacity-50"
         >
-          {runningReplay ? "Running Replay..." : "Run Replay Wave"}
+          {runningReplay ? "Running..." : "Run Next Step"}
         </button>
         <button
           onClick={resetReplayShadow}
           disabled={!uid || runningReplay || resettingReplay || !dangerConfirmed}
           className="px-4 py-2 rounded-xl border border-violet-400/50 bg-violet-500/10 text-violet-100 font-semibold disabled:opacity-50"
         >
-          {resettingReplay ? "Resetting Replay..." : "Reset Replay Shadow"}
+          {resettingReplay ? "Resetting..." : "Reset Replay"}
         </button>
       </div>
       <div className="text-sm text-slate-300">
-        Cursor: {fixtureReplayState.cursor}
+        Progress: {fixtureReplayState.cursor}
         {fixtureReplayState.total !== null && fixtureReplayState.total !== undefined
           ? ` / ${fixtureReplayState.total}`
           : ""}
-        {" · "}Shadow matches: {fixtureReplayState.shadowMatchCount}
+        {" · "}Test matches: {fixtureReplayState.shadowMatchCount}
         {" · "}Done: {fixtureReplayState.done ? "yes" : "no"}
       </div>
       {replayStatus ? (

@@ -733,6 +733,34 @@ function DashboardPageContent() {
           const homeRed = typeof data.homeRedCards === "number" ? data.homeRedCards : 0;
           const awayRed = typeof data.awayRedCards === "number" ? data.awayRedCards : 0;
 
+          const minute =
+            typeof data.minute === "number" ? data.minute : null;
+
+          const homeHT = typeof data.homeScoreHT === "number" ? data.homeScoreHT : null;
+          const awayHT = typeof data.awayScoreHT === "number" ? data.awayScoreHT : null;
+          const scoreHT: [number, number] | null =
+            homeHT !== null && awayHT !== null ? [homeHT, awayHT] : null;
+
+          const homePens = typeof data.homeScorePens === "number" ? data.homeScorePens : null;
+          const awayPens = typeof data.awayScorePens === "number" ? data.awayScorePens : null;
+          const scorePens: [number, number] | null =
+            homePens !== null && awayPens !== null ? [homePens, awayPens] : null;
+
+          const winner =
+            data.winner === "HOME" || data.winner === "AWAY" ? data.winner : null;
+
+          const rawGoals = Array.isArray(data.goals) ? data.goals : [];
+          const goals = rawGoals
+            .filter((g): g is Record<string, unknown> => typeof g === "object" && g !== null)
+            .map((g) => ({
+              minute: typeof g.minute === "number" ? g.minute : null,
+              playerName: typeof g.playerName === "string" ? g.playerName : null,
+              teamSide: g.teamSide === "away" ? "away" as const : "home" as const,
+              type: (["REGULAR", "OWN_GOAL", "PENALTY", "EXTRA_TIME"].includes(String(g.type))
+                ? g.type
+                : "REGULAR") as "REGULAR" | "OWN_GOAL" | "PENALTY" | "EXTRA_TIME",
+            }));
+
           const match: Match = {
             id: docSnap.id,
             t1: home,
@@ -748,6 +776,11 @@ function DashboardPageContent() {
             group,
             yellowCards: [homeYellow, awayYellow],
             redCards: [homeRed, awayRed],
+            minute,
+            scoreHT,
+            scorePens,
+            winner,
+            goals: goals.length ? goals : undefined,
           };
 
           if (!grouped[stage]) grouped[stage] = [];

@@ -205,7 +205,7 @@ export function LiveOpsConfigPanel({
     const cutoffTrimmed = liveOpsCutoffInput.trim();
 
     setSavingLiveOps(true);
-    setLiveOpsStatus("Saving automation settings...");
+    setLiveOpsStatus("Saving settings...");
 
     try {
       const fn = httpsCallable<SetLiveOpsSettingsPayload, unknown>(
@@ -219,7 +219,7 @@ export function LiveOpsConfigPanel({
         fixtureCutoffIso: cutoffTrimmed || null,
       });
       setLiveOpsStatus(
-        `✅ Automation saved: ${liveOpsModeInput} mode via ${liveOpsProviderInput}.`
+        `✅ Settings saved: ${liveOpsModeInput} mode, ${liveOpsProviderInput}.`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -239,7 +239,7 @@ export function LiveOpsConfigPanel({
 
     if (liveOpsProviderInput !== "football-data") {
       setProviderContractPreview(
-        "❌ Choose football-data.org for a real-provider contract test."
+        "❌ Select 'Live scores (football-data.org)' as the data source to run this test."
       );
       return;
     }
@@ -259,7 +259,7 @@ export function LiveOpsConfigPanel({
       });
       const data = res.data;
       setProviderContractPreview(
-        `Preview: provider ${data.provider ?? liveOpsProviderInput} returned ${data.matches ?? 0} mapped match(es) for shadow contract test.`
+        `Preview: ${data.matches ?? 0} match(es) available from ${data.provider ?? liveOpsProviderInput}.`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -279,7 +279,7 @@ export function LiveOpsConfigPanel({
 
     if (liveOpsProviderInput !== "football-data") {
       setProviderContractStatus(
-        "❌ Choose football-data.org for a real-provider contract test."
+        "❌ Select 'Live scores (football-data.org)' as the data source to run this test."
       );
       return;
     }
@@ -289,11 +289,10 @@ export function LiveOpsConfigPanel({
       fixtureCutoffIso
     );
     const summary = [
-      `Run provider contract test in shadow mode for ${liveOpsProviderInput}?`,
-      "- Writes go to shadowMatches.",
-      "- Recompute writes to shadowLeaderboard/current.",
-      hasMax ? `- maxMatches: ${max}` : "- maxMatches: (provider default/all)",
-      hasCutoff ? `- cutoffIso: ${trimmedCutoff}` : "- cutoffIso: (none)",
+      `Run live score feed test for ${liveOpsProviderInput}?`,
+      "- Results go to a safe sandbox (no public changes).",
+      hasMax ? `- Limit: ${max} matches` : "- All matches",
+      hasCutoff ? `- Cut off before: ${trimmedCutoff}` : "- No date cutoff",
     ].join("\n");
 
     if (typeof window !== "undefined" && !window.confirm(summary)) {
@@ -302,7 +301,7 @@ export function LiveOpsConfigPanel({
     }
 
     setProviderContractRunning(true);
-    setProviderContractStatus("Running provider contract test into shadow mode...");
+    setProviderContractStatus("Running live score feed test (safe mode)...");
 
     try {
       const fn = httpsCallable<
@@ -316,7 +315,7 @@ export function LiveOpsConfigPanel({
       });
       const data = res.data;
       setProviderContractStatus(
-        `✅ ${data.provider ?? liveOpsProviderInput} contract test mapped ${data.matches ?? 0} match(es), updated ${data.updated ?? 0}, quarantined ${data.quarantined ?? 0}, target ${data.target ?? "shadowMatches"}, leaderboard ${data.leaderboardTarget ?? "shadowLeaderboard/current"}.`
+        `✅ Test complete: ${data.matches ?? 0} match(es) processed, ${data.updated ?? 0} updated${data.quarantined ? `, ${data.quarantined} skipped` : ""}. No public data was changed.`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -331,10 +330,10 @@ export function LiveOpsConfigPanel({
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="font-semibold text-slate-100">
-            Live Automation (Scheduler)
+            Live Score Updates
           </div>
           <div className="text-xs text-slate-400">
-            Default is OFF to keep costs near zero in dev.
+            Leave off when the tournament isn't active.
           </div>
         </div>
         <div
@@ -362,7 +361,7 @@ export function LiveOpsConfigPanel({
         </label>
 
         <label className="block text-sm text-slate-300">
-          Provider
+          Data source
           <select
             value={liveOpsProviderInput}
             onChange={(e) =>
@@ -370,16 +369,16 @@ export function LiveOpsConfigPanel({
             }
             className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
           >
-            <option value="fixture">Fixture (safe testing)</option>
-            <option value="football-data">football-data.org (primary)</option>
-            <option value="stub">Stub (no ingest)</option>
+            <option value="fixture">Test data (safe)</option>
+            <option value="football-data">Live scores (football-data.org)</option>
+            <option value="stub">Off (no data)</option>
           </select>
         </label>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <label className="block text-sm text-slate-300">
-          Fixture max matches (optional)
+          Limit matches (optional)
           <input
             type="number"
             min="0"
@@ -391,13 +390,13 @@ export function LiveOpsConfigPanel({
         </label>
 
         <label className="block text-sm text-slate-300">
-          Fixture cutoff ISO (optional)
+          Cut off before date (optional)
           <input
             type="text"
             value={liveOpsCutoffInput}
             onChange={(e) => setLiveOpsCutoffInput(e.target.value)}
             className="mt-1 block w-full rounded-xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm text-slate-100"
-            placeholder="e.g., 2022-11-22T00:00:00Z"
+            placeholder="e.g., 2026-06-15T00:00:00Z"
           />
         </label>
       </div>
@@ -408,7 +407,7 @@ export function LiveOpsConfigPanel({
           disabled={!uid || savingLiveOps || !dangerConfirmed}
           className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
         >
-          {savingLiveOps ? "Saving..." : "Save Automation Settings"}
+          {savingLiveOps ? "Saving..." : "Save Settings"}
         </button>
       </div>
 
@@ -418,17 +417,11 @@ export function LiveOpsConfigPanel({
 
       <div className="border-t border-slate-800/60 pt-3 space-y-2">
         <div className="font-semibold text-slate-100">
-          Real Provider Contract Test
+          Test Live Score Feed
         </div>
         <p className="text-xs text-slate-400">
-          Uses the selected real provider and pushes mapped updates through
-          validation into{" "}
-          <code className="mx-1 text-emerald-200/90">shadowMatches</code>, then
-          recomputes{" "}
-          <code className="mx-1 text-emerald-200/90">
-            shadowLeaderboard/current
-          </code>
-          .
+          Fetches real match data and runs it through validation in a safe
+          sandbox — no changes to public scores or the live leaderboard.
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -442,8 +435,8 @@ export function LiveOpsConfigPanel({
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-sky-500/50 bg-sky-500/10 text-sky-100 font-semibold disabled:opacity-50"
           >
             {providerContractPreviewing
-              ? "Previewing Contract Test..."
-              : "Preview Contract Test"}
+              ? "Checking..."
+              : "Preview"}
           </button>
           <button
             onClick={runProviderContractTest}
@@ -456,8 +449,8 @@ export function LiveOpsConfigPanel({
             className="w-full sm:w-auto px-4 py-2 rounded-xl bg-violet-500/90 text-violet-950 font-semibold disabled:opacity-50"
           >
             {providerContractRunning
-              ? "Running Contract Test..."
-              : "Run Contract Test in Shadow"}
+              ? "Running Test..."
+              : "Run Test (safe mode)"}
           </button>
         </div>
         {providerContractPreview ? (
@@ -474,7 +467,7 @@ export function LiveOpsConfigPanel({
       </div>
 
       <div className="rounded-lg border border-slate-800/70 bg-slate-900/50 p-3 text-xs text-slate-300 space-y-1">
-        <div className="font-semibold text-slate-100">Ingest Health</div>
+        <div className="font-semibold text-slate-100">System Status</div>
         <div className="flex items-center gap-2">
           <span
             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider border ${
@@ -488,7 +481,7 @@ export function LiveOpsConfigPanel({
             Status: {ingestAlert.label}
           </span>
           {ingestAlert.stale ? (
-            <span className="text-amber-300">stale scheduler signal</span>
+            <span className="text-amber-300">data may be outdated</span>
           ) : null}
         </div>
         <div
@@ -515,7 +508,7 @@ export function LiveOpsConfigPanel({
             Last run: {liveOps.lastRunStatus ?? "unknown"}
           </span>
           <span className="text-slate-400">
-            failures in a row: {liveOps.consecutiveFailures ?? 0}
+            {liveOps.consecutiveFailures ?? 0} failure(s) in a row
           </span>
         </div>
         <div>
@@ -524,8 +517,7 @@ export function LiveOpsConfigPanel({
           {liveOps.mode ? ` • mode ${liveOps.mode}` : ""}
         </div>
         <div>
-          Last run payload: matches {liveOps.lastRunMatches ?? 0}, updated{" "}
-          {liveOps.lastRunUpdated ?? 0}
+          Last run: {liveOps.lastRunMatches ?? 0} matches, {liveOps.lastRunUpdated ?? 0} updated
         </div>
         <div>Last success: {liveOps.lastSuccessAt || "—"}</div>
         <div>Last error: {liveOps.lastErrorAt || "—"}</div>
@@ -540,7 +532,7 @@ export function LiveOpsConfigPanel({
         {liveOps.recentRuns && liveOps.recentRuns.length > 0 ? (
           <div className="mt-2 space-y-1">
             <div className="font-semibold text-slate-100">
-              Recent Runs ({liveOps.recentRuns.length})
+              Recent activity ({liveOps.recentRuns.length})
             </div>
             <div className="max-h-40 overflow-auto space-y-1 pr-1">
               {liveOps.recentRuns.map((run, idx) => (

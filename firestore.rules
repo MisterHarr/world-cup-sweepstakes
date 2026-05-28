@@ -10,6 +10,19 @@ service cloud.firestore {
       return signedIn() && request.auth.token.admin == true;
     }
 
+    // Returns true when players may still submit new pot entries.
+    // Checked on every potEntries create — two reads, but create is low-frequency.
+    function entriesOpen() {
+      let docExists = exists(/databases/$(database)/documents/settings/prizePot);
+      let cfg = docExists
+        ? get(/databases/$(database)/documents/settings/prizePot).data
+        : {};
+      let isLocked = docExists && cfg.get("potLocked", false) == true;
+      let deadline = docExists ? cfg.get("entryDeadline", null) : null;
+      let pastDeadline = deadline != null && request.time >= deadline;
+      return !isLocked && !pastDeadline;
+    }
+
     function isUserCreateValid(uid) {
       return request.resource.data.keys().hasOnly([
           "uid",
@@ -136,6 +149,36 @@ service cloud.firestore {
         && isUserUpdateValid(uid);
 
       allow delete: if false;
+    }
+
+    // Prize pot entries.
+    // Players can self-declare payment (create their own pending doc).
+    // Any signed-in user can read confirmed entries (for the public participants list).
+    // Admins can read all entries including pending ones (for the confirmation panel).
+    // All status transitions (pending→confirmed) and deletes go through Cloud Functions only.
+    match /potEntries/{uid} {
+      allow read: if signedIn() && (
+        request.auth.uid == uid              // own entry (any status)
+        || isAdmin()                          // admin sees all
+        || resource.data.status == "confirmed" // anyone sees confirmed entries
+      );
+
+      // Self-declaration: player creates their own pending entry.
+      // Strict field validation prevents them from marking themselves as confirmed.
+      // entriesOpen() enforces the server-side lock and deadline — closing
+      // the pot from admin is not just a UI gate, it is rejected here too.
+      allow create: if signedIn()
+        && entriesOpen()
+        && request.auth.uid == uid
+        && request.resource.data.uid == uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.selfDeclared == true
+        && request.resource.data.keys().hasOnly([
+            "uid", "displayName", "code", "selfDeclaredAt", "status", "selfDeclared"
+          ]);
+
+      // No client updates or deletes — handled by Cloud Functions via Admin SDK.
+      allow update, delete: if false;
     }
 
     match /{document=**} {

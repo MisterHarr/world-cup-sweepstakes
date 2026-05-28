@@ -1,6 +1,18 @@
 export type MatchStatus = "SCHEDULED" | "LIVE" | "FINISHED";
 export type MatchStage = "GROUP" | "R32" | "R16" | "QF" | "SF" | "FINAL";
 
+/**
+ * A goal event extracted from the provider. teamSide is home/away relative to
+ * the match (own-goals are recorded under the SCORING team, not the own-goal team).
+ */
+export type ProviderGoal = {
+  minute: number | null;
+  playerName: string | null;
+  teamSide: "home" | "away";
+  /** REGULAR = normal goal; OWN_GOAL = own goal; PENALTY = pen in normal/ET play (not shootout) */
+  type: "REGULAR" | "OWN_GOAL" | "PENALTY" | "EXTRA_TIME";
+};
+
 export type ProviderMatch = {
   matchId: string;
   homeTeamId: string;
@@ -14,6 +26,15 @@ export type ProviderMatch = {
   homeYellowCards: number;
   awayRedCards: number;
   awayYellowCards: number;
+  // Live / richer display data (Deep Data plan)
+  minute?: number | null;
+  homeScoreHT?: number | null;
+  awayScoreHT?: number | null;
+  homeScorePens?: number | null;
+  awayScorePens?: number | null;
+  /** Resolved winner — HOME or AWAY. Only set when match is FINISHED and decided on pens or ET. */
+  winner?: "HOME" | "AWAY" | null;
+  goals?: ProviderGoal[];
 };
 
 export type NormalizedMatchProvider =
@@ -38,13 +59,20 @@ export type NormalizedMatchUpdate = {
   kickoffTime: string | null;
   status: MatchStatus;
   stage: MatchStage;
-  minute?: number;
   homeScore: number | null;
   awayScore: number | null;
   homeYellowCards?: number;
   awayYellowCards?: number;
   homeRedCards?: number;
   awayRedCards?: number;
+  // Rich display fields
+  minute?: number | null;
+  homeScoreHT?: number | null;
+  awayScoreHT?: number | null;
+  homeScorePens?: number | null;
+  awayScorePens?: number | null;
+  winner?: "HOME" | "AWAY" | null;
+  goals?: ProviderGoal[];
   events?: NormalizedMatchEvent[];
   providerUpdatedAt: string;
   ingestReceivedAt: string;
