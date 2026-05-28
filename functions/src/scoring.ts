@@ -509,8 +509,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
         asString(data.username) ??
         asString(data.displayName) ??
         asString(data.name) ??
-        asString(data.email) ??
-        "Anonymous";
+        "Player";
 
       const department = asDepartment(data.department);
 

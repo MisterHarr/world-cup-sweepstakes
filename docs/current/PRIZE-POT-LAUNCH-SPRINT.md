@@ -188,14 +188,12 @@ are computed as `leaderboard rows ∩ confirmed entries`.
 
 **Goal:** No staff email should ever render on a shared table.
 
-### Task 5.1 — Drop email from the displayName fallback ⬜
+### Task 5.1 — Drop email from the displayName fallback ✅ (2026-05-28)
 - **File:** `functions/src/scoring.ts` (~L508–513)
-- Change `… ?? asString(data.name) ?? asString(data.email) ?? "Anonymous"` →
+- Changed `… ?? asString(data.name) ?? asString(data.email) ?? "Anonymous"` →
   `… ?? asString(data.name) ?? "Player"` (drop the `email` term).
 - **Acceptance:** A user with only an email shows "Player" (or initials), never the email.
-- **Verify:** Recompute with a name-less test user; inspect `leaderboard/current.rows`.
-- **Note:** `getSquadDetails.ts` already uses email *local-part initials* only — no change needed there,
-  but double-check it stays that way.
+- **Note:** `getSquadDetails.ts` uses `email.split("@")[0]` initials only — confirmed still safe, no change needed.
 
 ---
 
