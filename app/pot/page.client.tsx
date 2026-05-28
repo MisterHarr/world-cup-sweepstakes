@@ -489,14 +489,13 @@ export default function PrizePotPageClient() {
                 {!isPending ? (
                   <details className="rounded-xl border border-[var(--ff-hairline)] bg-[var(--ff-bg-card)]">
                     <summary className="cursor-pointer select-none px-4 py-3 text-xs font-semibold text-[var(--ff-fg-secondary)] font-ff-ui">
-                      How it works &amp; rules
+                      How does it work?
                     </summary>
-                    <div className="space-y-2 border-t border-[var(--ff-hairline)] px-4 py-3 text-xs text-[var(--ff-fg-quiet)] font-ff-ui leading-relaxed">
-                      <p>• Entry is <strong className="text-[var(--ff-fg-primary)]">RM{PRIZE_POT_CONFIG.amountPerEntry}</strong>, optional. You must transfer the amount manually via Touch&nbsp;&apos;n&nbsp;Go.</p>
-                      <p>• <strong className="text-[var(--ff-fg-primary)]">Prize eligibility requires admin confirmation</strong> of your payment before the entry deadline. Tapping "I've paid" alone does not guarantee entry.</p>
-                      <p>• Prize split: <strong className="text-[var(--ff-fg-primary)]">60&thinsp;%&thinsp;/&thinsp;30&thinsp;%&thinsp;/&thinsp;10&thinsp;%</strong> for 1st / 2nd / 3rd. Ties at a position share that prize equally.</p>
-                      <p>• There is no automated payment verification — confirmation is manual by the organiser.</p>
-                      <p>• If the game is cancelled, a data provider fails, or a dispute arises, the organiser decides on resolution. Refunds are at the organiser's discretion.</p>
+                    <div className="space-y-2.5 border-t border-[var(--ff-hairline)] px-4 py-3.5 text-xs text-[var(--ff-fg-quiet)] font-ff-ui leading-relaxed">
+                      <p>Totally optional — just a bit of extra fun on top of the sweepstakes. Chuck in <strong className="text-[var(--ff-fg-primary)]">RM{PRIZE_POT_CONFIG.amountPerEntry}</strong> via Touch&nbsp;&apos;n&nbsp;Go and you&apos;re in the running for a slice of the pot.</p>
+                      <p>Once you&apos;ve transferred, tap <strong className="text-[var(--ff-fg-primary)]">"I've paid"</strong> to let us know. Harrison will confirm your entry — until then you&apos;re not officially in, so make sure it goes through before the deadline.</p>
+                      <p>Top 3 on the leaderboard (among paid players) split the pot: <strong className="text-[var(--ff-fg-primary)]">60&thinsp;%&thinsp;/&thinsp;30&thinsp;%&thinsp;/&thinsp;10&thinsp;%</strong>. If two people tie, they split that share equally.</p>
+                      <p className="text-[var(--ff-fg-faint)]">Confirmation is manual — there&apos;s no automated payment check. If anything weird happens (cancelled game, data issues), Harrison calls it.</p>
                     </div>
                   </details>
                 ) : null}
