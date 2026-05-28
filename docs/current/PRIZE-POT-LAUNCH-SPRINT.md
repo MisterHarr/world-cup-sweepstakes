@@ -201,16 +201,13 @@ are computed as `leaderboard rows ∩ confirmed entries`.
 
 **Goal:** Players understand the deal before paying; organiser approves the pool.
 
-### Task 6.1 — Add a rules block to `/pot` ⬜
+### Task 6.1 — Add a rules block to `/pot` ✅ (2026-05-28)
 - **File:** `app/pot/page.client.tsx`
-- Short, plain-English block shown before the "I've paid" action:
-  - RM10 entry, optional.
-  - Payment is manual via Touch 'n Go QR.
-  - **Eligibility requires admin-confirmed payment before the entry deadline.**
-  - 60/30/10 split; ties at a position split equally.
-  - What happens if the game is cancelled / provider fails / a dispute arises (organiser decides; refunds at organiser discretion).
-  - No automated payment verification — confirmation is manual.
-- Avoid gambling language (no odds/wager/bet/jackpot). ✅ already clean — keep it that way.
+- Added collapsible `<details>` "How it works & rules" block shown before the "I've paid" action.
+  Covers: RM10 optional entry; manual TnG transfer; eligibility requires admin confirmation before
+  deadline; 60/30/10 split; ties split equally; no automated verification; organiser discretion on
+  disputes/cancellation/refunds.
+- No gambling language used (no odds/wager/bet/jackpot).
 
 ### Task 6.2 — Organiser approval gate ⬜
 - **Action (owner, not code):** Get explicit organiser sign-off for a workplace-pooled-money prize.
