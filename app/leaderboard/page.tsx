@@ -386,31 +386,32 @@ export default function StandaloneLeaderboardPage() {
 
           {signedIn && !loadingUser && (
             <>
-              {/* ── Segmented tab control ── */}
+              {/* ── Tab control ── */}
               {showPotTab ? (
-                <div className="mb-4 inline-flex items-center gap-0.5 rounded-[12px] border border-[var(--ff-hairline)] bg-[var(--ff-bg-card)] p-0.5">
+                <div className="mb-4 flex border-b border-[rgba(255,255,255,0.07)]">
                   <button
+                    type="button"
                     onClick={() => setActiveTab("overall")}
                     className={cn(
-                      "rounded-[9px] px-4 py-1.5 font-ff-ui text-[13px] font-semibold transition-colors",
+                      "relative -mb-px flex min-h-[44px] items-center border-b-2 bg-transparent px-4 py-2 font-ff-ui text-[13px] transition-colors",
                       activeTab === "overall"
-                        ? "bg-[var(--ff-bg-card-alt)] text-[var(--ff-fg-primary)]"
-                        : "text-[var(--ff-fg-quiet)] hover:text-[var(--ff-fg-secondary)]"
+                        ? "z-[1] border-[var(--ff-accent-text)] font-semibold text-[#e8eaed]"
+                        : "border-transparent font-normal text-[#5a6472] hover:text-[var(--ff-fg-secondary)]"
                     )}
                   >
                     Overall
                   </button>
                   <button
+                    type="button"
                     onClick={() => setActiveTab("pot")}
                     className={cn(
-                      "flex items-center gap-1.5 rounded-[9px] px-4 py-1.5 font-ff-ui text-[13px] font-semibold transition-colors",
+                      "relative -mb-px flex min-h-[44px] items-center gap-1.5 border-b-2 bg-transparent px-4 py-2 font-ff-ui text-[13px] transition-colors",
                       activeTab === "pot"
-                        ? "bg-[var(--ff-bg-card-alt)] text-[var(--ff-gold)]"
-                        : "text-[var(--ff-fg-quiet)] hover:text-[var(--ff-fg-secondary)]"
+                        ? "z-[1] border-[var(--ff-accent-text)] font-semibold text-[#e8eaed]"
+                        : "border-transparent font-normal text-[#5a6472] hover:text-[var(--ff-fg-secondary)]"
                     )}
                   >
                     The Pot
-                    <span className="text-[11px] leading-none opacity-75">🪙</span>
                   </button>
                 </div>
               ) : null}

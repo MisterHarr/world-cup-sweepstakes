@@ -215,10 +215,10 @@ NEXT_PUBLIC_PRIZE_POT_SHOW_PARTICIPANTS=true
 
 | Bundle | Status | Commit | Notes |
 |--------|--------|--------|-------|
-| P1 — Config rebrand | ☐ | — | |
-| P2 — Firestore + Cloud Function | ☐ | — | |
-| P3 — Prize Pot page (`/pot`) | ☐ | — | |
-| P4 — Admin confirmation panel | ☐ | — | |
+| P1 — Config rebrand | ✅ | `feat(prize-pot): P1 — config layer and nav item` | prizePot.ts, features.ts, mainNav.ts |
+| P2 — Firestore + Cloud Function | ✅ | `feat(prize-pot): P2 — potEntries collection, confirmPotEntry Cloud Function` | pot.ts, firestore.rules |
+| P3 — Prize Pot page (`/pot`) | ✅ | `feat(prize-pot): P3+P4 — self-declaration flow, unique codes, admin panel` | app/pot/ |
+| P4 — Admin confirmation panel | ✅ | `feat(prize-pot): P3+P4 — self-declaration flow, unique codes, admin panel` | app/admin/pot/ |
 | P5 — Env vars + docs | ☐ | — | |
 
 ---

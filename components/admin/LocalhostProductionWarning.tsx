@@ -34,12 +34,12 @@ export function LocalhostProductionWarning(
   return (
     <div className="rounded-xl border border-rose-500/50 bg-rose-500/10 p-4 text-sm text-rose-100 space-y-3">
       <div className="font-semibold uppercase tracking-[0.18em] text-rose-200">
-        Localhost + Production Project
+        ⚠️ Connected to live data
       </div>
       <p>
-        You are running locally against the production Firebase project. Type
+        You are running locally against the live site. Type
         <span className="px-1 font-semibold text-white">PRODUCTION</span>
-        before any destructive admin action is enabled.
+        to unlock actions below.
       </p>
       <input
         type="text"

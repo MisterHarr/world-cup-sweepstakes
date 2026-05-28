@@ -142,7 +142,7 @@ export function TransferWindowPanel({ uid, dangerConfirmed }: TransferWindowPane
         <div>
           <div className="font-semibold text-slate-100">Transfer Window</div>
           <div className="text-xs text-slate-400">
-            Enable for transfer testing without console scripts.
+            Allow players to swap their teams.
           </div>
         </div>
         <div

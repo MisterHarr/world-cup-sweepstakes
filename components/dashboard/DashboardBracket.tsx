@@ -203,6 +203,12 @@ const DashboardBracket = ({
         ? `${match.scorePens[0]}–${match.scorePens[1]} on pens`
         : null;
 
+    const t1Yellow = match.yellowCards?.[0] ?? 0;
+    const t1Red = match.redCards?.[0] ?? 0;
+    const t2Yellow = match.yellowCards?.[1] ?? 0;
+    const t2Red = match.redCards?.[1] ?? 0;
+    const hasDetails = isScored && (t1Yellow > 0 || t1Red > 0 || t2Yellow > 0 || t2Red > 0 || t1Goals.length > 0 || t2Goals.length > 0);
+
     return (
       <div
         key={match.id}
@@ -220,23 +226,17 @@ const DashboardBracket = ({
             aria-hidden
           />
         ) : null}
-        <div
-          className={cn(
-            "mb-2.5 font-ff-ui text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]",
-            yourTeam && "pl-2"
-          )}
-        >
+
+        {/* Eyebrow: GROUP A · 67' */}
+        <div className="mb-2.5 font-ff-ui text-[9px] font-semibold uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
           {matchCardEyebrow(match, tab)}
         </div>
 
-        <div
-          className={cn(
-            "grid grid-cols-[1fr_auto_1fr] items-center gap-2.5",
-            yourTeam && "pl-2"
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+        {/* ── Main row: flag · name · score · name · flag ── */}
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          {/* Home team */}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
               {resolveFlag(match.t1) ? (
                 <img
                   src={resolveFlag(match.t1)}
@@ -250,45 +250,20 @@ const DashboardBracket = ({
               )}
             </div>
             <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)]">
+              <div className="truncate font-ff-ui text-[13px] font-semibold leading-snug text-[var(--ff-fg-secondary)]">
                 {t1Name}
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {isUserTeam(match.t1) ? (
-                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
-                ) : null}
-                {(match.yellowCards?.[0] ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
-                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
-                    {match.yellowCards![0] > 1 ? `×${match.yellowCards![0]}` : ""}
-                  </span>
-                )}
-                {(match.redCards?.[0] ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
-                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
-                    {match.redCards![0] > 1 ? `×${match.redCards![0]}` : ""}
-                  </span>
-                )}
-              </div>
-              {t1Goals.length > 0 && (
-                <div className="mt-1 space-y-0.5">
-                  {t1Goals.map((g, i) => (
-                    <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-tight">
-                      {g.type === "OWN_GOAL" ? "⚽ OG" : "⚽"}{" "}
-                      {g.playerName ?? "—"}
-                      {g.minute != null ? ` ${g.minute}'` : ""}
-                      {g.type === "PENALTY" ? " (P)" : ""}
-                    </div>
-                  ))}
-                </div>
+              {isUserTeam(match.t1) && (
+                <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
               )}
             </div>
           </div>
 
-          <div className="min-w-[64px] shrink-0 text-center">
+          {/* Score / kickoff */}
+          <div className="min-w-[58px] shrink-0 text-center">
             {tab === "upcoming" ? (
               <>
-                <div className="font-ff-display text-base font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
+                <div className="font-ff-display text-[13px] font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
                   {match.kickoffTime ? formatKickoff(match.kickoffTime) : "TBD"}
                 </div>
                 <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
@@ -297,7 +272,7 @@ const DashboardBracket = ({
               </>
             ) : (
               <>
-                <div className="font-ff-display text-[32px] font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
+                <div className="font-ff-display text-[28px] font-extrabold leading-none tracking-tight text-[var(--ff-fg-primary)]">
                   {scoreLine}
                 </div>
                 <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
@@ -307,8 +282,9 @@ const DashboardBracket = ({
             )}
           </div>
 
-          <div className="flex min-w-0 flex-row-reverse items-center gap-2.5 text-right">
-            <div className="relative h-[36px] w-[36px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+          {/* Away team */}
+          <div className="flex min-w-0 flex-row-reverse items-center gap-2">
+            <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
               {resolveFlag(match.t2) ? (
                 <img
                   src={resolveFlag(match.t2)}
@@ -321,44 +297,78 @@ const DashboardBracket = ({
                 </span>
               )}
             </div>
-            <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[14px] font-semibold text-[var(--ff-fg-secondary)] text-right">
+            <div className="min-w-0 text-right">
+              <div className="truncate font-ff-ui text-[13px] font-semibold leading-snug text-[var(--ff-fg-secondary)]">
                 {t2Name}
               </div>
-              <div className="flex flex-row-reverse items-center gap-1.5 mt-0.5">
-                {isUserTeam(match.t2) ? (
-                  <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
-                ) : null}
-                {(match.yellowCards?.[1] ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
-                    {match.yellowCards![1] > 1 ? `×${match.yellowCards![1]}` : ""}
-                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-yellow-400" />
-                  </span>
-                )}
-                {(match.redCards?.[1] ?? 0) > 0 && (
-                  <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
-                    {match.redCards![1] > 1 ? `×${match.redCards![1]}` : ""}
-                    <span className="inline-block w-[7px] h-[9px] rounded-[1px] bg-red-500" />
-                  </span>
-                )}
-              </div>
-              {t2Goals.length > 0 && (
-                <div className="mt-1 space-y-0.5 text-right">
-                  {t2Goals.map((g, i) => (
-                    <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-tight">
-                      {g.type === "OWN_GOAL" ? "OG ⚽" : "⚽"}{" "}
-                      {g.playerName ?? "—"}
-                      {g.minute != null ? ` ${g.minute}'` : ""}
-                      {g.type === "PENALTY" ? " (P)" : ""}
-                    </div>
-                  ))}
-                </div>
+              {isUserTeam(match.t2) && (
+                <span className="font-ff-ui text-[9px] font-semibold uppercase tracking-[0.08em] text-[var(--ff-accent-text)]">SQUAD</span>
               )}
             </div>
           </div>
         </div>
 
-        {/* HT score + penalty shootout result */}
+        {/* ── Details row: cards + goal scorers (below main row) ── */}
+        {hasDetails && (
+          <div className="mt-2.5 grid grid-cols-2 gap-3 border-t border-[rgba(255,255,255,0.05)] pt-2.5">
+            {/* Home side */}
+            <div className="space-y-0.5">
+              {(t1Yellow > 0 || t1Red > 0) && (
+                <div className="flex items-center gap-1.5 mb-1">
+                  {t1Yellow > 0 && (
+                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-yellow-400" />
+                      {t1Yellow > 1 ? `×${t1Yellow}` : ""}
+                    </span>
+                  )}
+                  {t1Red > 0 && (
+                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-red-500" />
+                      {t1Red > 1 ? `×${t1Red}` : ""}
+                    </span>
+                  )}
+                </div>
+              )}
+              {t1Goals.map((g, i) => (
+                <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-snug">
+                  {g.type === "OWN_GOAL" ? "⚽ OG" : "⚽"}{" "}
+                  {g.playerName ?? "—"}
+                  {g.minute != null ? ` ${g.minute}'` : ""}
+                  {g.type === "PENALTY" ? " (P)" : ""}
+                </div>
+              ))}
+            </div>
+            {/* Away side */}
+            <div className="space-y-0.5 text-right">
+              {(t2Yellow > 0 || t2Red > 0) && (
+                <div className="flex flex-row-reverse items-center gap-1.5 mb-1">
+                  {t2Yellow > 0 && (
+                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
+                      {t2Yellow > 1 ? `×${t2Yellow}` : ""}
+                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-yellow-400" />
+                    </span>
+                  )}
+                  {t2Red > 0 && (
+                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
+                      {t2Red > 1 ? `×${t2Red}` : ""}
+                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-red-500" />
+                    </span>
+                  )}
+                </div>
+              )}
+              {t2Goals.map((g, i) => (
+                <div key={i} className="font-ff-ui text-[10px] text-[var(--ff-fg-faint)] leading-snug">
+                  {g.type === "OWN_GOAL" ? "OG ⚽" : "⚽"}{" "}
+                  {g.playerName ?? "—"}
+                  {g.minute != null ? ` ${g.minute}'` : ""}
+                  {g.type === "PENALTY" ? " (P)" : ""}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Footer: HT score + penalty result ── */}
         {(htLabel || pensLabel) && (
           <div className="mt-2 flex items-center justify-center gap-3">
             {htLabel && (
@@ -471,7 +481,12 @@ const DashboardBracket = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-2 pt-1 md:grid-cols-2">
+      <div className={cn(
+        "grid gap-3 pt-1",
+        visibleMatches.length === 1
+          ? "grid-cols-1 max-w-xl w-full mx-auto"
+          : "grid-cols-1 sm:grid-cols-2"
+      )}>
         {isLoading ? (
           <div className="py-10 text-center font-ff-ui text-sm text-[var(--ff-fg-quiet)]">
             Loading matches…

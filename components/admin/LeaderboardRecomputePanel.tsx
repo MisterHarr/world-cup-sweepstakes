@@ -189,7 +189,7 @@ export function LeaderboardRecomputePanel({
     }
 
     setRecomputing(true);
-    setRecomputeStatus("Recomputing leaderboard...");
+    setRecomputeStatus("Refreshing scores...");
 
     try {
       const fn = httpsCallable<Record<string, never>, RecomputeResult>(
@@ -199,7 +199,7 @@ export function LeaderboardRecomputePanel({
       const res = await fn({});
       const data = res.data;
       setRecomputeStatus(
-        `✅ Recomputed for ${data?.users ?? 0} users (${data?.matches ?? 0} matches).`
+        `✅ Scores refreshed for ${data?.users ?? 0} players (${data?.matches ?? 0} matches).`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -217,7 +217,7 @@ export function LeaderboardRecomputePanel({
     }
 
     setRetryingDirtyRecompute(true);
-    setRecomputeStatus("Retrying dirty score recompute...");
+    setRecomputeStatus("Force refreshing scores...");
 
     try {
       const fn = httpsCallable<Record<string, never>, RecomputeResult>(
@@ -228,8 +228,8 @@ export function LeaderboardRecomputePanel({
       const data = res.data;
       setRecomputeStatus(
         data?.wasDirty
-          ? `✅ Dirty recompute complete (${data?.users ?? 0} users, ${data?.matches ?? 0} matches). Reason was: ${data?.dirtyReason ?? "unknown"}.`
-          : `✅ Scores were not marked dirty — no retry needed.`
+          ? `✅ Scores refreshed for ${data?.users ?? 0} players (${data?.matches ?? 0} matches).`
+          : `✅ Scores were already up to date — nothing to do.`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -247,7 +247,7 @@ export function LeaderboardRecomputePanel({
     }
 
     setRecomputingShadow(true);
-    setRecomputeStatus("Recomputing shadow leaderboard...");
+    setRecomputeStatus("Refreshing test scores...");
 
     try {
       const fn = httpsCallable<Record<string, never>, RecomputeResult>(
@@ -257,7 +257,7 @@ export function LeaderboardRecomputePanel({
       const res = await fn({});
       const data = res.data;
       setRecomputeStatus(
-        `✅ Shadow recomputed for ${data?.users ?? 0} users (${data?.matches ?? 0} matches). Target: ${data?.target ?? "shadowLeaderboard/current"}.`
+        `✅ Test scores refreshed for ${data?.users ?? 0} players (${data?.matches ?? 0} matches).`
       );
     } catch (err: unknown) {
       console.error(err);
@@ -282,7 +282,7 @@ export function LeaderboardRecomputePanel({
             }
             className="px-4 py-2 rounded-xl bg-slate-800 text-slate-100 disabled:opacity-50"
           >
-            {recomputing ? "Recomputing..." : "Recompute Leaderboard"}
+            {recomputing ? "Refreshing..." : "Refresh Scores"}
           </button>
           <button
             onClick={recomputeShadowLeaderboard}
@@ -295,7 +295,7 @@ export function LeaderboardRecomputePanel({
             }
             className="px-4 py-2 rounded-xl border border-violet-400/50 bg-violet-500/10 text-violet-100 disabled:opacity-50"
           >
-            {recomputingShadow ? "Recomputing Shadow..." : "Recompute Shadow Leaderboard"}
+            {recomputingShadow ? "Refreshing..." : "Refresh Test Scores"}
           </button>
           <button
             onClick={retryDirtyLeaderboard}
@@ -308,7 +308,7 @@ export function LeaderboardRecomputePanel({
             }
             className="px-4 py-2 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-100 disabled:opacity-50"
           >
-            {retryingDirtyRecompute ? "Retrying Dirty Scores..." : "Retry Dirty Scores"}
+            {retryingDirtyRecompute ? "Refreshing..." : "Force Refresh"}
           </button>
         </div>
         {recomputeStatus ? (
@@ -333,7 +333,7 @@ export function LeaderboardRecomputePanel({
             : "—"}
         </div>
         <div className="mt-3 border-t border-slate-800/60 pt-3">
-          <div className="font-semibold mb-2 text-slate-100">Shadow Leaderboard Status</div>
+          <div className="font-semibold mb-2 text-slate-100">Test Leaderboard Status</div>
           <div>
             Last updated:{" "}
             {shadowLeaderboardStatus.lastUpdated ? shadowLeaderboardStatus.lastUpdated : "—"}
@@ -371,17 +371,17 @@ export function LeaderboardRecomputePanel({
           </div>
           {shadowLeaderboardStatus.lastErrorMessage ? (
             <div className="text-rose-300">
-              Shadow recompute error: {shadowLeaderboardStatus.lastErrorMessage}
+              Test score error: {shadowLeaderboardStatus.lastErrorMessage}
             </div>
           ) : null}
         </div>
         <div className="mt-3 border-t border-slate-800/60 pt-3">
           <div className="font-semibold mb-2 text-slate-100">
-            Public vs Shadow Comparison
+            Live vs Test Comparison
           </div>
-          <div>Public rows: {leaderboardDiff.publicCount}</div>
-          <div>Shadow rows: {leaderboardDiff.shadowCount}</div>
-          <div>Detected mismatches: {leaderboardDiff.mismatchCount}</div>
+          <div>Live rows: {leaderboardDiff.publicCount}</div>
+          <div>Test rows: {leaderboardDiff.shadowCount}</div>
+          <div>Differences: {leaderboardDiff.mismatchCount}</div>
           {leaderboardDiff.topMismatches.length > 0 ? (
             <div className="mt-2 space-y-1">
               {leaderboardDiff.topMismatches.map((row) => (
@@ -400,26 +400,25 @@ export function LeaderboardRecomputePanel({
             </div>
           ) : (
             <div className="text-emerald-300">
-              No public-vs-shadow mismatch detected in the current rows.
+              Live and test scores match — no differences found.
             </div>
           )}
         </div>
         <div className="mt-3 border-t border-slate-800/60 pt-3">
           <div className="font-semibold mb-2 text-slate-100">
-            Ingest / Recompute Health
+            System Health
           </div>
-          <div>Match data updated: {ingestHealth.lastIngestSuccessAt ? "yes" : "no"}</div>
-          <div>Leaderboard current: {ingestHealth.scoresDirty ? "no" : "yes"}</div>
-          <div>Scores dirty: {ingestHealth.scoresDirty ? "yes" : "no"}</div>
-          <div>Dirty reason: {ingestHealth.dirtyReason || "—"}</div>
-          <div>Active provider: {ingestHealth.activeProvider || "—"}</div>
+          <div>Match data up to date: {ingestHealth.lastIngestSuccessAt ? "yes" : "no"}</div>
+          <div>Scores up to date: {ingestHealth.scoresDirty ? "no" : "yes"}</div>
+          {ingestHealth.scoresDirty ? <div>Reason: {ingestHealth.dirtyReason || "—"}</div> : null}
+          <div>Data source: {ingestHealth.activeProvider || "—"}</div>
           <div>Mode: {ingestHealth.mode || "—"}</div>
-          <div>Last ingest attempt: {ingestHealth.lastIngestAttemptAt || "—"}</div>
-          <div>Last ingest success: {ingestHealth.lastIngestSuccessAt || "—"}</div>
-          <div>Last ingest error: {ingestHealth.lastIngestErrorAt || "—"}</div>
-          <div>Last recompute attempt: {ingestHealth.lastRecomputeAttemptAt || "—"}</div>
-          <div>Last recompute: {ingestHealth.lastRecomputeSuccessAt || "—"}</div>
-          <div>Last recompute error: {ingestHealth.lastRecomputeErrorAt || "—"}</div>
+          <div>Last data fetch: {ingestHealth.lastIngestSuccessAt || "—"}</div>
+          <div>Last data fetch attempt: {ingestHealth.lastIngestAttemptAt || "—"}</div>
+          <div>Last data fetch error: {ingestHealth.lastIngestErrorAt || "—"}</div>
+          <div>Last score refresh: {ingestHealth.lastRecomputeSuccessAt || "—"}</div>
+          <div>Last score refresh attempt: {ingestHealth.lastRecomputeAttemptAt || "—"}</div>
+          <div>Last score refresh error: {ingestHealth.lastRecomputeErrorAt || "—"}</div>
           {ingestHealth.lastIngestErrorMessage ? (
             <div className="text-rose-300">
               Ingest error: {ingestHealth.lastIngestErrorMessage}

@@ -52,10 +52,31 @@ const TABS = [
   { label: "Guide", meaning: "This page." },
 ];
 
+const KNOCKOUT = [
+  {
+    label: "No draws",
+    detail: "Every knockout match has a winner. No draw points.",
+  },
+  {
+    label: "Penalty shootouts",
+    detail: "Win on pens = win (+3 pts). Goal points only count for goals in normal time and extra time — not the shootout.",
+  },
+  {
+    label: "Clean sheets",
+    detail: "0 goals conceded in normal time + extra time = clean sheet (+1 pt). Shootout goals don't count.",
+  },
+  {
+    label: "Star Team",
+    detail: "The 2× multiplier still applies — wins, goals, and clean sheets all double.",
+  },
+];
+
 const FAQS = [
   { q: "I don't follow football — can I still play?", a: "Yes. Pick any Star Team. Everything scores automatically." },
   { q: "Why does my Star Team score more?", a: "You locked in a 2× multiplier when you picked it — every point it earns counts double." },
   { q: "Can I swap my Star Team?", a: "No. Star Team is locked for the whole tournament." },
+  { q: "What happens if my team loses on penalties?", a: "They lose the match — 0 points for the result. But they still earn goal points for any goals scored in normal time and extra time." },
+  { q: "Do penalty shootout goals count?", a: "No — only goals scored in normal time (90 mins) and extra time count toward your score. Shootout goals are just for deciding the winner." },
 ];
 
 // ── Collapsible section ──────────────────────────────────────────────────────
@@ -192,7 +213,7 @@ export default function GuidePage() {
             </div>
           ) : null}
 
-          <GuideSection title="Points" defaultOpen>
+          <GuideSection title="Scoring" defaultOpen>
             <ul className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-muted-foreground">
               {POINTS.map((rule) => (
                 <li key={rule} className="flex items-center gap-1.5">
@@ -201,6 +222,17 @@ export default function GuidePage() {
                 </li>
               ))}
             </ul>
+          </GuideSection>
+
+          <GuideSection title="Knockout rounds &amp; penalties">
+            <div className="mt-3 space-y-2">
+              {KNOCKOUT.map((r) => (
+                <div key={r.label} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{r.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{r.detail}</p>
+                </div>
+              ))}
+            </div>
           </GuideSection>
 
           <GuideSection title="Transfers">

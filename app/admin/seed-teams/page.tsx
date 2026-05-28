@@ -76,8 +76,8 @@ function SeedTeamsContent(props: { uid: string }) {
       }
 
       setStatus(
-        `✅ Successfully wrote ${teamCount} team documents (setDoc merge). ` +
-          `Retired ids (e.g. PO_*) are not removed automatically — use the orphan button below if needed.`
+        `✅ All ${teamCount} teams loaded successfully. ` +
+          `Old team IDs are not removed automatically — use "Remove old teams" below if needed.`
       );
     } catch (error: unknown) {
       console.error(error);
@@ -101,14 +101,14 @@ function SeedTeamsContent(props: { uid: string }) {
       const affectedUserCount = Number(data.affectedUserCount ?? 0);
       if (orphanIds.length === 0) {
         setOrphanStatus(
-          "✅ No orphan documents — every teams/{id} matches TEAMS_SEED."
+          "✅ All good — no old teams to remove."
         );
         return;
       }
 
       setOrphanStatus(
-        `⚠️ Found ${orphanIds.length} orphan team doc(s). ` +
-          `Affected users: ${affectedUserCount}. Review below, then type DELETE ORPHAN TEAMS to proceed.`
+        `⚠️ Found ${orphanIds.length} old team(s) to remove. ` +
+          `Affects ${affectedUserCount} player(s). Review below, then type DELETE ORPHAN TEAMS to proceed.`
       );
     } catch (error: unknown) {
       console.error(error);
@@ -117,7 +117,7 @@ function SeedTeamsContent(props: { uid: string }) {
   }
 
   async function confirmDeleteOrphanTeamDocs() {
-    setOrphanStatus("Deleting orphan team docs...");
+    setOrphanStatus("Removing old teams...");
 
     try {
       const fn = httpsCallable<OrphanDeletePayload, OrphanPreviewResponse>(
@@ -152,29 +152,19 @@ function SeedTeamsContent(props: { uid: string }) {
 
       <div className="text-sm">
         <a href="/admin/fixtures" className="text-emerald-200 underline">
-          Go to Fixture Ingest
+          Go to Match Data
         </a>
       </div>
 
       <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300 space-y-2">
         <p>
-          <strong>1. Seed Teams</strong> — writes <strong>{teamCount}</strong>{" "}
-          documents to <code className="text-emerald-200/90">teams/{`{teamId}`}</code>{" "}
-          using <code className="text-emerald-200/90">setDoc(..., merge: true)</code>.
-          Existing fields on a doc are merged; this does <strong>not</strong> delete
-          retired ids (e.g. old playoff placeholders).
+          <strong>1. Set Up Teams</strong> — loads all <strong>{teamCount}</strong>{" "}
+          teams into the database. Safe to run more than once.
         </p>
         <p>
-          <strong>2. Remove orphan team docs</strong> (after a roster change) —
-          deletes any <code className="text-emerald-200/90">teams/{`{id}`}</code>{" "}
-          whose <code className="text-emerald-200/90">id</code> is not in the
-          current <code className="text-emerald-200/90">TEAMS_SEED</code> list in
-          this app build.
-        </p>
-        <p className="text-slate-400 text-xs">
-          Test on emulator or staging first. Production: coordinate so no active
-          users still reference a deleted team id. This tool now previews affected
-          users before deletion and requires typed confirmation.
+          <strong>2. Remove old teams</strong> — removes any teams that are no
+          longer in the current list (e.g. after a squad change). Shows you which
+          players are affected before deleting.
         </p>
       </div>
 
@@ -185,7 +175,7 @@ function SeedTeamsContent(props: { uid: string }) {
           disabled={!dangerConfirmed}
           className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
         >
-          Seed Teams
+          Set Up Teams
         </button>
         <button
           type="button"
@@ -193,16 +183,16 @@ function SeedTeamsContent(props: { uid: string }) {
           disabled={!dangerConfirmed}
           className="w-full sm:w-auto px-4 py-2 rounded-xl border border-amber-500/60 text-amber-100 font-semibold hover:bg-amber-500/10 disabled:opacity-50"
         >
-          Remove orphan team docs
+          Remove old teams
         </button>
       </div>
 
       {orphanPreview && Array.isArray(orphanPreview.orphanIds) && orphanPreview.orphanIds.length > 0 ? (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-slate-300 space-y-3">
           <div className="font-semibold text-amber-100">
-            Orphan Deletion Preview
+            Teams to remove
           </div>
-          <div>Orphan ids: {orphanPreview.orphanIds.join(", ")}</div>
+          <div>IDs: {orphanPreview.orphanIds.join(", ")}</div>
           <div>Affected users: {Number(orphanPreview.affectedUserCount ?? 0)}</div>
           {Array.isArray(orphanPreview.affectedUsers) && orphanPreview.affectedUsers.length > 0 ? (
             <div className="space-y-2">
@@ -222,7 +212,7 @@ function SeedTeamsContent(props: { uid: string }) {
           ) : null}
 
           <label className="block text-sm text-slate-300">
-            Type <span className="text-amber-200">DELETE ORPHAN TEAMS</span> to confirm
+            Type <span className="text-amber-200">DELETE ORPHAN TEAMS</span> to confirm removal
             <input
               value={orphanConfirmation}
               onChange={(event) => setOrphanConfirmation(event.target.value)}
@@ -236,7 +226,7 @@ function SeedTeamsContent(props: { uid: string }) {
             disabled={!dangerConfirmed || orphanConfirmation !== "DELETE ORPHAN TEAMS"}
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-rose-500/60 text-rose-100 font-semibold hover:bg-rose-500/10 disabled:opacity-50"
           >
-            Delete Confirmed Orphan Teams
+            Confirm & Remove
           </button>
         </div>
       ) : null}
@@ -261,7 +251,7 @@ export default function SeedTeamsPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                Admin · Seed Teams
+                Admin · Team Setup
               </h1>
               <a
                 href="/admin"
