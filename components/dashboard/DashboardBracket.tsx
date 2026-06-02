@@ -84,7 +84,7 @@ const DashboardBracket = ({
     return teamNames[teamId] ?? teamId;
   };
   const resolveBadge = (teamId?: string) =>
-    isPlaceholderId(teamId) ? "?" : (teamId?.substring(0, 2).toUpperCase() ?? "—");
+    isPlaceholderId(teamId) ? "TBD" : (teamId?.substring(0, 2).toUpperCase() ?? "—");
   const resolveFlag = (teamId?: string) =>
     isPlaceholderId(teamId) ? "" : (teamId ? teamFlags[teamId] ?? "" : "");
   const isUserTeam = (teamId?: string) =>
@@ -119,8 +119,10 @@ const DashboardBracket = ({
     if (activeTab === "upcoming" && fixtureSearch.trim()) {
       const q = fixtureSearch.trim().toLowerCase();
       return filterMatchesForTab(allMatches, "upcoming").filter((m) => {
-        const t1 = (m.t1Label ?? teamNames[m.t1 ?? ""] ?? m.t1 ?? "").toLowerCase();
-        const t2 = (m.t2Label ?? teamNames[m.t2 ?? ""] ?? m.t2 ?? "").toLowerCase();
+        const t1Raw = teamNames[m.t1 ?? ""] ?? (isPlaceholderId(m.t1) ? "to be confirmed" : (m.t1 ?? ""));
+        const t2Raw = teamNames[m.t2 ?? ""] ?? (isPlaceholderId(m.t2) ? "to be confirmed" : (m.t2 ?? ""));
+        const t1 = (m.t1Label ?? t1Raw).toLowerCase();
+        const t2 = (m.t2Label ?? t2Raw).toLowerCase();
         const grp = (m.group ?? "").toLowerCase();
         const stage = (m.stageId ?? "").toLowerCase();
         return t1.includes(q) || t2.includes(q) || grp.includes(q) || stage.includes(q);
