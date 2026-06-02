@@ -173,6 +173,14 @@ const DashboardBracket = ({
   const stageTitle =
     activeStage?.name ?? stageLabel(activeStage?.id ?? "");
 
+  // Derive a short match label from placeholder doc IDs (wc2026-m73 → "M73").
+  // Returns null for real provider fixtures (fd-XXXXX) and non-numbered slots.
+  const extractMatchNumber = (id?: string): string | null => {
+    if (!id) return null;
+    const m = id.match(/^wc2026-m(\d+)$/);
+    return m ? `M${m[1]}` : null;
+  };
+
   const headerMid = (match: BracketMatch, tab: typeof activeTab) => {
     if (tab === "live") return match.minute != null ? `${match.minute}'` : "LIVE";
     if (tab === "results") return match.scorePens ? "FT (Pens)" : "FT";
@@ -188,7 +196,10 @@ const DashboardBracket = ({
       const g = match.group?.trim();
       return g ? `GROUP ${g.toUpperCase()} · ${mid}` : `GROUP · ${mid}`;
     }
-    return `${resolvedStageTitle} · ${mid}`;
+    const matchNum = extractMatchNumber(match.id);
+    return matchNum
+      ? `${resolvedStageTitle} · ${matchNum} · ${mid}`
+      : `${resolvedStageTitle} · ${mid}`;
   };
 
   const renderFfMatchCard = (
