@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onSchedule, type ScheduledEvent } from "firebase-functions/v2/scheduler";
 import fixtures from "./fixtures/worldcup2022.json";
 import preTournamentFixtures from "./fixtures/pretournament2022.json";
+import { KNOCKOUT_PLACEHOLDERS_2026 } from "./fixtures/knockoutPlaceholders2026";
 import {
   getErrorMessage,
   markScoresDirty,
@@ -33,6 +34,11 @@ import type {
   ProviderMatch,
 } from "./providers/providerTypes";
 
+import {
+  computePollingGate,
+  isScoringRelevantChange,
+  type ScheduleEntry,
+} from "./pollingWindow";
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
 const SCHEDULE = "every 10 minutes";
 
@@ -49,6 +55,8 @@ export type ApplyMatchUpdatesResult = {
   updated: number;
   matches: number;
   quarantined: number;
+  /** Number of placeholder docs deleted because real fixtures for the same stage were written. */
+  deletedPlaceholders?: number;
 };
 
 type LiveOpsConfig = {
@@ -673,10 +681,12 @@ export async function applyNormalizedMatchUpdates(
     ref: FirebaseFirestore.DocumentReference;
     data: Record<string, unknown>;
   }> = [];
+  let hasScoringRelevantChange = false;
 
   validMatches.forEach((match) => {
     const existing = existingById[match.canonicalMatchId];
     if (!isDifferent(existing, match)) return;
+    if (isScoringRelevantChange(existing, match)) hasScoringRelevantChange = true;
 
     updates.push({
       ref: db.collection(collectionName).doc(match.canonicalMatchId),
@@ -735,7 +745,7 @@ export async function applyNormalizedMatchUpdates(
     await batch.commit();
   }
 
-  if (shouldRecompute) {
+  if (shouldRecompute && hasScoringRelevantChange) {
     const recomputeTarget = options.recomputeTarget ?? "public";
     try {
       await recomputeScoresCore({
@@ -755,10 +765,62 @@ export async function applyNormalizedMatchUpdates(
     }
   }
 
+  // Supersession: when real knockout fixtures from football-data.org are written
+  // to the production `matches` collection, automatically delete any placeholder
+  // docs for the same stage.  This prevents the UI from showing both a placeholder
+  // ("Runner-up Group A") and the real fixture side-by-side.
+  //
+  // Stage-level cleanup is safe: by the time the first R32 match kicks off, ALL
+  // 32 R32 team slots are resolved, so all 16 R32 real fixtures are written in
+  // the same ingest cycle.  Same logic applies to R16, QF, SF, FINAL.
+  //
+  // Only runs for the live provider writing to the public collection — not for
+  // fixture replay or shadow mode.
+  let deletedPlaceholders = 0;
+  if (options.source === "football-data" && collectionName === "matches") {
+    const knockoutStagesWritten = new Set(
+      updates
+        .map((u) => u.data.stage as string)
+        .filter((stage) => stage !== "GROUP")
+    );
+
+    if (knockoutStagesWritten.size > 0) {
+      const placeholderSnap = await db
+        .collection(collectionName)
+        .where("isPlaceholder", "==", true)
+        .get();
+
+      const toDelete = placeholderSnap.docs.filter((d) =>
+        knockoutStagesWritten.has(d.get("stage") as string)
+      );
+
+      if (toDelete.length > 0) {
+        let delBatch = db.batch();
+        let delCount = 0;
+        for (const doc of toDelete) {
+          delBatch.delete(doc.ref);
+          delCount += 1;
+          if (delCount >= 400) {
+            await delBatch.commit();
+            delBatch = db.batch();
+            delCount = 0;
+          }
+        }
+        if (delCount > 0) await delBatch.commit();
+        deletedPlaceholders = toDelete.length;
+        console.log(
+          `[ingest] Deleted ${deletedPlaceholders} placeholder doc(s) superseded by ` +
+          `real knockout fixtures (stages: ${[...knockoutStagesWritten].join(", ")})`
+        );
+      }
+    }
+  }
+
   return {
     updated: updates.length,
     matches: normalizedUpdates.length,
     quarantined: rejected.length,
+    ...(deletedPlaceholders > 0 ? { deletedPlaceholders } : {}),
   };
 }
 
@@ -824,13 +886,47 @@ export const ingestLiveScores = onSchedule(
       return;
     }
 
+    // Read the match schedule from Firestore — the same collection that will
+    // be written by this function.  We select only the two fields needed by
+    // computePollingGate so the read is cheap (2 fields × ~64 docs).
+    // This replaces the bundled worldcup2022.json schedule, which has 2022
+    // kickoff dates and is only correct for staging/replay use.
+    const db = admin.firestore();
+    const target = getLiveOpsTarget(liveOps.mode);
+    const scheduleSnap = await db
+      .collection(target.collectionName)
+      .select("kickoffTime", "stage", "status")
+      .get();
+    const firestoreSchedule: ScheduleEntry[] = scheduleSnap.docs.map((d) => ({
+      kickoffTime: d.get("kickoffTime"),
+      stage: d.get("stage"),
+    }));
+
+    const gate = computePollingGate(Date.now(), firestoreSchedule);
+
+    if (gate === "skip") {
+      console.log("[ingest] No match in polling window. Skipping.");
+      return;
+    }
+
+    if (gate === "check-live") {
+      // One or more matches started but are past the fixed time window.
+      // This covers long extra time / penalty shootouts. Only continue if
+      // Firestore confirms a match is still LIVE.
+      const hasLive = scheduleSnap.docs.some((d) => d.get("status") === "LIVE");
+      if (!hasLive) {
+        console.log("[ingest] No active matches. Skipping.");
+        return;
+      }
+      console.log("[ingest] Live match detected outside time window — continuing.");
+    }
+
     await recordIngestAttempt({
       activeProvider: liveOps.provider,
       mode: liveOps.mode,
     });
 
     try {
-      const target = getLiveOpsTarget(liveOps.mode);
       const matches = await fetchProviderMatches({
         provider: liveOps.provider,
         maxMatches: liveOps.fixtureMaxMatches,
@@ -1173,6 +1269,181 @@ export const adminContractTestProvider = onCall(
         errorMessage: message,
         mode: "shadow",
       });
+      throw err;
+    }
+  }
+);
+
+/**
+ * Seed knockout-stage placeholder fixtures into the production `matches`
+ * collection.  Placeholder docs have:
+ *   • TBD-* team IDs (absent from `teams` → quarantined by validateMatchUpdate)
+ *   • isScoringEligible: false (skipped by recomputeScoresCore)
+ *   • isPlaceholder: true
+ *
+ * The polling gate uses their kickoffTime to open the window on schedule,
+ * so the scheduler calls football-data.org automatically once knockout
+ * fixtures are published with real team IDs.
+ *
+ * Pass dryRun:true to preview without writing.
+ * Pass force:true to overwrite existing placeholder docs.
+ */
+export const adminSeedKnockoutPlaceholders = onCall(
+  CALL_OPTS,
+  async (request) => {
+    requireAdmin(request);
+
+    const payload = (request.data ?? {}) as Record<string, unknown>;
+    const dryRun = payload.dryRun === true;
+    const force = payload.force === true;
+
+    const db = admin.firestore();
+    const collectionName = "matches";
+
+    // Check which placeholder docs already exist
+    const existingIds = new Set<string>();
+    if (!force) {
+      const existingSnap = await db
+        .collection(collectionName)
+        .where("isPlaceholder", "==", true)
+        .get();
+      existingSnap.docs.forEach((d) => existingIds.add(d.id));
+    }
+
+    const toWrite = KNOCKOUT_PLACEHOLDERS_2026.filter(
+      (p) => force || !existingIds.has(p.matchId)
+    );
+
+    if (dryRun) {
+      return {
+        ok: true,
+        dryRun: true,
+        total: KNOCKOUT_PLACEHOLDERS_2026.length,
+        alreadyExist: existingIds.size,
+        wouldWrite: toWrite.length,
+        fixtures: toWrite.map((p) => ({
+          matchId: p.matchId,
+          stage: p.stage,
+          kickoffTime: p.kickoffTime,
+          home: p.homePlaceholder,
+          away: p.awayPlaceholder,
+        })),
+      };
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const maxBatch = 450;
+    let batch = db.batch();
+    let writes = 0;
+
+    for (const p of toWrite) {
+      const ref = db.collection(collectionName).doc(p.matchId);
+      batch.set(ref, {
+        matchId: p.matchId,
+        homeTeamId: p.homeTeamId,
+        awayTeamId: p.awayTeamId,
+        homePlaceholder: p.homePlaceholder,
+        awayPlaceholder: p.awayPlaceholder,
+        kickoffTime: p.kickoffTime,
+        stage: p.stage,
+        status: "SCHEDULED",
+        homeScore: null,
+        awayScore: null,
+        homeRedCards: 0,
+        homeYellowCards: 0,
+        awayRedCards: 0,
+        awayYellowCards: 0,
+        isPlaceholder: true,
+        isScoringEligible: false,
+        source: "placeholder",
+        lastUpdated: now,
+      });
+      writes += 1;
+      if (writes >= maxBatch) {
+        await batch.commit();
+        batch = db.batch();
+        writes = 0;
+      }
+    }
+    if (writes > 0) await batch.commit();
+
+    return {
+      ok: true,
+      dryRun: false,
+      total: KNOCKOUT_PLACEHOLDERS_2026.length,
+      skipped: existingIds.size,
+      written: toWrite.length,
+    };
+  }
+);
+
+/**
+ * One-shot production bootstrap: fetch real knockout fixtures from
+ * football-data.org and write them to the `matches` collection.
+ *
+ * Use this after the group stage ends, once football-data.org has real
+ * team IDs for the R32.  Run adminContractTestProvider (shadow) first to
+ * confirm the data looks correct, then call this to go live.
+ */
+export const adminBootstrapKnockoutFixtures = onCall(
+  { ...HEAVY_CALL_OPTS, secrets: [FOOTBALL_DATA_TOKEN] },
+  async (request) => {
+    requireAdmin(request);
+
+    const liveOps = await getLiveOpsConfig();
+    if (liveOps.provider !== "football-data") {
+      throw new HttpsError(
+        "failed-precondition",
+        "liveOps.provider must be football-data to bootstrap knockout fixtures."
+      );
+    }
+
+    const dryRun = (request.data as Record<string, unknown>)?.dryRun === true;
+
+    await recordIngestAttempt({
+      activeProvider: liveOps.provider,
+      mode: liveOps.mode,
+    });
+
+    try {
+      const matches = await fetchProviderMatches({
+        provider: liveOps.provider,
+        maxMatches: 0,
+        cutoffIso: null,
+      });
+
+      if (dryRun) {
+        await recordIngestSuccess({ activeProvider: liveOps.provider, mode: liveOps.mode });
+        return {
+          ok: true,
+          dryRun: true,
+          matchesFromProvider: matches.length,
+          knockoutMatches: matches.filter((m) => m.stage !== "GROUP").length,
+        };
+      }
+
+      const target = getLiveOpsTarget(liveOps.mode);
+      const result = matches.length
+        ? await applyMatchUpdates(matches, {
+            source: "football-data",
+            initiatedBy: request.auth?.uid ?? "admin",
+            collectionName: target.collectionName,
+            recompute: true,
+            recomputeTarget: target.recomputeTarget,
+          })
+        : { updated: 0, matches: 0, quarantined: 0 };
+
+      await recordIngestSuccess({ activeProvider: liveOps.provider, mode: liveOps.mode });
+
+      return {
+        ok: true,
+        dryRun: false,
+        matchesFromProvider: matches.length,
+        ...result,
+      };
+    } catch (err) {
+      const message = getErrorMessage(err);
+      await recordIngestError({ activeProvider: liveOps.provider, errorMessage: message, mode: liveOps.mode });
       throw err;
     }
   }

@@ -709,9 +709,17 @@ function DashboardPageContent() {
 
           const home = String(data.homeTeamId ?? "TBD");
           const away = String(data.awayTeamId ?? "TBD");
+          const t1Label =
+            typeof data.homePlaceholder === "string" && data.homePlaceholder.trim()
+              ? data.homePlaceholder.trim()
+              : undefined;
+          const t2Label =
+            typeof data.awayPlaceholder === "string" && data.awayPlaceholder.trim()
+              ? data.awayPlaceholder.trim()
+              : undefined;
 
-          if (home && home !== "TBD") teamIds.add(home);
-          if (away && away !== "TBD") teamIds.add(away);
+          if (home && home !== "TBD" && !home.startsWith("TBD-")) teamIds.add(home);
+          if (away && away !== "TBD" && !away.startsWith("TBD-")) teamIds.add(away);
 
           const s1 =
             typeof data.homeScore === "number" ? data.homeScore : undefined;
@@ -765,6 +773,8 @@ function DashboardPageContent() {
             id: docSnap.id,
             t1: home,
             t2: away,
+            t1Label,
+            t2Label,
             s1,
             s2,
             status: matchStatusLabel(statusCode),

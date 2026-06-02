@@ -75,10 +75,18 @@ const DashboardBracket = ({
   );
   const activeStage = stagesToUse[safeStageIndex];
   const currentMatches = activeStage ? matches[activeStage.id] || [] : [];
-  const resolveName = (teamId?: string) =>
-    teamId ? teamNames[teamId] ?? teamId : "TBD";
+  const isPlaceholderId = (teamId?: string) =>
+    Boolean(teamId?.startsWith("TBD-"));
+  const resolveName = (teamId?: string, labelOverride?: string) => {
+    if (!teamId) return "To be confirmed";
+    if (labelOverride) return labelOverride;
+    if (isPlaceholderId(teamId)) return "To be confirmed";
+    return teamNames[teamId] ?? teamId;
+  };
+  const resolveBadge = (teamId?: string) =>
+    isPlaceholderId(teamId) ? "?" : (teamId?.substring(0, 2).toUpperCase() ?? "—");
   const resolveFlag = (teamId?: string) =>
-    teamId ? teamFlags[teamId] ?? "" : "";
+    isPlaceholderId(teamId) ? "" : (teamId ? teamFlags[teamId] ?? "" : "");
   const isUserTeam = (teamId?: string) =>
     teamId ? userTeamSet.has(String(teamId)) : false;
   const formatKickoff = (kickoff?: string) => {
@@ -111,8 +119,8 @@ const DashboardBracket = ({
     if (activeTab === "upcoming" && fixtureSearch.trim()) {
       const q = fixtureSearch.trim().toLowerCase();
       return filterMatchesForTab(allMatches, "upcoming").filter((m) => {
-        const t1 = (teamNames[m.t1 ?? ""] ?? m.t1 ?? "").toLowerCase();
-        const t2 = (teamNames[m.t2 ?? ""] ?? m.t2 ?? "").toLowerCase();
+        const t1 = (m.t1Label ?? teamNames[m.t1 ?? ""] ?? m.t1 ?? "").toLowerCase();
+        const t2 = (m.t2Label ?? teamNames[m.t2 ?? ""] ?? m.t2 ?? "").toLowerCase();
         const grp = (m.group ?? "").toLowerCase();
         const stage = (m.stageId ?? "").toLowerCase();
         return t1.includes(q) || t2.includes(q) || grp.includes(q) || stage.includes(q);
@@ -188,8 +196,8 @@ const DashboardBracket = ({
   ) => {
     const yourTeam = isUserTeam(match.t1) || isUserTeam(match.t2);
     const visible = Boolean(matchRowVisible[index]);
-    const t1Name = resolveName(match.t1);
-    const t2Name = resolveName(match.t2);
+    const t1Name = resolveName(match.t1, match.t1Label);
+    const t2Name = resolveName(match.t2, match.t2Label);
     const scoreLine = `${match.s1 ?? "–"}–${match.s2 ?? "–"}`;
     const isScored = tab === "live" || tab === "results";
     const t1Goals = isScored ? (match.goals ?? []).filter((g) => g.teamSide === "home") : [];
@@ -245,7 +253,7 @@ const DashboardBracket = ({
                 />
               ) : (
                 <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
-                  {match.t1?.substring(0, 2).toUpperCase() ?? "—"}
+                  {resolveBadge(match.t1)}
                 </span>
               )}
             </div>
@@ -293,7 +301,7 @@ const DashboardBracket = ({
                 />
               ) : (
                 <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
-                  {match.t2?.substring(0, 2).toUpperCase() ?? "—"}
+                  {resolveBadge(match.t2)}
                 </span>
               )}
             </div>

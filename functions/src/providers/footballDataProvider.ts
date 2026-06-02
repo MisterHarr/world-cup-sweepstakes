@@ -26,19 +26,47 @@ function asIsoOrNull(value: unknown): string | null {
   return Number.isNaN(Date.parse(raw)) ? null : raw;
 }
 
-function toProviderStatus(value: unknown): MatchStatus | null {
+/**
+ * Normalize a football-data.org match status string to our canonical
+ * MatchStatus.  Exported for unit testing.
+ *
+ * Active (→ "LIVE"):
+ *   IN_PLAY, PAUSED (half-time), EXTRA_TIME, PENALTY_SHOOTOUT
+ *
+ * Terminal (→ "FINISHED"):
+ *   FINISHED, AFTER_EXTRA_TIME, AFTER_PENALTIES, AWARDED, WALKOVER
+ *
+ * Future (→ "SCHEDULED"):
+ *   SCHEDULED, TIMED, POSTPONED, SUSPENDED
+ *
+ * PENALTY_SHOOTOUT must be "LIVE" — the match is still being played.
+ * Mapping it to "FINISHED" would cause the check-live gate to stop
+ * polling before the shootout result (and winner field) is confirmed.
+ */
+export function normalizeProviderStatus(value: unknown): MatchStatus | null {
   const status = asString(value)?.toUpperCase();
   if (!status) return null;
 
-  if (status === "IN_PLAY" || status === "PAUSED" || status === "LIVE") return "LIVE";
+  if (
+    status === "IN_PLAY" ||
+    status === "PAUSED" ||         // half-time break
+    status === "LIVE" ||           // legacy / other-provider alias
+    status === "EXTRA_TIME" ||     // match in extra time — still active
+    status === "PENALTY_SHOOTOUT"  // match in shootout — still active
+  ) {
+    return "LIVE";
+  }
+
   if (
     status === "FINISHED" ||
+    status === "AFTER_EXTRA_TIME" || // concluded after ET (team won in ET)
+    status === "AFTER_PENALTIES" ||  // concluded after shootout — result final
     status === "AWARDED" ||
-    status === "AFTER_EXTRA_TIME" ||
-    status === "PENALTY_SHOOTOUT"
+    status === "WALKOVER"
   ) {
     return "FINISHED";
   }
+
   if (
     status === "SCHEDULED" ||
     status === "TIMED" ||
@@ -245,6 +273,8 @@ export async function getFootballDataMatches(
 
   const teamLookup = await getTeamLookup();
   const mapped: ProviderMatch[] = [];
+  // Collect unmapped teams across all matches; key by tla to deduplicate.
+  const unmappedTeams = new Map<string, string>(); // tla → name
 
   rawMatches.forEach((raw: unknown) => {
     if (!isRecord(raw)) return;
@@ -255,15 +285,20 @@ export async function getFootballDataMatches(
         : null;
     const homeTeamId = mapProviderTeamId(raw.homeTeam, teamLookup);
     const awayTeamId = mapProviderTeamId(raw.awayTeam, teamLookup);
-    const status = toProviderStatus(raw.status);
+    const status = normalizeProviderStatus(raw.status);
     const stage = toProviderStage(raw.stage);
 
     if (!matchId || !homeTeamId || !awayTeamId || !status) {
-      // Log unmapped teams so we can add aliases
       const ht = isRecord(raw.homeTeam) ? raw.homeTeam : {};
       const at = isRecord(raw.awayTeam) ? raw.awayTeam : {};
-      if (!homeTeamId) console.warn(`[ingest] unmapped home team — tla: "${ht.tla}", name: "${ht.name}", shortName: "${ht.shortName}"`);
-      if (!awayTeamId) console.warn(`[ingest] unmapped away team — tla: "${at.tla}", name: "${at.name}", shortName: "${at.shortName}"`);
+      if (!homeTeamId) {
+        const tla = String(ht.tla ?? "?");
+        unmappedTeams.set(tla, `${tla}/${String(ht.shortName ?? ht.name ?? "")}`);
+      }
+      if (!awayTeamId) {
+        const tla = String(at.tla ?? "?");
+        unmappedTeams.set(tla, `${tla}/${String(at.shortName ?? at.name ?? "")}`);
+      }
       return;
     }
 
@@ -304,8 +339,12 @@ export async function getFootballDataMatches(
   });
 
   const dropped = rawMatches.length - mapped.length;
-  if (dropped > 0) {
-    console.warn(`[ingest] dropped ${dropped}/${rawMatches.length} matches due to unmapped teams — see warnings above`);
+  if (unmappedTeams.size > 0) {
+    const teamList = [...unmappedTeams.values()].join(", ");
+    console.warn(
+      `[ingest] ${dropped}/${rawMatches.length} matches dropped — ` +
+      `${unmappedTeams.size} unmapped team(s): ${teamList}`
+    );
   }
   const limited = filterAndLimitMatches(mapped, options);
   console.log(

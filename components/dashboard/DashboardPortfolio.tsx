@@ -258,7 +258,7 @@ function TeamDetailModal({
   const opponentName = nextMatch
     ? ((teamsById[nextMatch.opponentId]?.name as string | undefined)
         ?? allTeamNames[nextMatch.opponentId]
-        ?? nextMatch.opponentId)
+        ?? (nextMatch.opponentId?.startsWith("TBD-") ? "To be confirmed" : nextMatch.opponentId))
     : null;
   const record = teamsById[team.id];
   const isEliminated = team.isEliminated === true;
@@ -266,11 +266,11 @@ function TeamDetailModal({
   // Scoring formula breakdown — mirrors functions/src/scoring.ts
   const rawBreakdowns = [
     { key: "wins",        label: "Wins",         value: asNumber(record?.wins),         rate: 3,    rateLabel: "3 pts/win",     color: "text-[var(--ff-accent-text)]" },
-    { key: "goals",       label: "Goals",        value: asNumber(record?.goalsScored),  rate: 1,    rateLabel: "1 pt/goal",     color: "text-[var(--ff-accent-text)]" },
+    { key: "goals",       label: "Goals",        value: asNumber(record?.goalsScored),  rate: 1.5,  rateLabel: "1.5 pts/goal",  color: "text-[var(--ff-accent-text)]" },
     { key: "cleanSheets", label: "Clean sheets", value: asNumber(record?.cleanSheets),  rate: 1,    rateLabel: "1 pt/sheet",    color: "text-[var(--ff-accent-text)]" },
     { key: "draws",       label: "Draws",        value: asNumber(record?.draws),        rate: 1,    rateLabel: "1 pt/draw",     color: "text-[var(--ff-fg-secondary)]" },
     { key: "redCards",    label: "Red cards",    value: asNumber(record?.redCards),     rate: -1,   rateLabel: "−1 pt/card",    color: "text-[var(--ff-danger)]" },
-    { key: "yellowCards", label: "Yellow cards", value: asNumber(record?.yellowCards),  rate: -0.5, rateLabel: "−0.5 pt/card",  color: "text-[var(--ff-danger)]" },
+    { key: "yellowCards", label: "Yellow cards", value: asNumber(record?.yellowCards),  rate: -0.25, rateLabel: "−0.25 pt/card", color: "text-[var(--ff-danger)]" },
   ];
   // Always show all stat rows including red/yellow cards
   const statBreakdowns = rawBreakdowns;

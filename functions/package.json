@@ -12,6 +12,7 @@
     "test:emulator:shadow-routing": "node scripts/test-shadow-mode-routing.cjs",
     "test:emulator:dirty-retry": "node scripts/test-dirty-recompute-retry.cjs",
     "test:emulator:rules": "node scripts/test-rules-security.cjs",
+    "test:unit:polling": "node scripts/test-polling-window.cjs",
     "create-local-admin": "node create-local-admin.cjs",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",

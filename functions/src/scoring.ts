@@ -253,10 +253,10 @@ function calcTeamPoints(stats: TeamStats): number {
   return (
     stats.wins * 3 +
     stats.draws * 1 +
-    stats.goalsScored * 1 +
+    stats.goalsScored * 1.5 +
     stats.cleanSheets * 1 +
     stats.redCards * -1 +
-    stats.yellowCards * -0.5
+    stats.yellowCards * -0.25
   );
 }
 
@@ -383,6 +383,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       const data = docSnap.data() as Record<string, unknown>;
       const status = asStatus(data.status);
       if (!status || !eligibleStatuses.includes(status)) return;
+      if (data.isScoringEligible === false) return; // placeholder fixtures never count
 
       const homeTeamId = asString(data.homeTeamId);
       const awayTeamId = asString(data.awayTeamId);

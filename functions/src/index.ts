@@ -21,6 +21,8 @@ export {
   adminResetFixtureIngest,
   adminIngestPreTournament,
   adminContractTestProvider,
+  adminSeedKnockoutPlaceholders,
+  adminBootstrapKnockoutFixtures,
   setLiveOpsSettings,
 } from "./ingest";
 export {
@@ -34,4 +36,4 @@ export {
   adminPreviewOrphanTeamDeletion,
   adminDeleteOrphanTeamDocs,
 } from "./adminSafety";
-export { confirmPotEntry, removePotEntry, exportConfirmedEntrants } from "./pot";
+export { confirmPotEntry, removePotEntry, exportConfirmedEntrants, adminSetPotPaymentStatus } from "./pot";

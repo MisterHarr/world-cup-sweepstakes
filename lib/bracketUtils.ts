@@ -11,6 +11,10 @@ export type BracketMatch = {
   id: string;
   t1?: string;
   t2?: string;
+  /** Display label override for t1 — shown when t1 is a placeholder TBD-* ID. */
+  t1Label?: string;
+  /** Display label override for t2 — shown when t2 is a placeholder TBD-* ID. */
+  t2Label?: string;
   s1?: number;
   s2?: number;
   status?: string;
