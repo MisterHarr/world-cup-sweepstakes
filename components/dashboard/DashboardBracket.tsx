@@ -257,21 +257,28 @@ const DashboardBracket = ({
         <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
           {/* Home team */}
           <div className="flex min-w-0 items-center gap-2">
-            <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
-              {resolveFlag(match.t1) ? (
-                <img
-                  src={resolveFlag(match.t1)}
-                  alt={t1Name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
-                  {resolveBadge(match.t1)}
-                </span>
-              )}
-            </div>
+            {!isPlaceholderId(match.t1) && (
+              <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+                {resolveFlag(match.t1) ? (
+                  <img
+                    src={resolveFlag(match.t1)}
+                    alt={t1Name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
+                    {resolveBadge(match.t1)}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="min-w-0">
-              <div className="truncate font-ff-ui text-[13px] font-semibold leading-snug text-[var(--ff-fg-secondary)]">
+              <div className={cn(
+                "font-ff-ui font-semibold leading-snug text-[var(--ff-fg-secondary)]",
+                isPlaceholderId(match.t1)
+                  ? "text-[12px] leading-tight"
+                  : "truncate text-[13px]"
+              )}>
                 {t1Name}
               </div>
               {isUserTeam(match.t1) && (
@@ -284,7 +291,7 @@ const DashboardBracket = ({
           <div className="min-w-[58px] shrink-0 text-center">
             {tab === "upcoming" ? (
               <>
-                <div className="font-ff-display text-[13px] font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
+                <div className="font-ff-display text-[11px] sm:text-[13px] font-extrabold leading-tight tracking-tight text-[var(--ff-fg-primary)]">
                   {match.kickoffTime ? formatKickoff(match.kickoffTime) : "TBD"}
                 </div>
                 <div className="mt-0.5 font-ff-ui text-[8px] font-medium uppercase tracking-[0.1em] text-[var(--ff-fg-faint)]">
@@ -305,21 +312,28 @@ const DashboardBracket = ({
 
           {/* Away team */}
           <div className="flex min-w-0 flex-row-reverse items-center gap-2">
-            <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
-              {resolveFlag(match.t2) ? (
-                <img
-                  src={resolveFlag(match.t2)}
-                  alt={t2Name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
-                  {resolveBadge(match.t2)}
-                </span>
-              )}
-            </div>
+            {!isPlaceholderId(match.t2) && (
+              <div className="relative h-[32px] w-[32px] shrink-0 overflow-hidden rounded border border-[var(--ff-hairline)] bg-black/20">
+                {resolveFlag(match.t2) ? (
+                  <img
+                    src={resolveFlag(match.t2)}
+                    alt={t2Name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-full items-center justify-center font-ff-ui text-[9px] text-[var(--ff-fg-faint)]">
+                    {resolveBadge(match.t2)}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="min-w-0 text-right">
-              <div className="truncate font-ff-ui text-[13px] font-semibold leading-snug text-[var(--ff-fg-secondary)]">
+              <div className={cn(
+                "font-ff-ui font-semibold leading-snug text-[var(--ff-fg-secondary)]",
+                isPlaceholderId(match.t2)
+                  ? "text-[12px] leading-tight"
+                  : "truncate text-[13px]"
+              )}>
                 {t2Name}
               </div>
               {isUserTeam(match.t2) && (
