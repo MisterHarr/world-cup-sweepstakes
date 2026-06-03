@@ -20,9 +20,9 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 const POINTS = [
   "Win = +3 pts",
   "Draw = +1 pt",
-  "Goal = +1 pt",
+  "Goal = +1.5 pts",
   "Clean sheet = +1 pt",
-  "Yellow card = −0.5 pts",
+  "Yellow card = −0.25 pts",
   "Red card = −1 pt",
   "Star Team = all points × 2",
 ];
@@ -32,7 +32,7 @@ const TERMS = [
   { term: "Drawn Teams", meaning: "5 random teams assigned to you." },
   { term: "Transfer", meaning: "Swap one drawn team for another." },
   { term: "Clean Sheet", meaning: "0 goals conceded in a match. +1 pt." },
-  { term: "Cards", meaning: "Yellow −0.5 pt · Red −1 pt." },
+  { term: "Cards", meaning: "Yellow −0.25 pt · Red −1 pt." },
 ];
 
 const TRANSFERS = [
@@ -59,7 +59,7 @@ const KNOCKOUT = [
   },
   {
     label: "Penalty shootouts",
-    detail: "Win on pens = win (+3 pts). Goal points only count for goals in normal time and extra time — not the shootout.",
+    detail: "Win on pens = win (+3 pts). Goal points (1.5 pts each) only count for goals in normal time and extra time — not the shootout.",
   },
   {
     label: "Clean sheets",
@@ -75,8 +75,8 @@ const FAQS = [
   { q: "I don't follow football — can I still play?", a: "Yes. Pick any Star Team. Everything scores automatically." },
   { q: "Why does my Star Team score more?", a: "You locked in a 2× multiplier when you picked it — every point it earns counts double." },
   { q: "Can I swap my Star Team?", a: "No. Star Team is locked for the whole tournament." },
-  { q: "What happens if my team loses on penalties?", a: "They lose the match — 0 points for the result. But they still earn goal points for any goals scored in normal time and extra time." },
-  { q: "Do penalty shootout goals count?", a: "No — only goals scored in normal time (90 mins) and extra time count toward your score. Shootout goals are just for deciding the winner." },
+  { q: "What happens if my team loses on penalties?", a: "They lose the match — 0 points for the result. But they still earn 1.5 pts per goal scored in normal time and extra time." },
+  { q: "Do penalty shootout goals count?", a: "No — only goals scored in normal time (90 mins) and extra time earn points (1.5 pts each). Shootout goals are just for deciding the winner." },
 ];
 
 // ── Collapsible section ──────────────────────────────────────────────────────

@@ -250,7 +250,8 @@ function calculateTeamPoints(
   const redCards = Number(team.redCards ?? 0);
   const yellowCards = Number(team.yellowCards ?? 0);
 
-  return wins * 3 + draws + goalsScored + cleanSheets - redCards - yellowCards * 0.5;
+  // Keep in sync with calcTeamPoints in functions/src/scoring.ts
+  return wins * 3 + draws * 1 + goalsScored * 1.5 + cleanSheets * 1 - redCards * 1 - yellowCards * 0.25;
 }
 
 function friendlyErrorMessage(err: unknown, fallback: string): string {
