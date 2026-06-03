@@ -59,6 +59,16 @@ import {
   where,
 } from "firebase/firestore";
 
+// ── Firestore client-side cache ──────────────────────────────────────────────
+// Both caches live in localStorage so they survive tab closes and page
+// navigations.  The LIVE snapshot handles real-time score updates independently
+// of these caches, so a longer TTL is safe — matches only go stale when they
+// transition LIVE→FINISHED, at which point both caches are explicitly busted.
+const MATCH_CACHE_KEY = "ff_matches_v3"; // bump suffix to bust old 30-min entries
+const MATCH_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+const TEAMS_CACHE_KEY = "ff_teams_v2";   // bump suffix to bust old 30-min entries
+const TEAMS_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
+
 const LeaderboardPanel = dynamicImport(
   () => import("@/components/leaderboard/LeaderboardPanel"),
   { ssr: false, loading: () => <TabPanelLoading /> }
@@ -702,8 +712,7 @@ function DashboardPageContent() {
 
     setLoadingMatches(true);
 
-    const MATCH_CACHE_KEY = "ff_matches_v2"; // v2 = localStorage, bump to bust old localStorage caches
-    const MATCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes — persists across tab closes/reopens
+    // MATCH_CACHE_KEY and MATCH_CACHE_TTL are module-level constants above.
 
     let cancelled = false;
 
@@ -807,13 +816,13 @@ function DashboardPageContent() {
         // Reading the cache here avoids the duplicate 48-read fetch.
         let resolvedFromCache = false;
         try {
-          const raw = typeof window !== "undefined" ? localStorage.getItem("ff_teams_v1") : null;
+          const raw = typeof window !== "undefined" ? localStorage.getItem(TEAMS_CACHE_KEY) : null;
           if (raw) {
             const { docs: td, ts: tts } = JSON.parse(raw) as {
               docs: Array<{ id: string; d: Record<string, unknown> }>;
               ts: number;
             };
-            if (Date.now() - tts < 30 * 60 * 1000) {
+            if (Date.now() - tts < TEAMS_CACHE_TTL) {
               const names: Record<string, string> = {};
               const flags: Record<string, string> = {};
               td.forEach((c) => {
@@ -912,8 +921,15 @@ function DashboardPageContent() {
 
       const hasRemovals = liveSnap.docChanges().some((c) => c.type === "removed");
       if (hasRemovals) {
-        // A match just finished — bust the cache so the final score is fetched
-        try { if (typeof window !== "undefined") localStorage.removeItem(MATCH_CACHE_KEY); } catch { /* ignore */ }
+        // A match just finished — bust both caches.
+        // Match cache: so the final score is fetched on next getDocs.
+        // Teams cache: recomputeScores will update team stats; next visit gets fresh data.
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem(MATCH_CACHE_KEY);
+            localStorage.removeItem(TEAMS_CACHE_KEY);
+          }
+        } catch { /* ignore */ }
         fetchFullSchedule().catch(console.error);
         return;
       }
@@ -1038,8 +1054,7 @@ function DashboardPageContent() {
     // match-card display doesn't need a separate fetchTeamsByIds call.
     setLoadingMarketTeams(true);
 
-    const TEAMS_CACHE_KEY = "ff_teams_v1";
-    const TEAMS_CACHE_TTL = 30 * 60 * 1000;
+    // TEAMS_CACHE_KEY and TEAMS_CACHE_TTL are module-level constants above.
 
     const applyTeamDocs = (docs: Array<{ id: string; d: Record<string, unknown> }>) => {
       const next: Record<string, TeamRecord> = {};
