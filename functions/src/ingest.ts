@@ -37,6 +37,8 @@ import type {
 import {
   computePollingGate,
   isScoringRelevantChange,
+  POLLING_MAX_ELAPSED_MS,
+  POLLING_PRE_KICKOFF_MS,
   type ScheduleEntry,
 } from "./pollingWindow";
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
@@ -886,23 +888,42 @@ export const ingestLiveScores = onSchedule(
       return;
     }
 
-    // Read the match schedule from Firestore — the same collection that will
-    // be written by this function.  We select only the two fields needed by
-    // computePollingGate so the read is cheap (2 fields × ~64 docs).
-    // This replaces the bundled worldcup2022.json schedule, which has 2022
-    // kickoff dates and is only correct for staging/replay use.
+    // Polling gate — time-bounded Firestore query.
+    //
+    // Previous approach read ALL docs in the collection to pass to
+    // computePollingGate, costing 104 reads on every 10-minute tick even when
+    // the gate immediately returned "skip".  104 reads × 144 ticks/day = 14 976
+    // reads/day from the gate alone, before any user traffic.
+    //
+    // New approach: query only the docs whose kickoffTime falls inside the
+    // possible polling window [now − 8 h, now + 10 min].  Outside the
+    // tournament (or between match days) this range matches 0 docs and Firestore
+    // charges 0 reads.  On a live match day it returns 1–4 docs.
     const db = admin.firestore();
     const target = getLiveOpsTarget(liveOps.mode);
-    const scheduleSnap = await db
+    const nowMs = Date.now();
+    const maxPastIso = new Date(nowMs - POLLING_MAX_ELAPSED_MS).toISOString();
+    const preKickoffIso = new Date(nowMs + POLLING_PRE_KICKOFF_MS).toISOString();
+
+    const windowSnap = await db
       .collection(target.collectionName)
+      .where("kickoffTime", ">=", maxPastIso)
+      .where("kickoffTime", "<=", preKickoffIso)
       .select("kickoffTime", "stage", "status")
       .get();
-    const firestoreSchedule: ScheduleEntry[] = scheduleSnap.docs.map((d) => ({
+
+    if (windowSnap.empty) {
+      // No match doc falls in the active window → guaranteed skip, 0 reads charged.
+      console.log("[ingest] No match in polling window. Skipping.");
+      return;
+    }
+
+    const firestoreSchedule: ScheduleEntry[] = windowSnap.docs.map((d) => ({
       kickoffTime: d.get("kickoffTime"),
       stage: d.get("stage"),
     }));
 
-    const gate = computePollingGate(Date.now(), firestoreSchedule);
+    const gate = computePollingGate(nowMs, firestoreSchedule);
 
     if (gate === "skip") {
       console.log("[ingest] No match in polling window. Skipping.");
@@ -910,13 +931,20 @@ export const ingestLiveScores = onSchedule(
     }
 
     if (gate === "check-live") {
-      // One or more matches started but are past the fixed time window.
-      // This covers long extra time / penalty shootouts. Only continue if
-      // Firestore confirms a match is still LIVE.
-      const hasLive = scheduleSnap.docs.some((d) => d.get("status") === "LIVE");
-      if (!hasLive) {
-        console.log("[ingest] No active matches. Skipping.");
-        return;
+      // Matches are in the time range but past their fixed window — check for LIVE.
+      const hasLiveInWindow = windowSnap.docs.some((d) => d.get("status") === "LIVE");
+      if (!hasLiveInWindow) {
+        // Also check outside the window: a very long match could have pushed past
+        // POLLING_MAX_ELAPSED_MS (extremely rare — 8 h after kickoff).
+        const liveSnap = await db
+          .collection(target.collectionName)
+          .where("status", "==", "LIVE")
+          .limit(1)
+          .get();
+        if (liveSnap.empty) {
+          console.log("[ingest] No active matches. Skipping.");
+          return;
+        }
       }
       console.log("[ingest] Live match detected outside time window — continuing.");
     }
