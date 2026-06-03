@@ -681,7 +681,7 @@ function DashboardPageContent() {
   //
   //   New approach:
   //   • getDocs (full schedule) — reads 104 docs once per session, cached in
-  //     sessionStorage for 5 minutes.  Repeat opens within the same tab = 0 reads.
+  //     localStorage for 5 minutes.  Repeat opens within the same tab = 0 reads.
   //   • onSnapshot(status == "LIVE") — reads only live match docs in real time.
   //     During quiet periods this is 0 docs.  During a live match ≈ 1–4 docs.
   //   • When a match leaves LIVE (FINISHED), invalidate the session cache and
@@ -701,8 +701,8 @@ function DashboardPageContent() {
 
     setLoadingMatches(true);
 
-    const MATCH_CACHE_KEY = "ff_matches_v1";
-    const MATCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    const MATCH_CACHE_KEY = "ff_matches_v2"; // v2 = localStorage, bump to bust old localStorage caches
+    const MATCH_CACHE_TTL = 30 * 60 * 1000; // 30 minutes — persists across tab closes/reopens
 
     let cancelled = false;
 
@@ -823,7 +823,7 @@ function DashboardPageContent() {
     const fetchFullSchedule = async () => {
       // Try session cache first for instant render
       try {
-        const raw = typeof window !== "undefined" ? sessionStorage.getItem(MATCH_CACHE_KEY) : null;
+        const raw = typeof window !== "undefined" ? localStorage.getItem(MATCH_CACHE_KEY) : null;
         if (raw) {
           const { docs: cachedDocs, ts } = JSON.parse(raw) as {
             docs: Array<{ id: string; d: Record<string, unknown> }>;
@@ -846,7 +846,7 @@ function DashboardPageContent() {
       // Populate cache
       try {
         if (typeof window !== "undefined") {
-          sessionStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({
+          localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({
             docs: snap.docs.map((d) => ({ id: d.id, d: d.data() })),
             ts: Date.now(),
           }));
@@ -878,7 +878,7 @@ function DashboardPageContent() {
       const hasRemovals = liveSnap.docChanges().some((c) => c.type === "removed");
       if (hasRemovals) {
         // A match just finished — bust the cache so the final score is fetched
-        try { if (typeof window !== "undefined") sessionStorage.removeItem(MATCH_CACHE_KEY); } catch { /* ignore */ }
+        try { if (typeof window !== "undefined") localStorage.removeItem(MATCH_CACHE_KEY); } catch { /* ignore */ }
         fetchFullSchedule().catch(console.error);
         return;
       }
