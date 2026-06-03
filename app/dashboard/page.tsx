@@ -673,7 +673,19 @@ function DashboardPageContent() {
     };
   }, [signedIn]);
 
-  // ✅ Live Match Center via Firestore snapshot
+  // ✅ Live Match Center — one-time fetch with session cache + narrow LIVE listener
+  //
+  // Cost model:
+  //   onSnapshot(all 104 matches) = 104 reads per user per open, every time any
+  //   doc changes.  With 50 users that blows the 50k/day free tier.
+  //
+  //   New approach:
+  //   • getDocs (full schedule) — reads 104 docs once per session, cached in
+  //     sessionStorage for 5 minutes.  Repeat opens within the same tab = 0 reads.
+  //   • onSnapshot(status == "LIVE") — reads only live match docs in real time.
+  //     During quiet periods this is 0 docs.  During a live match ≈ 1–4 docs.
+  //   • When a match leaves LIVE (FINISHED), invalidate the session cache and
+  //     re-fetch once so the final score is correct.
   useEffect(() => {
     if (!signedIn) {
       setBracketStages([]);
@@ -688,201 +700,215 @@ function DashboardPageContent() {
     }
 
     setLoadingMatches(true);
-    const q = query(collection(db, "matches"), orderBy("kickoffTime", "asc"));
+
+    const MATCH_CACHE_KEY = "ff_matches_v1";
+    const MATCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     let cancelled = false;
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        let latestUpdatedAt = "";
-        const teamIds = new Set<string>();
-        const grouped: Record<string, Array<{ match: Match; kickoffTime: string }>> =
-          {};
+    // ── shared doc→Match processor (used by full fetch and live merge) ──────
+    const processSnapshotDocs = (
+      docs: Array<{ id: string; data: () => Record<string, unknown> }>
+    ) => {
+      let latestUpdatedAt = "";
+      const teamIds = new Set<string>();
+      const grouped: Record<string, Array<{ match: Match; kickoffTime: string }>> = {};
 
-        snap.forEach((docSnap) => {
-          const data = docSnap.data() as Record<string, unknown>;
-          const stage = normalizeStageId(data.stage);
-          const kickoffTime =
-            typeof data.kickoffTime === "string" ? data.kickoffTime : "";
-          const updatedAt = toIsoString(data.lastUpdated);
+      docs.forEach((docSnap) => {
+        const data = docSnap.data();
+        const stage = normalizeStageId(data.stage);
+        const kickoffTime = typeof data.kickoffTime === "string" ? data.kickoffTime : "";
+        const updatedAt = toIsoString(data.lastUpdated);
+        const home = String(data.homeTeamId ?? "TBD");
+        const away = String(data.awayTeamId ?? "TBD");
+        const t1Label =
+          typeof data.homePlaceholder === "string" && data.homePlaceholder.trim()
+            ? data.homePlaceholder.trim() : undefined;
+        const t2Label =
+          typeof data.awayPlaceholder === "string" && data.awayPlaceholder.trim()
+            ? data.awayPlaceholder.trim() : undefined;
+        if (home && home !== "TBD" && !home.startsWith("TBD-")) teamIds.add(home);
+        if (away && away !== "TBD" && !away.startsWith("TBD-")) teamIds.add(away);
+        const s1 = typeof data.homeScore === "number" ? data.homeScore : undefined;
+        const s2 = typeof data.awayScore === "number" ? data.awayScore : undefined;
+        const statusCode = normalizeMatchStatus(data.status);
+        const groupRaw = data.group ?? data.groupId ?? data.groupCode;
+        const group = typeof groupRaw === "string" && groupRaw.trim().length ? groupRaw.trim() : undefined;
+        const homeYellow = typeof data.homeYellowCards === "number" ? data.homeYellowCards : 0;
+        const awayYellow = typeof data.awayYellowCards === "number" ? data.awayYellowCards : 0;
+        const homeRed = typeof data.homeRedCards === "number" ? data.homeRedCards : 0;
+        const awayRed = typeof data.awayRedCards === "number" ? data.awayRedCards : 0;
+        const minute = typeof data.minute === "number" ? data.minute : null;
+        const homeHT = typeof data.homeScoreHT === "number" ? data.homeScoreHT : null;
+        const awayHT = typeof data.awayScoreHT === "number" ? data.awayScoreHT : null;
+        const scoreHT: [number, number] | null = homeHT !== null && awayHT !== null ? [homeHT, awayHT] : null;
+        const homePens = typeof data.homeScorePens === "number" ? data.homeScorePens : null;
+        const awayPens = typeof data.awayScorePens === "number" ? data.awayScorePens : null;
+        const scorePens: [number, number] | null = homePens !== null && awayPens !== null ? [homePens, awayPens] : null;
+        const winner = data.winner === "HOME" || data.winner === "AWAY" ? data.winner : null;
+        const rawGoals = Array.isArray(data.goals) ? data.goals : [];
+        const goals = rawGoals
+          .filter((g): g is Record<string, unknown> => typeof g === "object" && g !== null)
+          .map((g) => ({
+            minute: typeof g.minute === "number" ? g.minute : null,
+            playerName: typeof g.playerName === "string" ? g.playerName : null,
+            teamSide: g.teamSide === "away" ? "away" as const : "home" as const,
+            type: (["REGULAR", "OWN_GOAL", "PENALTY", "EXTRA_TIME"].includes(String(g.type))
+              ? g.type : "REGULAR") as "REGULAR" | "OWN_GOAL" | "PENALTY" | "EXTRA_TIME",
+          }));
+        const match: Match = {
+          id: docSnap.id, t1: home, t2: away, t1Label, t2Label, s1, s2,
+          status: matchStatusLabel(statusCode),
+          impact: statusCode === "LIVE" ? "Match live" : undefined,
+          impactType: statusCode === "LIVE" ? "high" : undefined,
+          kickoffTime, updatedAt, isLive: statusCode === "LIVE", group,
+          yellowCards: [homeYellow, awayYellow], redCards: [homeRed, awayRed],
+          minute, scoreHT, scorePens, winner,
+          goals: goals.length ? goals : undefined,
+        };
+        if (!grouped[stage]) grouped[stage] = [];
+        grouped[stage].push({ match, kickoffTime });
+        if (updatedAt && updatedAt > latestUpdatedAt) latestUpdatedAt = updatedAt;
+      });
 
-          const home = String(data.homeTeamId ?? "TBD");
-          const away = String(data.awayTeamId ?? "TBD");
-          const t1Label =
-            typeof data.homePlaceholder === "string" && data.homePlaceholder.trim()
-              ? data.homePlaceholder.trim()
-              : undefined;
-          const t2Label =
-            typeof data.awayPlaceholder === "string" && data.awayPlaceholder.trim()
-              ? data.awayPlaceholder.trim()
-              : undefined;
+      return { grouped, teamIds, latestUpdatedAt };
+    };
 
-          if (home && home !== "TBD" && !home.startsWith("TBD-")) teamIds.add(home);
-          if (away && away !== "TBD" && !away.startsWith("TBD-")) teamIds.add(away);
+    // ── apply grouped result to state ────────────────────────────────────────
+    const applyGrouped = (
+      grouped: Record<string, Array<{ match: Match; kickoffTime: string }>>,
+      teamIds: Set<string>,
+      latestUpdatedAt: string
+    ) => {
+      if (cancelled) return;
+      const orderedStages = STAGE_ORDER.filter((stage) => Boolean(grouped[stage]?.length))
+        .map((stage) => ({ id: stage, name: stageLabel(stage) }));
+      const extraStages = Object.keys(grouped).filter((s) => !isKnownStage(s)).sort()
+        .map((stage) => ({ id: stage, name: stageLabel(stage) }));
+      const matchesByStage: Record<string, Match[]> = {};
+      Object.keys(grouped).forEach((stage) => {
+        matchesByStage[stage] = grouped[stage]
+          .sort((a, b) => (a.kickoffTime || "").localeCompare(b.kickoffTime || ""))
+          .map((item) => ({ ...item.match, stageId: stage }));
+      });
+      setBracketStages([...orderedStages, ...extraStages]);
+      setBracketMatches(matchesByStage);
+      setLastMatchUpdate(latestUpdatedAt);
+      setLoadingMatches(false);
 
-          const s1 =
-            typeof data.homeScore === "number" ? data.homeScore : undefined;
-          const s2 =
-            typeof data.awayScore === "number" ? data.awayScore : undefined;
-
-          const statusCode = normalizeMatchStatus(data.status);
-          const impact = statusCode === "LIVE" ? "Match live" : undefined;
-          const impactType = statusCode === "LIVE" ? "high" : undefined;
-
-          const groupRaw = data.group ?? data.groupId ?? data.groupCode;
-          const group =
-            typeof groupRaw === "string" && groupRaw.trim().length
-              ? groupRaw.trim()
-              : undefined;
-
-          const homeYellow = typeof data.homeYellowCards === "number" ? data.homeYellowCards : 0;
-          const awayYellow = typeof data.awayYellowCards === "number" ? data.awayYellowCards : 0;
-          const homeRed = typeof data.homeRedCards === "number" ? data.homeRedCards : 0;
-          const awayRed = typeof data.awayRedCards === "number" ? data.awayRedCards : 0;
-
-          const minute =
-            typeof data.minute === "number" ? data.minute : null;
-
-          const homeHT = typeof data.homeScoreHT === "number" ? data.homeScoreHT : null;
-          const awayHT = typeof data.awayScoreHT === "number" ? data.awayScoreHT : null;
-          const scoreHT: [number, number] | null =
-            homeHT !== null && awayHT !== null ? [homeHT, awayHT] : null;
-
-          const homePens = typeof data.homeScorePens === "number" ? data.homeScorePens : null;
-          const awayPens = typeof data.awayScorePens === "number" ? data.awayScorePens : null;
-          const scorePens: [number, number] | null =
-            homePens !== null && awayPens !== null ? [homePens, awayPens] : null;
-
-          const winner =
-            data.winner === "HOME" || data.winner === "AWAY" ? data.winner : null;
-
-          const rawGoals = Array.isArray(data.goals) ? data.goals : [];
-          const goals = rawGoals
-            .filter((g): g is Record<string, unknown> => typeof g === "object" && g !== null)
-            .map((g) => ({
-              minute: typeof g.minute === "number" ? g.minute : null,
-              playerName: typeof g.playerName === "string" ? g.playerName : null,
-              teamSide: g.teamSide === "away" ? "away" as const : "home" as const,
-              type: (["REGULAR", "OWN_GOAL", "PENALTY", "EXTRA_TIME"].includes(String(g.type))
-                ? g.type
-                : "REGULAR") as "REGULAR" | "OWN_GOAL" | "PENALTY" | "EXTRA_TIME",
-            }));
-
-          const match: Match = {
-            id: docSnap.id,
-            t1: home,
-            t2: away,
-            t1Label,
-            t2Label,
-            s1,
-            s2,
-            status: matchStatusLabel(statusCode),
-            impact,
-            impactType,
-            kickoffTime,
-            updatedAt,
-            isLive: statusCode === "LIVE",
-            group,
-            yellowCards: [homeYellow, awayYellow],
-            redCards: [homeRed, awayRed],
-            minute,
-            scoreHT,
-            scorePens,
-            winner,
-            goals: goals.length ? goals : undefined,
-          };
-
-          if (!grouped[stage]) grouped[stage] = [];
-          grouped[stage].push({ match, kickoffTime });
-
-          if (updatedAt && updatedAt > latestUpdatedAt) {
-            latestUpdatedAt = updatedAt;
-          }
-        });
-
-        const orderedStages = STAGE_ORDER.filter((stage) =>
-          Boolean(grouped[stage]?.length)
-        ).map((stage) => ({ id: stage, name: stageLabel(stage) }));
-
-        const extraStages = Object.keys(grouped)
-          .filter((stage) => !isKnownStage(stage))
-          .sort()
-          .map((stage) => ({ id: stage, name: stageLabel(stage) }));
-
-        const matchesByStage: Record<string, Match[]> = {};
-        Object.keys(grouped).forEach((stage) => {
-          matchesByStage[stage] = grouped[stage]
-            .sort((a, b) =>
-              (a.kickoffTime || "").localeCompare(b.kickoffTime || "")
-            )
-            .map((item) => ({ ...item.match, stageId: stage }));
-        });
-
-        setBracketStages([...orderedStages, ...extraStages]);
-        setBracketMatches(matchesByStage);
-        setLastMatchUpdate(latestUpdatedAt);
-        setLoadingMatches(false);
-
-        const missing = Array.from(teamIds).filter(
-          (id) =>
-            !matchTeamNamesRef.current[id] &&
-            !pendingTeamIdsRef.current.has(id)
-        );
-
-        if (missing.length) {
-          missing.forEach((id) => pendingTeamIdsRef.current.add(id));
-
-          fetchTeamsByIds(missing)
-            .then((teamsMap) => {
-              if (cancelled) return;
-              const updates: Record<string, string> = {};
-              const flagUpdates: Record<string, string> = {};
-              Object.entries(teamsMap).forEach(([id, team]) => {
-                const name =
-                  typeof team?.name === "string" && team.name.trim().length
-                    ? team.name.trim()
-                    : id;
-                updates[id] = name;
-                if (typeof team?.flagUrl === "string" && team.flagUrl.trim()) {
-                  flagUpdates[id] = team.flagUrl.trim();
-                }
-              });
-
-              if (Object.keys(updates).length) {
-                setMatchTeamNames((prev) => ({ ...prev, ...updates }));
-              }
-              if (Object.keys(flagUpdates).length) {
-                setMatchTeamFlags((prev) => ({ ...prev, ...flagUpdates }));
-              }
-            })
-            .catch((err) => {
-              console.error(err);
-            })
-            .finally(() => {
-              missing.forEach((id) => pendingTeamIdsRef.current.delete(id));
+      const missing = Array.from(teamIds).filter(
+        (id) => !matchTeamNamesRef.current[id] && !pendingTeamIdsRef.current.has(id)
+      );
+      if (missing.length) {
+        missing.forEach((id) => pendingTeamIdsRef.current.add(id));
+        fetchTeamsByIds(missing)
+          .then((teamsMap) => {
+            if (cancelled) return;
+            const updates: Record<string, string> = {};
+            const flagUpdates: Record<string, string> = {};
+            Object.entries(teamsMap).forEach(([id, team]) => {
+              const name = typeof team?.name === "string" && team.name.trim().length ? team.name.trim() : id;
+              updates[id] = name;
+              if (typeof team?.flagUrl === "string" && team.flagUrl.trim()) flagUpdates[id] = team.flagUrl.trim();
             });
-        }
-      },
-      (err) => {
-        const code = typeof err?.code === "string" ? err.code : "";
-        if (code === "permission-denied") {
-          setBracketStages([]);
-          setBracketMatches({});
-          setLoadingMatches(false);
-          return;
-        }
-        console.error(err);
-        setError(friendlyErrorMessage(err, "Failed to load live matches."));
-        setLoadingMatches(false);
+            if (Object.keys(updates).length) setMatchTeamNames((prev) => ({ ...prev, ...updates }));
+            if (Object.keys(flagUpdates).length) setMatchTeamFlags((prev) => ({ ...prev, ...flagUpdates }));
+          })
+          .catch(console.error)
+          .finally(() => { missing.forEach((id) => pendingTeamIdsRef.current.delete(id)); });
       }
-    );
+    };
+
+    // ── full schedule fetch (with session cache) ─────────────────────────────
+    const fetchFullSchedule = async () => {
+      // Try session cache first for instant render
+      try {
+        const raw = typeof window !== "undefined" ? sessionStorage.getItem(MATCH_CACHE_KEY) : null;
+        if (raw) {
+          const { docs: cachedDocs, ts } = JSON.parse(raw) as {
+            docs: Array<{ id: string; d: Record<string, unknown> }>;
+            ts: number;
+          };
+          if (Date.now() - ts < MATCH_CACHE_TTL) {
+            const { grouped, teamIds, latestUpdatedAt } = processSnapshotDocs(
+              cachedDocs.map((c) => ({ id: c.id, data: () => c.d }))
+            );
+            applyGrouped(grouped, teamIds, latestUpdatedAt);
+            return; // served from cache — skip Firestore read this open
+          }
+        }
+      } catch { /* ignore corrupt cache */ }
+
+      // Cache miss or expired — fetch from Firestore
+      const snap = await getDocs(query(collection(db, "matches"), orderBy("kickoffTime", "asc")));
+      if (cancelled) return;
+
+      // Populate cache
+      try {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({
+            docs: snap.docs.map((d) => ({ id: d.id, d: d.data() })),
+            ts: Date.now(),
+          }));
+        }
+      } catch { /* storage full — ignore */ }
+
+      const { grouped, teamIds, latestUpdatedAt } = processSnapshotDocs(
+        snap.docs.map((d) => ({ id: d.id, data: () => d.data() as Record<string, unknown> }))
+      );
+      applyGrouped(grouped, teamIds, latestUpdatedAt);
+    };
+
+    fetchFullSchedule().catch((err) => {
+      if (cancelled) return;
+      const code = typeof err?.code === "string" ? err.code : "";
+      if (code === "permission-denied") { setBracketStages([]); setBracketMatches({}); setLoadingMatches(false); return; }
+      console.error(err);
+      setError(friendlyErrorMessage(err, "Failed to load live matches."));
+      setLoadingMatches(false);
+    });
+
+    // ── narrow real-time listener: LIVE matches only ─────────────────────────
+    // Merges live score updates into state without re-reading the full schedule.
+    // When a match leaves LIVE (finished), invalidate cache + re-fetch once.
+    const liveQ = query(collection(db, "matches"), where("status", "==", "LIVE"));
+    const liveUnsub = onSnapshot(liveQ, (liveSnap) => {
+      if (cancelled) return;
+
+      const hasRemovals = liveSnap.docChanges().some((c) => c.type === "removed");
+      if (hasRemovals) {
+        // A match just finished — bust the cache so the final score is fetched
+        try { if (typeof window !== "undefined") sessionStorage.removeItem(MATCH_CACHE_KEY); } catch { /* ignore */ }
+        fetchFullSchedule().catch(console.error);
+        return;
+      }
+
+      // Merge live updates into existing bracket state
+      if (liveSnap.empty) return;
+      setBracketMatches((prev) => {
+        const next = { ...prev };
+        liveSnap.docs.forEach((docSnap) => {
+          const { grouped } = processSnapshotDocs([{ id: docSnap.id, data: () => docSnap.data() as Record<string, unknown> }]);
+          Object.entries(grouped).forEach(([stage, items]) => {
+            if (!next[stage]) return;
+            const updated = [...next[stage]];
+            items.forEach(({ match }) => {
+              const idx = updated.findIndex((m) => m.id === match.id);
+              if (idx !== -1) updated[idx] = { ...match, stageId: stage };
+            });
+            next[stage] = updated;
+          });
+        });
+        return next;
+      });
+    });
 
     return () => {
       cancelled = true;
-      unsub();
+      liveUnsub();
     };
   }, [signedIn]);
+
 
   useEffect(() => {
     if (!signedIn) {
@@ -972,11 +998,11 @@ function DashboardPageContent() {
       return;
     }
 
+    // One-time fetch — team stats only change after recompute (not in real-time).
+    // Using onSnapshot here read all 48 team docs for every user on every open.
     setLoadingMarketTeams(true);
-    const teamsRef = collection(db, "teams");
-    const unsub = onSnapshot(
-      teamsRef,
-      (snap) => {
+    getDocs(collection(db, "teams"))
+      .then((snap) => {
         const next: Record<string, TeamRecord> = {};
         snap.forEach((docSnap) => {
           next[docSnap.id] = {
@@ -986,24 +1012,20 @@ function DashboardPageContent() {
         });
         setMarketTeamsById(next);
         setLoadingMarketTeams(false);
-      },
-      (err) => {
+      })
+      .catch((err) => {
         const code = typeof err?.code === "string" ? err.code : "";
         if (code === "permission-denied") {
           setMarketTeamsById({});
           setLoadingMarketTeams(false);
           return;
         }
-
         console.error(err);
-        setTransferError(
-          friendlyErrorMessage(err, "Failed to load transfer market.")
-        );
+        setTransferError(friendlyErrorMessage(err, "Failed to load transfer market."));
         setLoadingMarketTeams(false);
-      }
-    );
+      });
 
-    return () => unsub();
+    return () => {};
   }, [signedIn]);
 
   const featuredDisplay: UITeam | null = useMemo(() => {
