@@ -801,22 +801,56 @@ function DashboardPageContent() {
         (id) => !matchTeamNamesRef.current[id] && !pendingTeamIdsRef.current.has(id)
       );
       if (missing.length) {
-        missing.forEach((id) => pendingTeamIdsRef.current.add(id));
-        fetchTeamsByIds(missing)
-          .then((teamsMap) => {
-            if (cancelled) return;
-            const updates: Record<string, string> = {};
-            const flagUpdates: Record<string, string> = {};
-            Object.entries(teamsMap).forEach(([id, team]) => {
-              const name = typeof team?.name === "string" && team.name.trim().length ? team.name.trim() : id;
-              updates[id] = name;
-              if (typeof team?.flagUrl === "string" && team.flagUrl.trim()) flagUpdates[id] = team.flagUrl.trim();
-            });
-            if (Object.keys(updates).length) setMatchTeamNames((prev) => ({ ...prev, ...updates }));
-            if (Object.keys(flagUpdates).length) setMatchTeamFlags((prev) => ({ ...prev, ...flagUpdates }));
-          })
-          .catch(console.error)
-          .finally(() => { missing.forEach((id) => pendingTeamIdsRef.current.delete(id)); });
+        // Check the teams localStorage cache before going to Firestore.
+        // The teams effect (declared after this one) hasn't run yet when
+        // applyGrouped fires, so the ref is empty even on return visits.
+        // Reading the cache here avoids the duplicate 48-read fetch.
+        let resolvedFromCache = false;
+        try {
+          const raw = typeof window !== "undefined" ? localStorage.getItem("ff_teams_v1") : null;
+          if (raw) {
+            const { docs: td, ts: tts } = JSON.parse(raw) as {
+              docs: Array<{ id: string; d: Record<string, unknown> }>;
+              ts: number;
+            };
+            if (Date.now() - tts < 30 * 60 * 1000) {
+              const names: Record<string, string> = {};
+              const flags: Record<string, string> = {};
+              td.forEach((c) => {
+                names[c.id] = typeof c.d.name === "string" && c.d.name.trim() ? c.d.name.trim() : c.id;
+                if (typeof c.d.flagUrl === "string" && c.d.flagUrl.trim()) flags[c.id] = c.d.flagUrl.trim();
+              });
+              if (Object.keys(names).length) {
+                setMatchTeamNames((prev) => ({ ...prev, ...names }));
+                matchTeamNamesRef.current = { ...matchTeamNamesRef.current, ...names };
+              }
+              if (Object.keys(flags).length) {
+                setMatchTeamFlags((prev) => ({ ...prev, ...flags }));
+                matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...flags };
+              }
+              resolvedFromCache = true;
+            }
+          }
+        } catch { /* ignore corrupt cache */ }
+
+        if (!resolvedFromCache) {
+          missing.forEach((id) => pendingTeamIdsRef.current.add(id));
+          fetchTeamsByIds(missing)
+            .then((teamsMap) => {
+              if (cancelled) return;
+              const updates: Record<string, string> = {};
+              const flagUpdates: Record<string, string> = {};
+              Object.entries(teamsMap).forEach(([id, team]) => {
+                const name = typeof team?.name === "string" && team.name.trim().length ? team.name.trim() : id;
+                updates[id] = name;
+                if (typeof team?.flagUrl === "string" && team.flagUrl.trim()) flagUpdates[id] = team.flagUrl.trim();
+              });
+              if (Object.keys(updates).length) setMatchTeamNames((prev) => ({ ...prev, ...updates }));
+              if (Object.keys(flagUpdates).length) setMatchTeamFlags((prev) => ({ ...prev, ...flagUpdates }));
+            })
+            .catch(console.error)
+            .finally(() => { missing.forEach((id) => pendingTeamIdsRef.current.delete(id)); });
+        }
       }
     };
 
@@ -999,20 +1033,56 @@ function DashboardPageContent() {
       return;
     }
 
-    // One-time fetch — team stats only change after recompute (not in real-time).
-    // Using onSnapshot here read all 48 team docs for every user on every open.
+    // Teams are cached in localStorage (30-min TTL).  On return visits this
+    // costs 0 Firestore reads.  Also populates matchTeamNames/Flags so the
+    // match-card display doesn't need a separate fetchTeamsByIds call.
     setLoadingMarketTeams(true);
+
+    const TEAMS_CACHE_KEY = "ff_teams_v1";
+    const TEAMS_CACHE_TTL = 30 * 60 * 1000;
+
+    const applyTeamDocs = (docs: Array<{ id: string; d: Record<string, unknown> }>) => {
+      const next: Record<string, TeamRecord> = {};
+      const names: Record<string, string> = {};
+      const flags: Record<string, string> = {};
+      docs.forEach(({ id, d }) => {
+        next[id] = { id, ...(d as Record<string, unknown>) } as TeamRecord;
+        names[id] = typeof d.name === "string" && d.name.trim() ? d.name.trim() : id;
+        if (typeof d.flagUrl === "string" && d.flagUrl.trim()) flags[id] = d.flagUrl.trim();
+      });
+      setMarketTeamsById(next);
+      setMatchTeamNames((prev) => ({ ...prev, ...names }));
+      setMatchTeamFlags((prev) => ({ ...prev, ...flags }));
+      matchTeamNamesRef.current = { ...matchTeamNamesRef.current, ...names };
+      matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...flags };
+      setLoadingMarketTeams(false);
+    };
+
+    // Try localStorage cache first
+    try {
+      const raw = typeof window !== "undefined" ? localStorage.getItem(TEAMS_CACHE_KEY) : null;
+      if (raw) {
+        const { docs, ts } = JSON.parse(raw) as {
+          docs: Array<{ id: string; d: Record<string, unknown> }>;
+          ts: number;
+        };
+        if (Date.now() - ts < TEAMS_CACHE_TTL) {
+          applyTeamDocs(docs);
+          return () => {};
+        }
+      }
+    } catch { /* ignore corrupt cache */ }
+
+    // Cache miss — fetch from Firestore and populate cache
     getDocs(collection(db, "teams"))
       .then((snap) => {
-        const next: Record<string, TeamRecord> = {};
-        snap.forEach((docSnap) => {
-          next[docSnap.id] = {
-            id: docSnap.id,
-            ...(docSnap.data() as Record<string, unknown>),
-          };
-        });
-        setMarketTeamsById(next);
-        setLoadingMarketTeams(false);
+        const docs = snap.docs.map((d) => ({ id: d.id, d: d.data() as Record<string, unknown> }));
+        try {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(TEAMS_CACHE_KEY, JSON.stringify({ docs, ts: Date.now() }));
+          }
+        } catch { /* storage full */ }
+        applyTeamDocs(docs);
       })
       .catch((err) => {
         const code = typeof err?.code === "string" ? err.code : "";
