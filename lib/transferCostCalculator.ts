@@ -8,7 +8,7 @@
  * - Downgrading to lower tier (higher number): CHEAP (reward strategic moves)
  * - Lateral move (same tier): BASELINE cost
  *
- * Tier scale: 1 (elite) → 5 (underdog)
+ * Tier scale: 1 (elite) → 4 (underdog) — only 4 tiers exist in this game.
  */
 
 export interface TransferCostCalculation {
@@ -39,9 +39,9 @@ export function calculateTransferCost(
   dropTier: number,
   pickupTier: number
 ): TransferCostCalculation {
-  // Normalize tiers to valid range (1-5)
-  const normalizedDropTier = Math.max(1, Math.min(5, Math.floor(dropTier)));
-  const normalizedPickupTier = Math.max(1, Math.min(5, Math.floor(pickupTier)));
+  // Normalize tiers to valid range (1-4)
+  const normalizedDropTier = Math.max(1, Math.min(4, Math.floor(dropTier)));
+  const normalizedPickupTier = Math.max(1, Math.min(4, Math.floor(pickupTier)));
 
   // Calculate tier difference
   // Negative = upgrading (picking better tier)
@@ -114,10 +114,10 @@ export function getTransferCostExplanation(calc: TransferCostCalculation): strin
  * Example usage and test scenarios
  */
 export const TRANSFER_COST_EXAMPLES = [
-  { drop: 5, pickup: 1, description: 'Tier 5 → Tier 1 (maximum upgrade)' },
-  { drop: 4, pickup: 1, description: 'Tier 4 → Tier 1 (expensive upgrade)' },
-  { drop: 3, pickup: 1, description: 'Tier 3 → Tier 1 (moderate upgrade)' },
-  { drop: 2, pickup: 2, description: 'Tier 2 → Tier 2 (lateral)' },
-  { drop: 1, pickup: 3, description: 'Tier 1 → Tier 3 (cheap downgrade)' },
-  { drop: 1, pickup: 5, description: 'Tier 1 → Tier 5 (maximum downgrade)' },
+  { drop: 4, pickup: 1, description: 'Tier 4 → Tier 1 (maximum upgrade, 15 pts)' },
+  { drop: 3, pickup: 1, description: 'Tier 3 → Tier 1 (moderate upgrade, 11 pts)' },
+  { drop: 2, pickup: 1, description: 'Tier 2 → Tier 1 (one-step upgrade, 7 pts)' },
+  { drop: 2, pickup: 2, description: 'Tier 2 → Tier 2 (lateral, 3 pts)' },
+  { drop: 1, pickup: 3, description: 'Tier 1 → Tier 3 (downgrade, 2 pts)' },
+  { drop: 1, pickup: 4, description: 'Tier 1 → Tier 4 (maximum downgrade, 2 pts)' },
 ];

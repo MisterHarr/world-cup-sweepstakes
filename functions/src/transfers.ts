@@ -75,9 +75,9 @@ function isTransferWindowOpen(config: unknown, nowMs: number): boolean {
 }
 
 function calculateTransferCost(dropTier: number, pickupTier: number): number {
-  // Normalize tiers to valid range (1-5)
-  const normalizedDropTier = Math.max(1, Math.min(5, Math.floor(dropTier)));
-  const normalizedPickupTier = Math.max(1, Math.min(5, Math.floor(pickupTier)));
+  // Normalize tiers to valid range (1-4) — only 4 tiers exist in this game
+  const normalizedDropTier = Math.max(1, Math.min(4, Math.floor(dropTier)));
+  const normalizedPickupTier = Math.max(1, Math.min(4, Math.floor(pickupTier)));
 
   // Calculate tier difference
   // Negative = upgrading (picking better tier, lower number)
