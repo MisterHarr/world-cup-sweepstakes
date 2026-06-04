@@ -5,10 +5,12 @@ export const dynamic = "force-dynamic";
 import { useState } from "react";
 import { httpsCallable } from "firebase/functions";
 
-import { AdminEnvironmentBadge } from "@/components/admin/AdminEnvironmentBadge";
 import { AdminGate } from "@/components/admin/AdminGate";
+import { AdminShell, AdminSectionLabel } from "@/components/admin/AdminShell";
 import { LocalhostProductionWarning } from "@/components/admin/LocalhostProductionWarning";
 import { functions } from "@/lib/firebase";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 type UserData = {
   uid: string;
@@ -20,65 +22,7 @@ type UserData = {
   mockBatchId: string;
 };
 
-type AdminListUsersResponse = {
-  ok?: boolean;
-  users?: unknown;
-};
-
-type AdminAssignTeamsResponse = {
-  ok?: boolean;
-  message?: string;
-  skipped?: boolean;
-  featured?: string;
-  drawn?: unknown;
-};
-
-type AssignTeamsPayload = {
-  userId: string;
-};
-
-type SeedDepartmentMode =
-  | "round-robin"
-  | "random"
-  | "primary"
-  | "secondary"
-  | "admin";
-
-type AdminSeedMockUsersPayload = {
-  count?: number;
-  departmentMode?: SeedDepartmentMode;
-  recompute?: boolean;
-  prefix?: string;
-  batchTag?: string;
-  excludeMockUsersFromLeaderboard?: boolean;
-};
-
-type AdminSeedMockUsersResponse = {
-  ok?: boolean;
-  batchTag?: string;
-  countRequested?: number;
-  created?: number;
-  failed?: number;
-  password?: string;
-  departmentMode?: string;
-  excludeMockUsersFromLeaderboard?: boolean;
-  recomputed?: boolean;
-  sampleUsers?: unknown;
-  errors?: unknown;
-};
-
-type DeleteMockUsersPayload = {
-  batchId: string;
-  dryRun?: boolean;
-};
-
-type DeleteMockUsersResponse = {
-  ok?: boolean;
-  batchId?: string;
-  dryRun?: boolean;
-  mockUsers?: number;
-  deleted?: number;
-};
+type SeedDepartmentMode = "round-robin" | "random" | "primary" | "secondary" | "admin";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -92,10 +36,8 @@ function asErrorMessage(error: unknown): string {
 
 function toUserData(value: unknown): UserData | null {
   if (!isRecord(value)) return null;
-
   const uid = typeof value.uid === "string" ? value.uid : "";
   if (!uid) return null;
-
   return {
     uid,
     displayName:
@@ -109,57 +51,54 @@ function toUserData(value: unknown): UserData | null {
         ? Math.max(0, Math.floor(value.teamCount))
         : 0,
     isMock: value.isMock === true,
-    mockBatchId:
-      typeof value.mockBatchId === "string" ? value.mockBatchId : "",
+    mockBatchId: typeof value.mockBatchId === "string" ? value.mockBatchId : "",
   };
 }
 
-function AdminUsersContent(props: { uid: string }) {
-  const { uid } = props;
+// ── Content ───────────────────────────────────────────────────────────────────
+
+function AdminUsersContent({ uid }: { uid: string }) {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [processing, setProcessing] = useState<string | null>(null);
+
+  // Seeding
   const [seedCountInput, setSeedCountInput] = useState("24");
-  const [seedDepartmentMode, setSeedDepartmentMode] =
-    useState<SeedDepartmentMode>("round-robin");
-  const [excludeMockUsersFromLeaderboard, setExcludeMockUsersFromLeaderboard] =
-    useState(true);
+  const [seedDepartmentMode, setSeedDepartmentMode] = useState<SeedDepartmentMode>("round-robin");
+  const [excludeMockUsersFromLeaderboard, setExcludeMockUsersFromLeaderboard] = useState(true);
   const [seeding, setSeeding] = useState(false);
   const [seedStatus, setSeedStatus] = useState("");
+
+  // Cleanup
   const [cleanupBatchId, setCleanupBatchId] = useState("");
   const [cleaningBatch, setCleaningBatch] = useState(false);
   const [cleanupStatus, setCleanupStatus] = useState("");
+
   const [dangerConfirmed, setDangerConfirmed] = useState(false);
 
   const mockBatchIds = Array.from(
-    new Set(users.filter((user) => user.isMock && user.mockBatchId).map((user) => user.mockBatchId))
+    new Set(users.filter((u) => u.isMock && u.mockBatchId).map((u) => u.mockBatchId))
   ).sort();
+
+  const realUsers = users.filter((u) => !u.isMock);
+  const mockUsers = users.filter((u) => u.isMock);
 
   async function loadUsers() {
     setLoading(true);
-    setStatus("Loading users...");
-
+    setStatus("Loading…");
     try {
-      const fn = httpsCallable<Record<string, never>, AdminListUsersResponse>(
-        functions,
-        "adminListUsers"
+      const fn = httpsCallable<Record<string, never>, { ok?: boolean; users?: unknown }>(
+        functions, "adminListUsers"
       );
       const res = await fn({});
-      const data = res.data;
-
-      if (data.ok !== true || !Array.isArray(data.users)) {
-        throw new Error("Invalid response from server");
+      if (res.data.ok !== true || !Array.isArray(res.data.users)) {
+        throw new Error("Invalid response");
       }
-
-      const parsedUsers = data.users
-        .map((entry) => toUserData(entry))
-        .filter((entry): entry is UserData => entry !== null);
-
-      setUsers(parsedUsers);
-      setStatus(`✅ Loaded ${parsedUsers.length} users.`);
-    } catch (error: unknown) {
-      console.error(error);
+      const parsed = res.data.users.map(toUserData).filter((u): u is UserData => u !== null);
+      setUsers(parsed);
+      setStatus(`Loaded ${parsed.length} users.`);
+    } catch (error) {
       setStatus(`❌ ${asErrorMessage(error)}`);
     } finally {
       setLoading(false);
@@ -167,40 +106,23 @@ function AdminUsersContent(props: { uid: string }) {
   }
 
   async function assignTeamsToUser(userId: string) {
-    if (
-      !confirm(
-        "Assign teams to this user? This will give them 1 featured + 5 drawn teams."
-      )
-    ) {
-      return;
-    }
-
+    if (!confirm("Assign 1 featured + 5 drawn teams to this user?")) return;
     setProcessing(userId);
-    setStatus(`Assigning teams to user ${userId}...`);
-
     try {
-      const fn = httpsCallable<AssignTeamsPayload, AdminAssignTeamsResponse>(
-        functions,
-        "adminAssignTeamsToUser"
+      const fn = httpsCallable<{ userId: string }, { ok?: boolean; message?: string; skipped?: boolean; featured?: string; drawn?: unknown }>(
+        functions, "adminAssignTeamsToUser"
       );
       const res = await fn({ userId });
-      const data = res.data;
-
-      if (data.skipped) {
-        setStatus(`ℹ️ ${data.message ?? "User already has teams assigned."}`);
+      if (res.data.skipped) {
+        setStatus(`ℹ️ ${res.data.message ?? "User already has teams."}`);
       } else {
-        const drawnTeams = Array.isArray(data.drawn)
-          ? data.drawn.filter((item): item is string => typeof item === "string")
+        const drawn = Array.isArray(res.data.drawn)
+          ? res.data.drawn.filter((i): i is string => typeof i === "string")
           : [];
-
-        setStatus(
-          `✅ ${data.message ?? "Teams assigned."}\nFeatured: ${data.featured ?? "-"}\nDrawn: ${drawnTeams.join(", ")}`
-        );
+        setStatus(`✅ ${res.data.message ?? "Teams assigned."} Featured: ${res.data.featured ?? "—"}  Drawn: ${drawn.join(", ")}`);
       }
-
       await loadUsers();
-    } catch (error: unknown) {
-      console.error(error);
+    } catch (error) {
       setStatus(`❌ ${asErrorMessage(error)}`);
     } finally {
       setProcessing(null);
@@ -208,107 +130,42 @@ function AdminUsersContent(props: { uid: string }) {
   }
 
   async function assignTeamsToAllWithout() {
-    const usersWithoutTeams = users.filter((user) => !user.hasTeams);
-
-    if (usersWithoutTeams.length === 0) {
-      setStatus("ℹ️ All users already have teams.");
-      return;
+    const without = users.filter((u) => !u.hasTeams);
+    if (without.length === 0) { setStatus("ℹ️ All users already have teams."); return; }
+    if (!confirm(`Assign teams to ${without.length} users without teams?`)) return;
+    setStatus(`Assigning teams to ${without.length} users…`);
+    const fn = httpsCallable<{ userId: string }, unknown>(functions, "adminAssignTeamsToUser");
+    let ok = 0, fail = 0;
+    for (const u of without) {
+      setProcessing(u.uid);
+      try { await fn({ userId: u.uid }); ok++; } catch { fail++; }
     }
-
-    if (
-      !confirm(
-        `Assign teams to ${usersWithoutTeams.length} users without teams? This cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    setStatus(`Assigning teams to ${usersWithoutTeams.length} users...`);
-    let successCount = 0;
-    let errorCount = 0;
-    const fn = httpsCallable<AssignTeamsPayload, AdminAssignTeamsResponse>(
-      functions,
-      "adminAssignTeamsToUser"
-    );
-
-    for (const user of usersWithoutTeams) {
-      setProcessing(user.uid);
-
-      try {
-        await fn({ userId: user.uid });
-        successCount++;
-      } catch (error: unknown) {
-        console.error(`Failed for ${user.email}:`, error);
-        errorCount++;
-      }
-    }
-
     setProcessing(null);
-    setStatus(`✅ Assigned teams to ${successCount} users. ${errorCount} errors.`);
+    setStatus(`✅ Assigned to ${ok} users. ${fail > 0 ? `${fail} failed.` : ""}`);
     await loadUsers();
   }
 
   async function seedMockUsers() {
-    const parsed = Number(seedCountInput);
-    const count =
-      Number.isFinite(parsed) && parsed > 0
-        ? Math.min(60, Math.floor(parsed))
-        : 24;
-
-    if (
-      !confirm(
-        `Create ${count} test players with squads assigned?\n` +
-          `Group spread: ${seedDepartmentMode}\n` +
-          `Hidden from leaderboard: ${excludeMockUsersFromLeaderboard ? "yes" : "no"}`
-      )
-    ) {
-      setSeedStatus("Cancelled.");
-      return;
+    const count = Math.min(60, Math.max(1, Math.floor(Number(seedCountInput) || 24)));
+    if (!confirm(`Create ${count} test players?\nGroup spread: ${seedDepartmentMode}\nHidden from leaderboard: ${excludeMockUsersFromLeaderboard ? "yes" : "no"}`)) {
+      setSeedStatus("Cancelled."); return;
     }
-
     setSeeding(true);
-    setSeedStatus("Creating test players...");
-
+    setSeedStatus("Creating…");
     try {
       const fn = httpsCallable<
-        AdminSeedMockUsersPayload,
-        AdminSeedMockUsersResponse
+        { count?: number; departmentMode?: string; recompute?: boolean; excludeMockUsersFromLeaderboard?: boolean },
+        { ok?: boolean; batchTag?: string; created?: number; failed?: number; password?: string; excludeMockUsersFromLeaderboard?: boolean; recomputed?: boolean; errors?: unknown }
       >(functions, "adminSeedMockUsers");
-      const res = await fn({
-        count,
-        departmentMode: seedDepartmentMode,
-        recompute: true,
-        excludeMockUsersFromLeaderboard,
-      });
-      const data = res.data;
-
-      const failures = Number(data.failed ?? 0);
-      const created = Number(data.created ?? 0);
-      const tag = String(data.batchTag ?? "-");
-      const recomputed = data.recomputed === true ? "yes" : "no";
-      const password = String(data.password ?? "-");
-      const excluded =
-        data.excludeMockUsersFromLeaderboard === false ? "no" : "yes";
-
-      let errorPreview = "";
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        const first = data.errors[0];
-        if (isRecord(first)) {
-          errorPreview = ` First failure: ${String(first.reason ?? "unknown")}`;
-        }
-      }
-
+      const res = await fn({ count, departmentMode: seedDepartmentMode, recompute: true, excludeMockUsersFromLeaderboard });
+      const d = res.data;
       setSeedStatus(
-        `✅ Batch ${tag}: created ${created}${failures > 0 ? `, failed ${failures}` : ""}. ` +
-          `Hidden from leaderboard: ${excluded}. ` +
-          `Login password: ${password}.` +
-          errorPreview
+        `✅ Batch ${d.batchTag ?? "—"}: created ${d.created ?? 0}${(d.failed ?? 0) > 0 ? `, failed ${d.failed}` : ""}. ` +
+        `Password: ${d.password ?? "—"}. Hidden from LB: ${d.excludeMockUsersFromLeaderboard === false ? "no" : "yes"}.`
       );
-      setCleanupBatchId(tag);
-
+      setCleanupBatchId(d.batchTag ?? "");
       await loadUsers();
-    } catch (error: unknown) {
-      console.error(error);
+    } catch (error) {
       setSeedStatus(`❌ ${asErrorMessage(error)}`);
     } finally {
       setSeeding(false);
@@ -317,255 +174,222 @@ function AdminUsersContent(props: { uid: string }) {
 
   async function cleanupMockUsersByBatch() {
     const batchId = cleanupBatchId.trim();
-    if (!batchId) {
-      setCleanupStatus("❌ Enter a batch ID first.");
-      return;
+    if (!batchId) { setCleanupStatus("❌ Enter a batch ID."); return; }
+    if (!confirm(`Remove all test players in batch ${batchId}? This cannot be undone.`)) {
+      setCleanupStatus("Cancelled."); return;
     }
-
-    if (
-      !confirm(
-        `Remove all test players in batch ${batchId}?\nThis cannot be undone.`
-      )
-    ) {
-      setCleanupStatus("Cancelled.");
-      return;
-    }
-
     setCleaningBatch(true);
-    setCleanupStatus(`Removing test players from batch ${batchId}...`);
-
+    setCleanupStatus(`Removing batch ${batchId}…`);
     try {
-      const fn = httpsCallable<DeleteMockUsersPayload, DeleteMockUsersResponse>(
-        functions,
-        "adminDeleteMockUsersByBatch"
+      const fn = httpsCallable<{ batchId: string }, { ok?: boolean; batchId?: string; deleted?: number }>(
+        functions, "adminDeleteMockUsersByBatch"
       );
       const res = await fn({ batchId });
-      const data = res.data;
-      setCleanupStatus(
-        `✅ Removed ${Number(data.deleted ?? 0)} test players from batch ${String(
-          data.batchId ?? batchId
-        )}.`
-      );
+      setCleanupStatus(`✅ Removed ${res.data.deleted ?? 0} test players from batch ${res.data.batchId ?? batchId}.`);
       await loadUsers();
-    } catch (error: unknown) {
-      console.error(error);
+    } catch (error) {
       setCleanupStatus(`❌ ${asErrorMessage(error)}`);
     } finally {
       setCleaningBatch(false);
     }
   }
 
+  const busy = loading || processing !== null || seeding || cleaningBatch;
+
   return (
-    <>
-      <div className="text-sm text-slate-300">
-        Signed in as <strong>{uid}</strong>
-      </div>
+    <div className="space-y-4">
+      <p className="text-xs text-slate-500">
+        Signed in as <span className="font-mono text-slate-400">{uid}</span>
+      </p>
 
       <LocalhostProductionWarning onConfirmedChange={setDangerConfirmed} />
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          onClick={loadUsers}
-          disabled={loading}
-          className="px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
-        >
-          {loading ? "Loading..." : "Load Users"}
-        </button>
+      <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
 
-        {users.length > 0 ? (
-          <button
-            onClick={assignTeamsToAllWithout}
-            disabled={loading || processing !== null || !dangerConfirmed}
-            className="px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
-          >
-            Assign Teams to All Without
-          </button>
-        ) : null}
-      </div>
+        {/* ── Left: Player list ──────────────────────────────────────── */}
+        <div className="space-y-3">
+          <AdminSectionLabel>Players</AdminSectionLabel>
 
-      <div className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 space-y-3">
-        <div className="text-sm font-semibold text-slate-100">
-          Create Test Players
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="space-y-1">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">
-              Count
-            </div>
-            <input
-              value={seedCountInput}
-              onChange={(event) => setSeedCountInput(event.target.value)}
-              inputMode="numeric"
-              className="w-24 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-            />
-          </label>
-
-          <label className="space-y-1">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">
-              Departments
-            </div>
-            <select
-              value={seedDepartmentMode}
-              onChange={(event) =>
-                setSeedDepartmentMode(event.target.value as SeedDepartmentMode)
-              }
-              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={loadUsers}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-xl bg-emerald-500/90 text-emerald-950 text-sm font-semibold disabled:opacity-50"
             >
-              <option value="round-robin">Round Robin</option>
-              <option value="random">Random</option>
-              <option value="primary">Primary Only</option>
-              <option value="secondary">Secondary Only</option>
-              <option value="admin">Admin Only</option>
-            </select>
-          </label>
-
-          <button
-            onClick={seedMockUsers}
-            disabled={seeding || loading || processing !== null || !dangerConfirmed}
-            className="px-4 py-2 rounded-xl bg-amber-400/90 text-amber-950 font-semibold disabled:opacity-50"
-          >
-            {seeding ? "Creating..." : "Create Test Players"}
-          </button>
-        </div>
-
-        <p className="text-xs text-slate-400">
-          Creates fake players with squads assigned — useful for testing the leaderboard.
-        </p>
-
-        <label className="flex items-center gap-2 text-sm text-slate-300">
-          <input
-            type="checkbox"
-            checked={excludeMockUsersFromLeaderboard}
-            onChange={(event) =>
-              setExcludeMockUsersFromLeaderboard(event.target.checked)
-            }
-            className="h-4 w-4"
-          />
-          Exclude mock users from leaderboard
-        </label>
-
-        {seedStatus ? (
-          <div className="text-sm text-slate-300 whitespace-pre-wrap">
-            {seedStatus}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="rounded-xl border border-slate-800/60 bg-slate-950/50 p-4 space-y-3">
-        <div className="text-sm font-semibold text-slate-100">
-          Remove Test Players
-        </div>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="space-y-1">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">
-              Batch
-            </div>
-            <input
-              value={cleanupBatchId}
-              onChange={(event) => setCleanupBatchId(event.target.value)}
-              list="mock-batch-ids"
-              className="min-w-[240px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100"
-            />
-            <datalist id="mock-batch-ids">
-              {mockBatchIds.map((batchId) => (
-                <option key={batchId} value={batchId} />
-              ))}
-            </datalist>
-          </label>
-
-          <button
-            onClick={cleanupMockUsersByBatch}
-            disabled={cleaningBatch || seeding || loading || processing !== null || !dangerConfirmed}
-            className="px-4 py-2 rounded-xl border border-rose-500/60 text-rose-100 font-semibold hover:bg-rose-500/10 disabled:opacity-50"
-          >
-            {cleaningBatch ? "Removing..." : "Remove Test Players"}
-          </button>
-        </div>
-
-        {cleanupStatus ? (
-          <div className="text-sm text-slate-300 whitespace-pre-wrap">
-            {cleanupStatus}
-          </div>
-        ) : null}
-      </div>
-
-      {status ? (
-        <div className="text-sm text-slate-300 whitespace-pre-wrap">{status}</div>
-      ) : null}
-
-      {users.length > 0 ? (
-        <div className="border-t border-slate-800/60 pt-4">
-          <h2 className="text-lg font-semibold mb-4">Users ({users.length})</h2>
-
-          <div className="space-y-2">
-            {users.map((user) => (
-              <div
-                key={user.uid}
-                className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 flex items-center justify-between"
+              {loading ? "Loading…" : "Load Players"}
+            </button>
+            {users.length > 0 ? (
+              <button
+                onClick={assignTeamsToAllWithout}
+                disabled={busy || !dangerConfirmed}
+                className="px-3 py-1.5 rounded-xl bg-sky-500/90 text-sky-950 text-sm font-semibold disabled:opacity-50"
               >
-                <div>
-                  <div className="font-semibold text-slate-100">
-                    {user.displayName}
-                    {user.isMock ? (
-                      <span className="ml-2 rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-200">
-                        Mock
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="text-sm text-slate-400">{user.email}</div>
-                  <div className="text-xs text-slate-500 mt-1">
-                    {user.hasTeams
-                      ? `✅ Has ${user.teamCount} teams`
-                      : "❌ No teams assigned"}
-                  </div>
-                  {user.isMock && user.mockBatchId ? (
-                    <div className="text-xs text-slate-500 mt-1">
-                      Batch: {user.mockBatchId}
-                    </div>
-                  ) : null}
-                </div>
+                Assign Teams to All Without
+              </button>
+            ) : null}
+          </div>
 
-                {!user.hasTeams ? (
-                  <button
-                    onClick={() => assignTeamsToUser(user.uid)}
-                    disabled={processing === user.uid || !dangerConfirmed}
-                    className="px-3 py-1.5 rounded-lg bg-sky-500/90 text-sky-950 text-sm font-semibold disabled:opacity-50"
+          {status ? (
+            <p className="text-xs text-slate-300 whitespace-pre-wrap">{status}</p>
+          ) : null}
+
+          {users.length > 0 ? (
+            <div className="space-y-3">
+              {/* Real players */}
+              {realUsers.length > 0 ? (
+                <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-800/60 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Real players</span>
+                    <span className="text-xs text-slate-600">{realUsers.length}</span>
+                  </div>
+                  <ul className="divide-y divide-slate-800/50">
+                    {realUsers.map((user) => (
+                      <li key={user.uid} className="flex items-center gap-3 px-4 py-2.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-slate-100 truncate">{user.displayName}</div>
+                          <div className="text-xs text-slate-500 truncate">{user.email}</div>
+                        </div>
+                        <div className="text-xs shrink-0">
+                          {user.hasTeams
+                            ? <span className="text-emerald-400">{user.teamCount} teams</span>
+                            : <span className="text-rose-400">No teams</span>}
+                        </div>
+                        {!user.hasTeams ? (
+                          <button
+                            onClick={() => assignTeamsToUser(user.uid)}
+                            disabled={processing === user.uid || !dangerConfirmed}
+                            className="shrink-0 px-2.5 py-1 rounded-lg bg-sky-500/90 text-sky-950 text-xs font-semibold disabled:opacity-50"
+                          >
+                            {processing === user.uid ? "…" : "Assign"}
+                          </button>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {/* Mock players */}
+              {mockUsers.length > 0 ? (
+                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-amber-500/20 flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-widest text-amber-600">Test players</span>
+                    <span className="text-xs text-amber-700">{mockUsers.length}</span>
+                  </div>
+                  <ul className="divide-y divide-amber-500/10 max-h-48 overflow-y-auto">
+                    {mockUsers.map((user) => (
+                      <li key={user.uid} className="flex items-center gap-3 px-4 py-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-slate-300 truncate">{user.displayName}</div>
+                          {user.mockBatchId ? (
+                            <div className="text-[10px] text-slate-600 truncate">Batch: {user.mockBatchId}</div>
+                          ) : null}
+                        </div>
+                        <span className="text-xs text-slate-500 shrink-0">
+                          {user.hasTeams ? `${user.teamCount}t` : "—"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Right: Tools ──────────────────────────────────────────── */}
+        <div className="space-y-4">
+
+          {/* Seed */}
+          <div>
+            <AdminSectionLabel>Create test players</AdminSectionLabel>
+            <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Count</span>
+                  <input
+                    value={seedCountInput}
+                    onChange={(e) => setSeedCountInput(e.target.value)}
+                    inputMode="numeric"
+                    className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Departments</span>
+                  <select
+                    value={seedDepartmentMode}
+                    onChange={(e) => setSeedDepartmentMode(e.target.value as SeedDepartmentMode)}
+                    className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100"
                   >
-                    {processing === user.uid ? "Assigning..." : "Assign Teams"}
-                  </button>
-                ) : null}
+                    <option value="round-robin">Round Robin</option>
+                    <option value="random">Random</option>
+                    <option value="primary">Primary</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
               </div>
-            ))}
+              <label className="flex items-center gap-2 text-xs text-slate-400">
+                <input
+                  type="checkbox"
+                  checked={excludeMockUsersFromLeaderboard}
+                  onChange={(e) => setExcludeMockUsersFromLeaderboard(e.target.checked)}
+                  className="h-3.5 w-3.5"
+                />
+                Exclude from leaderboard
+              </label>
+              <button
+                onClick={seedMockUsers}
+                disabled={seeding || busy || !dangerConfirmed}
+                className="w-full px-3 py-1.5 rounded-xl bg-amber-400/90 text-amber-950 text-sm font-semibold disabled:opacity-50"
+              >
+                {seeding ? "Creating…" : "Create Test Players"}
+              </button>
+              {seedStatus ? (
+                <p className="text-xs text-slate-300 whitespace-pre-wrap">{seedStatus}</p>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Cleanup */}
+          <div>
+            <AdminSectionLabel>Remove test players</AdminSectionLabel>
+            <div className="rounded-xl border border-slate-800/60 bg-slate-900/60 p-4 space-y-3">
+              <label className="space-y-1 block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Batch ID</span>
+                <input
+                  value={cleanupBatchId}
+                  onChange={(e) => setCleanupBatchId(e.target.value)}
+                  list="mock-batch-ids"
+                  placeholder="paste or pick from list"
+                  className="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-1.5 text-sm text-slate-100"
+                />
+                <datalist id="mock-batch-ids">
+                  {mockBatchIds.map((id) => <option key={id} value={id} />)}
+                </datalist>
+              </label>
+              <button
+                onClick={cleanupMockUsersByBatch}
+                disabled={cleaningBatch || busy || !dangerConfirmed}
+                className="w-full px-3 py-1.5 rounded-xl border border-rose-500/60 text-rose-100 text-sm font-semibold hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                {cleaningBatch ? "Removing…" : "Remove Batch"}
+              </button>
+              {cleanupStatus ? (
+                <p className="text-xs text-slate-300 whitespace-pre-wrap">{cleanupStatus}</p>
+              ) : null}
+            </div>
           </div>
         </div>
-      ) : null}
-    </>
+      </div>
+    </div>
   );
 }
 
 export default function AdminUsersPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.35)] space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Admin · Players
-              </h1>
-              <a
-                href="/admin"
-                className="text-xs uppercase tracking-widest text-slate-400 hover:text-emerald-200"
-              >
-                Back to Tools
-              </a>
-            </div>
-            <AdminEnvironmentBadge />
-          </div>
-
-          <AdminGate>{({ uid }) => <AdminUsersContent uid={uid} />}</AdminGate>
-        </div>
-      </div>
-    </div>
+    <AdminShell title="Players" subtitle="View all players, assign teams, and manage test users." wide>
+      <AdminGate>{({ uid }) => <AdminUsersContent uid={uid} />}</AdminGate>
+    </AdminShell>
   );
 }

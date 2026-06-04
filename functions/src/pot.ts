@@ -117,6 +117,47 @@ export const exportConfirmedEntrants = onCall(CALL_OPTS, async (request) => {
   return { ok: true, count: rows.length, rows };
 });
 
+// ── adminSetPotPaymentStatus ──────────────────────────────────────────────────
+
+/**
+ * Admin-only. Records whether a player has paid cash or opted out.
+ * Writes `potPaymentStatus` to users/{uid}. Passing "pending" clears the field.
+ * No money moves through the site — this is a manual tracking record only.
+ */
+export const adminSetPotPaymentStatus = onCall(CALL_OPTS, async (request) => {
+  requireAdmin(request);
+
+  const payload = isRecord(request.data) ? request.data : {};
+  const targetUid = typeof payload.uid === "string" ? payload.uid.trim() : "";
+  const status = payload.status;
+
+  if (!targetUid) throw new HttpsError("invalid-argument", "Missing uid.");
+  if (status !== "paid" && status !== "opted_out" && status !== "pending") {
+    throw new HttpsError(
+      "invalid-argument",
+      "status must be 'paid', 'opted_out', or 'pending'."
+    );
+  }
+
+  const userRef = db().collection("users").doc(targetUid);
+  const snap = await userRef.get();
+  if (!snap.exists) throw new HttpsError("not-found", `User ${targetUid} not found.`);
+
+  if (status === "pending") {
+    await userRef.update({
+      potPaymentStatus: admin.firestore.FieldValue.delete(),
+      potPaymentStatusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } else {
+    await userRef.update({
+      potPaymentStatus: status,
+      potPaymentStatusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  return { ok: true, uid: targetUid, status };
+});
+
 // ── removePotEntry ────────────────────────────────────────────────────────────
 
 export const removePotEntry = onCall(CALL_OPTS, async (request) => {

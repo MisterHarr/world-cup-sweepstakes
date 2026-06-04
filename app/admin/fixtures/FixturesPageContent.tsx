@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AdminEnvironmentBadge } from "@/components/admin/AdminEnvironmentBadge";
 import { AdminGate } from "@/components/admin/AdminGate";
+import { AdminShell, AdminSectionLabel } from "@/components/admin/AdminShell";
 import { FixtureIngestPanel } from "@/components/admin/FixtureIngestPanel";
 import { LeaderboardRecomputePanel } from "@/components/admin/LeaderboardRecomputePanel";
 import { LiveOpsConfigPanel } from "@/components/admin/LiveOpsConfigPanel";
@@ -11,70 +11,82 @@ import { LocalhostProductionWarning } from "@/components/admin/LocalhostProducti
 import { ProviderShadowPanel } from "@/components/admin/ProviderShadowPanel";
 import { TransferWindowPanel } from "@/components/admin/TransferWindowPanel";
 
-function FixtureIngestContent(props: { uid: string }) {
-  const { uid } = props;
+function FixtureIngestContent({ uid }: { uid: string }) {
   const [maxMatches, setMaxMatches] = useState("");
   const [cutoffIso, setCutoffIso] = useState("");
   const [dangerConfirmed, setDangerConfirmed] = useState(false);
 
   return (
-    <>
-      <div className="text-sm text-slate-300">
-        Signed in as <strong>{uid}</strong>
-      </div>
-
+    <div className="space-y-4">
+      {/* Environment gate */}
       <LocalhostProductionWarning onConfirmedChange={setDangerConfirmed} />
 
-      <LiveOpsConfigPanel
-        uid={uid}
-        dangerConfirmed={dangerConfirmed}
-        fixtureMaxMatches={maxMatches}
-        fixtureCutoffIso={cutoffIso}
-      />
+      {/* ── Main 2-col grid ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-4 items-start">
 
-      <TransferWindowPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+        {/* ── Left column: Configuration ──────────────────────────── */}
+        <div className="space-y-4">
+          <div>
+            <AdminSectionLabel>Live ops</AdminSectionLabel>
+            <LiveOpsConfigPanel
+              uid={uid}
+              dangerConfirmed={dangerConfirmed}
+              fixtureMaxMatches={maxMatches}
+              fixtureCutoffIso={cutoffIso}
+            />
+          </div>
 
-      <LocalVisibleRehearsalPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+          <div>
+            <AdminSectionLabel>Transfer window</AdminSectionLabel>
+            <TransferWindowPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+          </div>
+        </div>
 
-      <FixtureIngestPanel
-        uid={uid}
-        dangerConfirmed={dangerConfirmed}
-        maxMatches={maxMatches}
-        cutoffIso={cutoffIso}
-        onMaxMatchesChange={setMaxMatches}
-        onCutoffIsoChange={setCutoffIso}
-      />
+        {/* ── Right column: Data & Scores ──────────────────────────── */}
+        <div className="space-y-4">
+          <div>
+            <AdminSectionLabel>Match data</AdminSectionLabel>
+            <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 space-y-0">
+              <FixtureIngestPanel
+                uid={uid}
+                dangerConfirmed={dangerConfirmed}
+                maxMatches={maxMatches}
+                cutoffIso={cutoffIso}
+                onMaxMatchesChange={setMaxMatches}
+                onCutoffIsoChange={setCutoffIso}
+              />
+            </div>
+          </div>
 
-      <ProviderShadowPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+          <div>
+            <AdminSectionLabel>Leaderboard &amp; scores</AdminSectionLabel>
+            <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 space-y-0">
+              <LeaderboardRecomputePanel uid={uid} dangerConfirmed={dangerConfirmed} />
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <LeaderboardRecomputePanel uid={uid} dangerConfirmed={dangerConfirmed} />
-    </>
+      {/* ── Testing row (full width, 2-col) ──────────────────────────── */}
+      <div>
+        <AdminSectionLabel>Testing &amp; simulation</AdminSectionLabel>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <LocalVisibleRehearsalPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+          <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4">
+            <ProviderShadowPanel uid={uid} dangerConfirmed={dangerConfirmed} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 export default function FixtureIngestPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-3xl mx-auto p-6 space-y-6">
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.35)] space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Admin · Match Data
-              </h1>
-              <a
-                href="/admin"
-                className="text-xs uppercase tracking-widest text-slate-400 hover:text-emerald-200"
-              >
-                Back to Tools
-              </a>
-            </div>
-            <AdminEnvironmentBadge />
-          </div>
-
-          <AdminGate>{({ uid }) => <FixtureIngestContent uid={uid} />}</AdminGate>
-        </div>
-      </div>
-    </div>
+    <AdminShell title="Match Data" subtitle="Live score ingestion, fixture management, leaderboard and transfer controls." wide>
+      <AdminGate>
+        {({ uid }) => <FixtureIngestContent uid={uid} />}
+      </AdminGate>
+    </AdminShell>
   );
 }

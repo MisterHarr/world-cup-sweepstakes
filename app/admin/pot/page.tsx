@@ -3,23 +3,32 @@
 import { useEffect, useState, useCallback } from "react";
 import {
   CheckCircle2,
+  Circle,
   Clock,
-  Coins,
   LockOpen,
   Lock,
+  MinusCircle,
   RefreshCw,
   Trash2,
   X,
 } from "lucide-react";
-import { collection, doc, onSnapshot, query, setDoc, Timestamp } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query, setDoc, Timestamp } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 
 import { AdminGate } from "@/components/admin/AdminGate";
-import { AdminEnvironmentBadge } from "@/components/admin/AdminEnvironmentBadge";
+import { AdminShell, AdminSectionLabel } from "@/components/admin/AdminShell";
 import { db, functions } from "@/lib/firebase";
 import { PRIZE_POT_CONFIG } from "@/lib/prizePot";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type PotPaymentStatus = "paid" | "opted_out" | "pending";
+
+interface UserPotRecord {
+  uid: string;
+  displayName: string;
+  potPaymentStatus: PotPaymentStatus;
+}
 
 interface PotEntry {
   uid: string;
@@ -61,6 +70,11 @@ function PotPanel({ uid }: { uid: string }) {
   const [exportText, setExportText] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
 
+  // ── Payment tracking state ───────────────────────────────────────────────
+  const [allUsers, setAllUsers] = useState<UserPotRecord[]>([]);
+  const [paymentBusy, setPaymentBusy] = useState<Set<string>>(new Set());
+  const [paymentStatus, setPaymentStatusMsg] = useState("");
+
   // null = still loading
   const [potLocked, setPotLocked] = useState<boolean | null>(null);
   const [entryDeadline, setEntryDeadline] = useState<{ seconds: number } | null>(null);
@@ -81,6 +95,30 @@ function PotPanel({ uid }: { uid: string }) {
     const q = query(collection(db, "potEntries"));
     const unsub = onSnapshot(q, (snap) => {
       setEntries(snap.docs.map((d) => d.data() as PotEntry));
+    });
+    return () => unsub();
+  }, []);
+
+  // ── Live listener: all real players (for payment tracking) ───────────────
+
+  useEffect(() => {
+    const q = query(collection(db, "users"), orderBy("displayName"));
+    const unsub = onSnapshot(q, (snap) => {
+      const records = snap.docs
+        .map((d) => {
+          const data = d.data() as Record<string, unknown>;
+          if (data.isMock === true) return null;
+          const raw = data.potPaymentStatus;
+          const status: PotPaymentStatus =
+            raw === "paid" ? "paid" : raw === "opted_out" ? "opted_out" : "pending";
+          return {
+            uid: d.id,
+            displayName: typeof data.displayName === "string" ? data.displayName : d.id,
+            potPaymentStatus: status,
+          };
+        })
+        .filter((r): r is UserPotRecord => r !== null);
+      setAllUsers(records);
     });
     return () => unsub();
   }, []);
@@ -116,6 +154,22 @@ function PotPanel({ uid }: { uid: string }) {
     }, () => { setPotLocked(false); setEntryDeadline(null); });
     return () => unsub();
   }, []);
+
+  // ── Payment status toggle ────────────────────────────────────────────────
+
+  async function updatePaymentStatus(targetUid: string, next: PotPaymentStatus) {
+    setPaymentBusy((prev) => new Set(prev).add(targetUid));
+    setPaymentStatusMsg("");
+    try {
+      const fn = httpsCallable(functions, "adminSetPotPaymentStatus");
+      await fn({ uid: targetUid, status: next });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setPaymentStatusMsg(`❌ ${msg}`);
+    } finally {
+      setPaymentBusy((prev) => { const s = new Set(prev); s.delete(targetUid); return s; });
+    }
+  }
 
   async function togglePotOpen() {
     if (toggleBusy || potLocked === null) return;
@@ -168,6 +222,11 @@ function PotPanel({ uid }: { uid: string }) {
   const pending = entries.filter((e) => e.status === "pending");
   const confirmed = entries.filter((e) => e.status === "confirmed");
   const potTotal = confirmed.length * PRIZE_POT_CONFIG.amountPerEntry;
+
+  // Payment tracking tallies
+  const paidUsers = allUsers.filter((u) => u.potPaymentStatus === "paid");
+  const optedOutUsers = allUsers.filter((u) => u.potPaymentStatus === "opted_out");
+  const pendingUsers = allUsers.filter((u) => u.potPaymentStatus === "pending");
 
   // ── Confirm single entry ─────────────────────────────────────────────────
 
@@ -310,10 +369,117 @@ function PotPanel({ uid }: { uid: string }) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5">
+    <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-4 items-start">
 
-      {/* ── Summary strip ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* ══ LEFT COLUMN: Payment Tracking ═══════════════════════════ */}
+      <div className="space-y-0">
+        <AdminSectionLabel>Payment tracking</AdminSectionLabel>
+
+      {/* ── Payment Tracking panel ──────────────────────────────── */}
+      <div className="rounded-xl border border-slate-800/60 bg-slate-900/70 overflow-hidden">
+
+        {/* Header + tally */}
+        <div className="px-4 py-3 border-b border-slate-800/60">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="font-semibold text-slate-100 text-sm">Payment Tracking</span>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1 text-emerald-300 font-semibold">
+                <CheckCircle2 className="size-3.5" aria-hidden />
+                {paidUsers.length} paid
+              </span>
+              <span className="flex items-center gap-1 text-rose-300 font-semibold">
+                <MinusCircle className="size-3.5" aria-hidden />
+                {optedOutUsers.length} opted out
+              </span>
+              <span className="flex items-center gap-1 text-slate-400">
+                <Circle className="size-3.5" aria-hidden />
+                {pendingUsers.length} no response
+              </span>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            Cash collected offline — mark each player manually. No money goes through the site.
+          </p>
+        </div>
+
+        {/* Status flash */}
+        {paymentStatus ? (
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-950/60 border-b border-slate-800/40 text-xs text-slate-300">
+            <span>{paymentStatus}</span>
+            <button onClick={() => setPaymentStatusMsg("")} className="text-slate-500 hover:text-slate-300">
+              <X className="size-3.5" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+
+        {/* Player list */}
+        {allUsers.length === 0 ? (
+          <div className="px-4 py-6 text-center text-sm text-slate-500">
+            No players yet — they appear here once they sign in.
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-800/60">
+            {allUsers.map((user) => {
+              const isBusy = paymentBusy.has(user.uid);
+              const isPaid = user.potPaymentStatus === "paid";
+              const isOut = user.potPaymentStatus === "opted_out";
+              return (
+                <li key={user.uid} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="flex-1 min-w-0 text-sm font-medium text-slate-100 truncate">
+                    {user.displayName}
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {/* Paid */}
+                    <button
+                      onClick={() => void updatePaymentStatus(user.uid, isPaid ? "pending" : "paid")}
+                      disabled={isBusy}
+                      title={isPaid ? "Clear payment" : "Mark as paid"}
+                      className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                        isPaid
+                          ? "bg-emerald-500/90 text-emerald-950"
+                          : "border border-slate-700/60 text-slate-400 hover:border-emerald-500/60 hover:text-emerald-300"
+                      }`}
+                    >
+                      {isBusy && isPaid ? (
+                        <RefreshCw className="size-3 animate-spin" aria-hidden />
+                      ) : (
+                        <CheckCircle2 className="size-3" aria-hidden />
+                      )}
+                      Paid
+                    </button>
+                    {/* Opted out */}
+                    <button
+                      onClick={() => void updatePaymentStatus(user.uid, isOut ? "pending" : "opted_out")}
+                      disabled={isBusy}
+                      title={isOut ? "Clear opted-out" : "Mark as opted out"}
+                      className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                        isOut
+                          ? "bg-rose-500/90 text-rose-100"
+                          : "border border-slate-700/60 text-slate-400 hover:border-rose-500/60 hover:text-rose-300"
+                      }`}
+                    >
+                      {isBusy && isOut ? (
+                        <RefreshCw className="size-3 animate-spin" aria-hidden />
+                      ) : (
+                        <MinusCircle className="size-3" aria-hidden />
+                      )}
+                      Out
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+      </div>{/* end left column */}
+
+      {/* ══ RIGHT COLUMN: Entry Management ══════════════════════════ */}
+      <div className="space-y-3">
+        <AdminSectionLabel>Entry management</AdminSectionLabel>
+
+        {/* ── Summary strip ──────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
           <div className="text-2xl font-black text-amber-300">{pending.length}</div>
           <div className="text-xs text-slate-400 mt-0.5">Pending</div>
@@ -620,9 +786,11 @@ function PotPanel({ uid }: { uid: string }) {
         ) : null}
       </div>
 
-      <div className="text-xs text-slate-600 text-center pb-2">
-        Signed in as {uid} · Changes are live instantly
-      </div>
+        <p className="text-[10px] text-slate-600 text-center pb-1">
+          Signed in as {uid} · Changes are live instantly
+        </p>
+      </div>{/* end right column */}
+
     </div>
   );
 }
@@ -631,40 +799,10 @@ function PotPanel({ uid }: { uid: string }) {
 
 export default function AdminPotPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-5">
-
-        {/* Header */}
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Coins className="size-5 text-yellow-400" aria-hidden />
-              <div>
-                <h1 className="text-xl font-semibold tracking-tight">Prize Pot</h1>
-                <span className="text-xs uppercase tracking-widest text-slate-400">
-                  Admin · Confirmation Panel
-                </span>
-              </div>
-            </div>
-            <AdminEnvironmentBadge />
-          </div>
-
-          <div className="mt-1">
-            <a
-              href="/admin"
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              ← Back to Admin
-            </a>
-          </div>
-        </div>
-
-        {/* Gate */}
-        <AdminGate>
-          {({ uid }) => <PotPanel uid={uid} />}
-        </AdminGate>
-
-      </div>
-    </div>
+    <AdminShell title="Prize Pot" subtitle="Payment tracking and pot entry confirmation panel." wide>
+      <AdminGate>
+        {({ uid }) => <PotPanel uid={uid} />}
+      </AdminGate>
+    </AdminShell>
   );
 }

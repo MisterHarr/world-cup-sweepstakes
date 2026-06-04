@@ -1,90 +1,104 @@
 "use client";
 
-import { AdminEnvironmentBadge } from "@/components/admin/AdminEnvironmentBadge";
 import { AdminGate } from "@/components/admin/AdminGate";
+import { AdminShell } from "@/components/admin/AdminShell";
+
+const STEPS = [
+  {
+    n: "1",
+    title: "Keep costs low",
+    color: "border-slate-700/60",
+    body: (
+      <p className="text-sm text-slate-300">
+        Keep <strong>Live Score Updates</strong> turned <strong>off</strong> when the tournament isn&apos;t actively running.
+        Use <strong>Test data</strong> or <strong>Off</strong> as the data source during setup to avoid API usage.
+      </p>
+    ),
+  },
+  {
+    n: "2",
+    title: "Before the tournament",
+    color: "border-sky-500/30",
+    body: (
+      <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+        <li>Open <strong>Match Data</strong> and confirm you&apos;re signed in as admin.</li>
+        <li>Use <strong>Clear &amp; Reload</strong> to set a clean test baseline.</li>
+        <li>Check that the Leaderboard and Live tab look correct.</li>
+      </ol>
+    ),
+  },
+  {
+    n: "3",
+    title: "Go live",
+    color: "border-emerald-500/30",
+    body: (
+      <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+        <li>Set data source to <strong>Live scores (football-data.org)</strong>.</li>
+        <li>Set mode to <strong>Production</strong> to enable scheduled updates.</li>
+        <li>Click <strong>Save Settings</strong>.</li>
+        <li>Confirm the success message and timestamp update.</li>
+      </ol>
+    ),
+  },
+  {
+    n: "4",
+    title: "If something goes wrong",
+    color: "border-rose-500/30",
+    body: (
+      <p className="text-sm text-slate-300">
+        If live updates stop working, turn off automation and run{" "}
+        <strong>Load Match Data</strong> and <strong>Refresh Scores</strong> manually.
+        Check the Leaderboard and Live tab after each action.
+      </p>
+    ),
+  },
+  {
+    n: "5",
+    title: "After the tournament",
+    color: "border-violet-500/30",
+    body: (
+      <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
+        <li>Set mode back to <strong>Disabled</strong>.</li>
+        <li>Save settings and confirm the timestamp updates.</li>
+        <li>Note the final leaderboard timestamp for your records.</li>
+      </ol>
+    ),
+  },
+  {
+    n: "6",
+    title: "Full technical runbook",
+    color: "border-slate-700/60",
+    body: (
+      <p className="text-sm text-slate-300">
+        Detailed procedures in <code className="text-xs bg-slate-800 px-1.5 py-0.5 rounded">docs/TOURNAMENT-RUNBOOK.md</code>
+      </p>
+    ),
+  },
+];
 
 export default function TournamentRunbookPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
-      <div className="max-w-4xl mx-auto p-6 space-y-6">
-        <div className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.35)]">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">
-                Tournament Checklist
-              </h1>
-              <a
-                href="/admin"
-                className="text-xs uppercase tracking-widest text-slate-400 hover:text-emerald-200"
+    <AdminShell title="Tournament Checklist" subtitle="Steps to follow before, during, and after the tournament." wide>
+      <AdminGate>
+        {() => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {STEPS.map((step) => (
+              <div
+                key={step.n}
+                className={`rounded-xl border bg-slate-900/60 p-4 space-y-2 ${step.color}`}
               >
-                Back to Tools
-              </a>
-            </div>
-            <AdminEnvironmentBadge />
+                <div className="flex items-center gap-2">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-slate-300 shrink-0">
+                    {step.n}
+                  </span>
+                  <h2 className="text-sm font-semibold text-slate-100">{step.title}</h2>
+                </div>
+                <div className="pl-8">{step.body}</div>
+              </div>
+            ))}
           </div>
-          <p className="mt-4 text-sm text-slate-300">
-            Steps to follow before, during and after the tournament.
-          </p>
-        </div>
-        <AdminGate>
-          {() => (
-            <>
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">1) Keep Costs Low</h2>
-                <p className="text-sm text-slate-300">
-                  Keep <strong>Live Score Updates</strong> turned{" "}
-                  <strong>off</strong> when the tournament isn't actively running.
-                  Use <strong>Test data</strong> or <strong>Off</strong> as the data source during setup.
-                </p>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">2) Before the Tournament</h2>
-                <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                  <li>Open <strong>Match Data</strong> and confirm you're signed in as admin.</li>
-                  <li>Use <strong>Clear &amp; Reload</strong> to set a clean test baseline.</li>
-                  <li>Check that the Leaderboard and Match Centre look correct.</li>
-                </ol>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">3) Go Live</h2>
-                <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                  <li>Set data source to <strong>Live scores (football-data.org)</strong>.</li>
-                  <li>Set mode to <strong>Production</strong> to enable scheduled updates.</li>
-                  <li>Click <strong>Save Settings</strong>.</li>
-                  <li>Confirm the success message and timestamp update.</li>
-                </ol>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">4) If Something Goes Wrong</h2>
-                <p className="text-sm text-slate-300">
-                  If live updates stop working, turn off automation and run
-                  <strong> Load Match Data</strong> and <strong>Refresh Scores</strong> manually.
-                  Check the Leaderboard and Live tab after each action.
-                </p>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">5) After the Tournament</h2>
-                <ol className="list-decimal pl-5 text-sm text-slate-300 space-y-1">
-                  <li>Set mode back to <strong>Disabled</strong>.</li>
-                  <li>Save settings and confirm the timestamp updates.</li>
-                  <li>Note the final leaderboard timestamp for your records.</li>
-                </ol>
-              </section>
-
-              <section className="rounded-2xl border border-slate-800/60 bg-slate-900/70 p-6 space-y-3">
-                <h2 className="text-lg font-semibold">Full details</h2>
-                <p className="text-sm text-slate-300">
-                  Technical runbook: <code>docs/TOURNAMENT-RUNBOOK.md</code>
-                </p>
-              </section>
-            </>
-          )}
-        </AdminGate>
-      </div>
-    </div>
+        )}
+      </AdminGate>
+    </AdminShell>
   );
 }
