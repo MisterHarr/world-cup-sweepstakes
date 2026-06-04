@@ -806,101 +806,85 @@ function DashboardPageContent() {
       setLastMatchUpdate(latestUpdatedAt);
       setLoadingMatches(false);
 
-      const missing = Array.from(teamIds).filter(
-        (id) => !matchTeamNamesRef.current[id] && !pendingTeamIdsRef.current.has(id)
-      );
-      if (missing.length) {
-        // Check the teams localStorage cache before going to Firestore.
-        // The teams effect (declared after this one) hasn't run yet when
-        // applyGrouped fires, so the ref is empty even on return visits.
-        // Reading the cache here avoids the duplicate 48-read fetch.
-        let resolvedFromCache = false;
-        try {
-          const raw = typeof window !== "undefined" ? localStorage.getItem(TEAMS_CACHE_KEY) : null;
-          if (raw) {
-            const { docs: td, ts: tts } = JSON.parse(raw) as {
-              docs: Array<{ id: string; d: Record<string, unknown> }>;
-              ts: number;
-            };
-            if (Date.now() - tts < TEAMS_CACHE_TTL) {
-              const names: Record<string, string> = {};
-              const flags: Record<string, string> = {};
-              td.forEach((c) => {
-                names[c.id] = typeof c.d.name === "string" && c.d.name.trim() ? c.d.name.trim() : c.id;
-                if (typeof c.d.flagUrl === "string" && c.d.flagUrl.trim()) flags[c.id] = c.d.flagUrl.trim();
-              });
-              if (Object.keys(names).length) {
-                setMatchTeamNames((prev) => ({ ...prev, ...names }));
-                matchTeamNamesRef.current = { ...matchTeamNamesRef.current, ...names };
-              }
-              if (Object.keys(flags).length) {
-                setMatchTeamFlags((prev) => ({ ...prev, ...flags }));
-                matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...flags };
-              }
-              resolvedFromCache = true;
-            }
-          }
-        } catch { /* ignore corrupt cache */ }
-
-        if (!resolvedFromCache) {
-          missing.forEach((id) => pendingTeamIdsRef.current.add(id));
-          fetchTeamsByIds(missing)
-            .then((teamsMap) => {
-              if (cancelled) return;
-              const updates: Record<string, string> = {};
-              const flagUpdates: Record<string, string> = {};
-              Object.entries(teamsMap).forEach(([id, team]) => {
-                const name = typeof team?.name === "string" && team.name.trim().length ? team.name.trim() : id;
-                updates[id] = name;
-                if (typeof team?.flagUrl === "string" && team.flagUrl.trim()) flagUpdates[id] = team.flagUrl.trim();
-              });
-              if (Object.keys(updates).length) setMatchTeamNames((prev) => ({ ...prev, ...updates }));
-              if (Object.keys(flagUpdates).length) setMatchTeamFlags((prev) => ({ ...prev, ...flagUpdates }));
-            })
-            .catch(console.error)
-            .finally(() => { missing.forEach((id) => pendingTeamIdsRef.current.delete(id)); });
-        }
-      }
+      // Team names and flags are populated directly from the matchSummary doc
+      // in fetchFullSchedule — no separate fetchTeamsByIds call needed.
     };
 
-    // ── full schedule fetch (with session cache) ─────────────────────────────
+    // ── fetch from settings/matchSummary — 1 read instead of 104 ────────────
+    // The summary doc contains all match entries (pre-processed, no Timestamps)
+    // plus teamNames and teamFlags.  It is maintained by the ingest Cloud
+    // Function (patchMatchSummary) so it stays current without the client
+    // reading the full matches collection.
     const fetchFullSchedule = async () => {
-      // Try session cache first for instant render
+      // Try localStorage cache first (plain JSON, no Timestamp serialization issues)
       try {
         const raw = typeof window !== "undefined" ? localStorage.getItem(MATCH_CACHE_KEY) : null;
         if (raw) {
-          const { docs: cachedDocs, ts } = JSON.parse(raw) as {
-            docs: Array<{ id: string; d: Record<string, unknown> }>;
+          const { summary: cached, ts } = JSON.parse(raw) as {
+            summary: { matches: Record<string, unknown>[]; teamNames: Record<string, string>; teamFlags: Record<string, string> };
             ts: number;
           };
-          if (Date.now() - ts < MATCH_CACHE_TTL) {
-            const { grouped, teamIds, latestUpdatedAt } = processSnapshotDocs(
-              cachedDocs.map((c) => ({ id: c.id, data: () => c.d }))
+          if (Date.now() - ts < MATCH_CACHE_TTL && Array.isArray(cached?.matches)) {
+            const { grouped, latestUpdatedAt } = processSnapshotDocs(
+              cached.matches.map((m) => ({ id: String(m.id ?? ""), data: () => m }))
             );
-            applyGrouped(grouped, teamIds, latestUpdatedAt);
-            return; // served from cache — skip Firestore read this open
+            applyGrouped(grouped, new Set<string>(), latestUpdatedAt);
+            // Populate team display data from cached summary
+            if (Object.keys(cached.teamNames ?? {}).length) {
+              setMatchTeamNames((prev) => ({ ...prev, ...cached.teamNames }));
+              matchTeamNamesRef.current = { ...matchTeamNamesRef.current, ...cached.teamNames };
+            }
+            if (Object.keys(cached.teamFlags ?? {}).length) {
+              setMatchTeamFlags((prev) => ({ ...prev, ...cached.teamFlags }));
+              matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...cached.teamFlags };
+            }
+            return;
           }
         }
       } catch { /* ignore corrupt cache */ }
 
-      // Cache miss or expired — fetch from Firestore
-      const snap = await getDocs(query(collection(db, "matches"), orderBy("kickoffTime", "asc")));
+      // Cache miss — read the single summary document (1 Firestore read)
+      const summarySnap = await getDoc(doc(db, "settings", "matchSummary"));
       if (cancelled) return;
 
-      // Populate cache
+      if (!summarySnap.exists()) {
+        // Summary not yet seeded — fall back to full collection read
+        const snap = await getDocs(query(collection(db, "matches"), orderBy("kickoffTime", "asc")));
+        if (cancelled) return;
+        const { grouped, latestUpdatedAt } = processSnapshotDocs(
+          snap.docs.map((d) => ({ id: d.id, data: () => d.data() as Record<string, unknown> }))
+        );
+        applyGrouped(grouped, new Set<string>(), latestUpdatedAt);
+        return;
+      }
+
+      const summary = summarySnap.data() as {
+        matches: Record<string, unknown>[];
+        teamNames: Record<string, string>;
+        teamFlags: Record<string, string>;
+      };
+
+      // Cache the summary (plain JSON — no Firestore Timestamps in the stored fields)
       try {
         if (typeof window !== "undefined") {
-          localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({
-            docs: snap.docs.map((d) => ({ id: d.id, d: d.data() })),
-            ts: Date.now(),
-          }));
+          localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ summary, ts: Date.now() }));
         }
-      } catch { /* storage full — ignore */ }
+      } catch { /* storage full */ }
 
-      const { grouped, teamIds, latestUpdatedAt } = processSnapshotDocs(
-        snap.docs.map((d) => ({ id: d.id, data: () => d.data() as Record<string, unknown> }))
+      const { grouped, latestUpdatedAt } = processSnapshotDocs(
+        (summary.matches ?? []).map((m) => ({ id: String(m.id ?? ""), data: () => m }))
       );
-      applyGrouped(grouped, teamIds, latestUpdatedAt);
+      applyGrouped(grouped, new Set<string>(), latestUpdatedAt);
+
+      // Populate team names and flags from the summary — no fetchTeamsByIds needed
+      if (Object.keys(summary.teamNames ?? {}).length) {
+        setMatchTeamNames((prev) => ({ ...prev, ...summary.teamNames }));
+        matchTeamNamesRef.current = { ...matchTeamNamesRef.current, ...summary.teamNames };
+      }
+      if (Object.keys(summary.teamFlags ?? {}).length) {
+        setMatchTeamFlags((prev) => ({ ...prev, ...summary.teamFlags }));
+        matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...summary.teamFlags };
+      }
     };
 
     fetchFullSchedule().catch((err) => {
@@ -922,7 +906,7 @@ function DashboardPageContent() {
       const hasRemovals = liveSnap.docChanges().some((c) => c.type === "removed");
       if (hasRemovals) {
         // A match just finished — bust both caches.
-        // Match cache: so the final score is fetched on next getDocs.
+        // Match cache: so the updated matchSummary is fetched on next getDoc.
         // Teams cache: recomputeScores will update team stats; next visit gets fresh data.
         try {
           if (typeof window !== "undefined") {
