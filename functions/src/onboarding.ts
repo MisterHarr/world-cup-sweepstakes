@@ -11,6 +11,7 @@ import {
 } from "./functionUtils";
 
 import { CALL_OPTS } from "./runtimeConfig";
+import { recomputeScoresCore } from "./scoring";
 
 type PortfolioItem = { teamId: string; role: "featured" | "drawn" };
 
@@ -321,6 +322,20 @@ export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
         drawn: drawnTeams,
       };
     });
+
+    // Recompute leaderboard so the new user appears immediately.
+    // Pre-tournament this is cheap (all scores are 0); during the
+    // tournament it picks up their teams for the next live standings.
+    try {
+      await recomputeScoresCore({
+        includeLive: false,
+        scoringVersion: "v1",
+        initiatedBy: uid,
+      });
+    } catch (recomputeErr) {
+      // Non-fatal — user is enrolled; leaderboard will update on next recompute.
+      console.error("Post-onboarding recompute failed (non-fatal):", recomputeErr);
+    }
 
     return {
       ok: true,
