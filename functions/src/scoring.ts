@@ -315,6 +315,8 @@ type LeaderboardRow = {
   badgeCount: number;
   rank: number;
   department: string | null;
+  /** Sum of goals scored by all portfolio teams — used as first tiebreaker. */
+  tiebreakGoals: number;
 };
 
 type PortfolioItem = {
@@ -555,6 +557,13 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
       const totalScore =
         featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
+
+      // Tiebreaker: total goals scored by all portfolio teams (unweighted).
+      // More goals → higher rank.  If still tied, players share the same rank.
+      const tiebreakGoals =
+        (featuredId ? (statsByTeam[featuredId]?.goalsScored ?? 0) : 0) +
+        drawnIds.reduce((sum, id) => sum + (statsByTeam[id]?.goalsScored ?? 0), 0);
+
       const isMock = data.isMock === true;
 
       if (!(excludeMockUsersFromLeaderboard && isMock)) {
@@ -562,6 +571,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
           userId: userDoc.id,
           displayName,
           totalScore,
+          tiebreakGoals,
           badgeCount,
           rank: 0,
           department,
@@ -584,11 +594,21 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     rows.sort((a, b) => {
       if (b.totalScore !== a.totalScore) return b.totalScore - a.totalScore;
-      return a.displayName.localeCompare(b.displayName);
+      if (b.tiebreakGoals !== a.tiebreakGoals) return b.tiebreakGoals - a.tiebreakGoals;
+      return 0; // genuine tie → same rank, pot is shared
     });
 
+    // Assign ranks with shared positions for genuine ties.
     rows.forEach((row, idx) => {
-      row.rank = idx + 1;
+      if (idx === 0) {
+        row.rank = 1;
+      } else {
+        const prev = rows[idx - 1];
+        const sharedWithPrev =
+          row.totalScore === prev.totalScore &&
+          row.tiebreakGoals === prev.tiebreakGoals;
+        row.rank = sharedWithPrev ? prev.rank : idx + 1;
+      }
     });
 
     await leaderboardRef.set(

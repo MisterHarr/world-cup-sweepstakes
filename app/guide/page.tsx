@@ -39,7 +39,7 @@ const TRANSFERS = [
   { label: "1 transfer per player", detail: "One swap for the entire tournament." },
   { label: "Window: after group stage", detail: "Opens after all group matches finish (after 28 June). Closes before the Round of 32." },
   { label: "Drawn teams only", detail: "Your Star Team is locked — only drawn teams can be swapped." },
-  { label: "Costs points", detail: "Upgrading to a stronger team costs more. Downgrading costs less. Minimum cost: 2 pts." },
+  { label: "Costs points", detail: "The cost depends on the tiers of the teams involved. Upgrading to a stronger (lower-tier) team costs base 3 pts + 4 pts per tier jumped. Moving to a same-tier or weaker team costs a flat 2 pts. Minimum cost is always 2 pts." },
   { label: "No duplicates", detail: "You can't pick up a team already in your squad." },
   { label: "Any drawn team", detail: "You can drop eliminated or active teams — the choice is yours." },
 ];
@@ -77,6 +77,8 @@ const FAQS = [
   { q: "Can I swap my Star Team?", a: "No. Star Team is locked for the whole tournament." },
   { q: "What happens if my team loses on penalties?", a: "They lose the match — 0 points for the result. But they still earn 1.5 pts per goal scored in normal time and extra time." },
   { q: "Do penalty shootout goals count?", a: "No — only goals scored in normal time (90 mins) and extra time earn points (1.5 pts each). Shootout goals are just for deciding the winner." },
+  { q: "What happens if two players finish on the same score?", a: "Tiebreaker: whoever's portfolio teams scored more goals across the tournament wins. If goals are also level, the prize pot is shared equally between the tied players." },
+  { q: "How much does a transfer cost?", a: "It depends on the tier gap. Upgrading from a Tier 5 to a Tier 1 team costs 19 pts (3 base + 4 × 4 tiers). Upgrading one tier costs 7 pts. Moving to a same or weaker tier always costs 2 pts. You can see the exact cost in the Transfer tab before confirming." },
 ];
 
 // ── Collapsible section ──────────────────────────────────────────────────────
