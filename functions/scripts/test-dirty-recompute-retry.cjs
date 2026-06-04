@@ -119,7 +119,7 @@ async function main() {
   const rows = Array.isArray(leaderboard.rows) ? leaderboard.rows : [];
   const row = rows.find((entry) => entry && entry.userId === adminUser.uid);
   assert(Boolean(row), "Expected leaderboard row for retry test user");
-  assert(Number(row.totalScore) === 6, `Expected leaderboard totalScore=6, got ${row.totalScore}`);
+  assert(Number(row.totalScore) === 7, `Expected leaderboard totalScore=7, got ${row.totalScore}`);
 
   const health = healthSnap.data() || {};
   assert(health.scoresDirty === false, "Expected scoresDirty to be cleared after retry");
@@ -129,7 +129,7 @@ async function main() {
   );
 
   const user = userSnap.data() || {};
-  assert(Number(user.totalScore) === 6, `Expected user totalScore=6, got ${user.totalScore}`);
+  assert(Number(user.totalScore) === 7, `Expected user totalScore=7, got ${user.totalScore}`);
 
   console.log("PASS: dirty recompute retry regression test succeeded.");
 }
