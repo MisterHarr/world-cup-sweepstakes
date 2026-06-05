@@ -20,6 +20,12 @@ import { AdminShell, AdminSectionLabel } from "@/components/admin/AdminShell";
 import { db, functions } from "@/lib/firebase";
 import { PRIZE_POT_CONFIG } from "@/lib/prizePot";
 
+// ── Mode flag ─────────────────────────────────────────────────────────────────
+// Pot is currently collected manually (off-site). The legacy QR / self-service
+// entry flow UI is hidden but the code is preserved so it can be re-enabled
+// if/when on-site entries return.  Toggle to `true` to restore the old UX.
+const SHOW_LEGACY_QR_FLOW = false;
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type PotPaymentStatus = "paid" | "opted_out" | "pending";
@@ -479,23 +485,39 @@ function PotPanel({ uid }: { uid: string }) {
         <AdminSectionLabel>Entry management</AdminSectionLabel>
 
         {/* ── Summary strip ──────────────────────────────────────── */}
+        {/* In manual collection mode (SHOW_LEGACY_QR_FLOW === false):
+            • Pending  = players with no payment status response yet
+            • Paid     = players marked Paid via the left-column tracker
+            • Pot total = paid players × ticket price
+            In legacy QR mode these reflect potEntries collection state. */}
         <div className="grid grid-cols-3 gap-2">
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
-          <div className="text-2xl font-black text-amber-300">{pending.length}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Pending</div>
+          <div className="text-2xl font-black text-amber-300">
+            {SHOW_LEGACY_QR_FLOW ? pending.length : pendingUsers.length}
+          </div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            {SHOW_LEGACY_QR_FLOW ? "Pending" : "No response"}
+          </div>
         </div>
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
-          <div className="text-2xl font-black text-emerald-300">{confirmed.length}</div>
-          <div className="text-xs text-slate-400 mt-0.5">Confirmed</div>
+          <div className="text-2xl font-black text-emerald-300">
+            {SHOW_LEGACY_QR_FLOW ? confirmed.length : paidUsers.length}
+          </div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            {SHOW_LEGACY_QR_FLOW ? "Confirmed" : "Paid"}
+          </div>
         </div>
         <div className="rounded-xl border border-yellow-400/30 bg-yellow-400/10 p-4 text-center">
           <div className="text-2xl font-black text-yellow-300">
-            {PRIZE_POT_CONFIG.currency}{potTotal}
+            {PRIZE_POT_CONFIG.currency}{SHOW_LEGACY_QR_FLOW ? potTotal : (paidUsers.length * PRIZE_POT_CONFIG.amountPerEntry)}
           </div>
           <div className="text-xs text-slate-400 mt-0.5">Pot total</div>
         </div>
       </div>
 
+      {/* ── Legacy QR / self-service entry UI (hidden while pot is off-site) ── */}
+      {SHOW_LEGACY_QR_FLOW && (
+      <>
       {/* ── Entry window controls ─────────────────────────────────── */}
       <div className="rounded-xl border border-slate-800/60 bg-slate-900/70 overflow-hidden">
 
@@ -761,6 +783,9 @@ function PotPanel({ uid }: { uid: string }) {
           </ul>
         )}
       </div>
+      </>
+      )}
+      {/* ── end legacy QR / self-service entry UI ────────────────── */}
 
       {/* ── Export confirmed entrants ──────────────────────────── */}
       <div className="rounded-xl border border-slate-800/60 bg-slate-900/70 overflow-hidden">
