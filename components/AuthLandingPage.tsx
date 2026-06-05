@@ -428,7 +428,7 @@ export function AuthLandingPage() {
                       3. Your Star Team gets double points.
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      4. You get 5 Drawn Teams at random.
+                      4. You get 5 Drawn Teams — a fair mix of favourites and underdogs.
                     </p>
                     <p className="text-xs text-muted-foreground">
                       5. Watch your score and rank update as matches finish.
