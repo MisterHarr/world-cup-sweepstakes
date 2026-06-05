@@ -11,7 +11,6 @@ import {
 } from "./functionUtils";
 
 import { CALL_OPTS } from "./runtimeConfig";
-import { recomputeScoresCore } from "./scoring";
 
 type PortfolioItem = { teamId: string; role: "featured" | "drawn" };
 
@@ -323,18 +322,65 @@ export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
       };
     });
 
-    // Recompute leaderboard so the new user appears immediately.
-    // Pre-tournament this is cheap (all scores are 0); during the
-    // tournament it picks up their teams for the next live standings.
+    // Add the new user to leaderboard/current as a single row.
+    //
+    // A brand new user has 0 points and 0 goals — we don't need a full
+    // recompute (which reads ~163 docs). Just append their row.  The full
+    // recompute runs naturally on the next scheduler tick once the
+    // tournament starts and will resync everything.
+    //
+    // Cost: 1 read + 1 write per signup (vs ~163 reads before).
     try {
-      await recomputeScoresCore({
-        includeLive: false,
-        scoringVersion: "v1",
-        initiatedBy: uid,
-      });
-    } catch (recomputeErr) {
-      // Non-fatal — user is enrolled; leaderboard will update on next recompute.
-      console.error("Post-onboarding recompute failed (non-fatal):", recomputeErr);
+      const db = admin.firestore();
+      const lbRef = db.collection("leaderboard").doc("current");
+      const userSnap = await db.collection("users").doc(uid).get();
+      const userData = (userSnap.exists ? userSnap.data() : {}) as Record<string, unknown>;
+      const displayName =
+        (typeof userData.username === "string" && userData.username.trim()) ||
+        (typeof userData.displayName === "string" && userData.displayName.trim()) ||
+        "Player";
+      const department = typeof userData.department === "string" ? userData.department : null;
+
+      const lbSnap = await lbRef.get();
+      if (lbSnap.exists) {
+        const lbData = (lbSnap.data() ?? {}) as Record<string, unknown>;
+        const rows = Array.isArray(lbData.rows)
+          ? (lbData.rows as Record<string, unknown>[])
+          : [];
+        const alreadyPresent = rows.some((r) => r.userId === uid);
+        if (!alreadyPresent) {
+          const newRow = {
+            userId: uid,
+            displayName,
+            totalScore: 0,
+            tiebreakGoals: 0,
+            badgeCount: 0,
+            rank: rows.length + 1, // last position; full recompute will resort
+            department,
+          };
+          await lbRef.update({
+            rows: [...rows, newRow],
+            rowCount: rows.length + 1,
+          });
+        }
+      } else {
+        // Edge case — leaderboard doesn't exist yet. Create it.
+        await lbRef.set({
+          rows: [{
+            userId: uid,
+            displayName,
+            totalScore: 0,
+            tiebreakGoals: 0,
+            badgeCount: 0,
+            rank: 1,
+            department,
+          }],
+          rowCount: 1,
+        });
+      }
+    } catch (lbErr) {
+      // Non-fatal — user is enrolled; next recompute will catch them.
+      console.error("Post-onboarding leaderboard patch failed (non-fatal):", lbErr);
     }
 
     return {

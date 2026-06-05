@@ -37,24 +37,24 @@ const TERMS = [
 
 const SQUAD = [
   {
-    label: "1 Star Team",
-    detail: "You choose your Star Team from any of the 48 tournament teams. Locked for the whole tournament. Earns 2× points.",
+    label: "1 Star Team (your pick)",
+    detail: "Choose any of the 48 teams. Locked for the whole tournament. Earns double points.",
   },
   {
-    label: "5 Drawn Teams — tier-balanced",
-    detail: "Every player gets the same tier distribution regardless of who they pick as Star: 1 from Tier 1 (elite), 1 from Tier 2 (strong), 2 from Tier 3 (competitive), 2 from Tier 4 (underdogs). The draw adjusts so your final squad always has 1+1+2+2 across the tiers, counting your Star.",
+    label: "5 Drawn Teams (auto-assigned)",
+    detail: "You'll get a fair mix: a couple of favourites, a couple of mid-strength teams, and a couple of underdogs. Everyone gets the same kind of spread — picking a strong Star doesn't mean you also luck into the best drawn teams.",
   },
   {
-    label: "Example",
-    detail: "Star: Brazil (Tier 1) → drawn: 1 Tier 2 + 2 Tier 3 + 2 Tier 4. Star: Cabo Verde (Tier 4) → drawn: 1 Tier 1 + 1 Tier 2 + 2 Tier 3 + 1 Tier 4. Either way, your final squad covers every tier.",
+    label: "How the spread works",
+    detail: "Teams are split into 4 strength groups (Tier 1 = favourites, Tier 4 = underdogs). Your final 6-team squad always covers all four — counting your Star plus the 5 drawn.",
   },
   {
-    label: "No same-group duplicates",
-    detail: "You'll never get two teams from the same World Cup group. This means your 6 teams span 6 different groups.",
+    label: "No repeats from the same group",
+    detail: "You won't get any two teams from the same World Cup group. Your 6 teams will come from 6 different groups.",
   },
   {
-    label: "Why balanced?",
-    detail: "Every player starts on a level playing field. Picking the best Star Team doesn't mean you also luck into the best drawn teams — the structure guarantees a spread of strong and underdog teams for everyone.",
+    label: "Why we do it this way",
+    detail: "It keeps the game fair. Everyone gets a real chance to score points — you'll have something to cheer for in every stage of the tournament, whether your favourites are still in it or you're rooting for an underdog upset.",
   },
 ];
 
