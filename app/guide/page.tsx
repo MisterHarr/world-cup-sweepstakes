@@ -29,10 +29,33 @@ const POINTS = [
 
 const TERMS = [
   { term: "Star Team", meaning: "Your chosen team. Earns double points." },
-  { term: "Drawn Teams", meaning: "5 random teams assigned to you." },
-  { term: "Transfer", meaning: "Swap one drawn team for another." },
+  { term: "Drawn Teams", meaning: "5 teams assigned to you by the tier-balanced draw — see Your squad section." },
+  { term: "Transfer", meaning: "Swap one drawn team for another (one-time, after group stage)." },
   { term: "Clean Sheet", meaning: "0 goals conceded in a match. +1 pt." },
   { term: "Cards", meaning: "Yellow −0.25 pt · Red −1 pt." },
+];
+
+const SQUAD = [
+  {
+    label: "1 Star Team",
+    detail: "You choose your Star Team from any of the 48 tournament teams. Locked for the whole tournament. Earns 2× points.",
+  },
+  {
+    label: "5 Drawn Teams — tier-balanced",
+    detail: "Every player gets the same tier distribution regardless of who they pick as Star: 1 from Tier 1 (elite), 1 from Tier 2 (strong), 2 from Tier 3 (competitive), 2 from Tier 4 (underdogs). The draw adjusts so your final squad always has 1+1+2+2 across the tiers, counting your Star.",
+  },
+  {
+    label: "Example",
+    detail: "Star: Brazil (Tier 1) → drawn: 1 Tier 2 + 2 Tier 3 + 2 Tier 4. Star: Cabo Verde (Tier 4) → drawn: 1 Tier 1 + 1 Tier 2 + 2 Tier 3 + 1 Tier 4. Either way, your final squad covers every tier.",
+  },
+  {
+    label: "No same-group duplicates",
+    detail: "You'll never get two teams from the same World Cup group. This means your 6 teams span 6 different groups.",
+  },
+  {
+    label: "Why balanced?",
+    detail: "Every player starts on a level playing field. Picking the best Star Team doesn't mean you also luck into the best drawn teams — the structure guarantees a spread of strong and underdog teams for everyone.",
+  },
 ];
 
 const TRANSFERS = [
@@ -224,6 +247,17 @@ export default function GuidePage() {
                 </li>
               ))}
             </ul>
+          </GuideSection>
+
+          <GuideSection title="Your squad — how the draw works" defaultOpen>
+            <div className="mt-3 space-y-2">
+              {SQUAD.map((r) => (
+                <div key={r.label} className="rounded-xl border border-border bg-background/40 p-3">
+                  <p className="text-sm font-semibold text-foreground">{r.label}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{r.detail}</p>
+                </div>
+              ))}
+            </div>
           </GuideSection>
 
           <GuideSection title="Knockout rounds &amp; penalties">

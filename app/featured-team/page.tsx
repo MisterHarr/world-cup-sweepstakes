@@ -392,6 +392,18 @@ export default function FeaturedTeamPage() {
             <p className="mt-3 text-sm sm:text-base font-semibold text-primary">
               Your Star Team earns <span className="font-black">2× points</span> — choose wisely.
             </p>
+            <div className="mt-4 rounded-xl border border-border bg-background/60 px-4 py-3 text-left">
+              <p className="text-xs sm:text-sm font-semibold text-foreground mb-1">
+                After you choose your Star Team:
+              </p>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                You'll be assigned 5 drawn teams via a tier-balanced draw. Every player
+                gets the same tier spread regardless of who they pick as Star —
+                <span className="font-semibold text-foreground"> 1 Tier 1, 1 Tier 2, 2 Tier 3, 2 Tier 4</span>
+                {" "}across your final 6-team squad (counting your Star).
+                You'll never get two teams from the same World Cup group.
+              </p>
+            </div>
           </div>
 
           {/* Error / Status */}
