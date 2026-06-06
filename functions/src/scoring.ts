@@ -376,71 +376,90 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     const matchesSnap = await db.collection(matchesCollection).get();
 
-    const statsByTeam: Record<string, TeamStats> = {};
     const eligibleStatuses: MatchStatus[] = includeLive
       ? ["LIVE", "FINISHED"]
       : ["FINISHED"];
 
-    matchesSnap.docs.forEach((docSnap) => {
-      const data = docSnap.data() as Record<string, unknown>;
-      const status = asStatus(data.status);
-      if (!status || !eligibleStatuses.includes(status)) return;
-      if (data.isScoringEligible === false) return; // placeholder fixtures never count
+    // Aggregate per-team stats from a match subset.
+    // `minKickoffMs` excludes matches that kicked off at or before that
+    // timestamp — used to give late joiners scoring only from matches that
+    // start AFTER they signed up.  Pass null to include all matches.
+    function aggregateStats(
+      minKickoffMs: number | null
+    ): Record<string, TeamStats> {
+      const stats: Record<string, TeamStats> = {};
+      matchesSnap.docs.forEach((docSnap) => {
+        const data = docSnap.data() as Record<string, unknown>;
+        const status = asStatus(data.status);
+        if (!status || !eligibleStatuses.includes(status)) return;
+        if (data.isScoringEligible === false) return; // placeholder fixtures never count
 
-      const homeTeamId = asString(data.homeTeamId);
-      const awayTeamId = asString(data.awayTeamId);
-      const homeScore = asNumberOrNull(data.homeScore);
-      const awayScore = asNumberOrNull(data.awayScore);
+        // Late-joiner filter: skip matches that kicked off before the user joined.
+        if (minKickoffMs !== null) {
+          const kickoffRaw = typeof data.kickoffTime === "string" ? data.kickoffTime : "";
+          const kickoffMs = Date.parse(kickoffRaw);
+          if (!Number.isNaN(kickoffMs) && kickoffMs <= minKickoffMs) return;
+        }
 
-      if (!homeTeamId || !awayTeamId) return;
-      if (homeScore === null || awayScore === null) return;
+        const homeTeamId = asString(data.homeTeamId);
+        const awayTeamId = asString(data.awayTeamId);
+        const homeScore = asNumberOrNull(data.homeScore);
+        const awayScore = asNumberOrNull(data.awayScore);
 
-      if (!statsByTeam[homeTeamId]) statsByTeam[homeTeamId] = emptyStats();
-      if (!statsByTeam[awayTeamId]) statsByTeam[awayTeamId] = emptyStats();
+        if (!homeTeamId || !awayTeamId) return;
+        if (homeScore === null || awayScore === null) return;
 
-      const home = statsByTeam[homeTeamId];
-      const away = statsByTeam[awayTeamId];
+        if (!stats[homeTeamId]) stats[homeTeamId] = emptyStats();
+        if (!stats[awayTeamId]) stats[awayTeamId] = emptyStats();
 
-      // homeScore/awayScore are regulation+ET goals only (penalties excluded by provider).
-      // These always count toward goal points regardless of stage.
-      home.goalsScored += homeScore;
-      home.goalsConceded += awayScore;
-      away.goalsScored += awayScore;
-      away.goalsConceded += homeScore;
+        const home = stats[homeTeamId];
+        const away = stats[awayTeamId];
 
-      // Knockout stages: no draw points. Winner determined by score, or by the
-      // `winner` field when the match was decided on penalties (score tied at FT/AET).
-      const matchStage = asStage(data.stage) ?? "GROUP";
-      const isKnockout = matchStage !== "GROUP";
-      const penWinner = asString(data.winner); // "HOME" | "AWAY" | null
+        home.goalsScored += homeScore;
+        home.goalsConceded += awayScore;
+        away.goalsScored += awayScore;
+        away.goalsConceded += homeScore;
 
-      if (homeScore > awayScore || (isKnockout && homeScore === awayScore && penWinner === "HOME")) {
-        home.wins += 1;
-        away.losses += 1;
-      } else if (awayScore > homeScore || (isKnockout && homeScore === awayScore && penWinner === "AWAY")) {
-        away.wins += 1;
-        home.losses += 1;
-      } else if (!isKnockout) {
-        // Group stage draw
-        home.draws += 1;
-        away.draws += 1;
+        const matchStage = asStage(data.stage) ?? "GROUP";
+        const isKnockout = matchStage !== "GROUP";
+        const penWinner = asString(data.winner);
+
+        if (homeScore > awayScore || (isKnockout && homeScore === awayScore && penWinner === "HOME")) {
+          home.wins += 1;
+          away.losses += 1;
+        } else if (awayScore > homeScore || (isKnockout && homeScore === awayScore && penWinner === "AWAY")) {
+          away.wins += 1;
+          home.losses += 1;
+        } else if (!isKnockout) {
+          home.draws += 1;
+          away.draws += 1;
+        }
+
+        if (awayScore === 0) home.cleanSheets += 1;
+        if (homeScore === 0) away.cleanSheets += 1;
+
+        home.redCards += asNonNegativeNumber(data.homeRedCards) ?? 0;
+        home.yellowCards += asNonNegativeNumber(data.homeYellowCards) ?? 0;
+        away.redCards += asNonNegativeNumber(data.awayRedCards) ?? 0;
+        away.yellowCards += asNonNegativeNumber(data.awayYellowCards) ?? 0;
+      });
+      return stats;
+    }
+
+    // Global stats — used to update teams/{id} docs (full tournament view)
+    // and for users who joined before the tournament started.
+    const statsByTeam = aggregateStats(null);
+
+    // Earliest match kickoff — used as the fast-path threshold below.
+    // If a user joined before this point, no matches are filtered out and we
+    // can reuse the global stats without a per-user aggregation pass.
+    let earliestKickoffMs = Infinity;
+    matchesSnap.docs.forEach((doc) => {
+      const kt = doc.data().kickoffTime;
+      if (typeof kt === "string") {
+        const ms = Date.parse(kt);
+        if (!Number.isNaN(ms) && ms < earliestKickoffMs) earliestKickoffMs = ms;
       }
-      // Knockout tie with no winner field yet (match still in progress or not resolved):
-      // no points awarded — will be recalculated once winner is known.
-
-      // Clean sheets: based on regulation+ET goals only (penalty shootout goals don't count).
-      if (awayScore === 0) home.cleanSheets += 1;
-      if (homeScore === 0) away.cleanSheets += 1;
-
-      const homeRedCards = asNonNegativeNumber(data.homeRedCards) ?? 0;
-      const homeYellowCards = asNonNegativeNumber(data.homeYellowCards) ?? 0;
-      const awayRedCards = asNonNegativeNumber(data.awayRedCards) ?? 0;
-      const awayYellowCards = asNonNegativeNumber(data.awayYellowCards) ?? 0;
-
-      home.redCards += homeRedCards;
-      home.yellowCards += homeYellowCards;
-      away.redCards += awayRedCards;
-      away.yellowCards += awayYellowCards;
     });
 
     const teamsSnap = await db.collection("teams").get();
@@ -547,9 +566,37 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
           .filter((id): id is string => Boolean(id));
       }
 
-      const featuredPoints = featuredId ? teamPointsById[featuredId] ?? 0 : 0;
+      // Late-joiner rule: a user only scores from matches that kick off
+      // AFTER they confirmed their entry.  Read joinedAt from entry.confirmedAt.
+      // Users without confirmedAt (legacy/test data) get full scoring.
+      let joinedAtMs: number | null = null;
+      const confirmedAtRaw = entry?.confirmedAt;
+      if (confirmedAtRaw && typeof (confirmedAtRaw as { toMillis?: unknown }).toMillis === "function") {
+        joinedAtMs = (confirmedAtRaw as { toMillis: () => number }).toMillis();
+      } else if (typeof confirmedAtRaw === "string") {
+        const parsed = Date.parse(confirmedAtRaw);
+        if (!Number.isNaN(parsed)) joinedAtMs = parsed;
+      }
+
+      // If joinedAt exists AND at least one match has kicked off before it,
+      // recompute team points using only matches that started after joinedAt.
+      // Otherwise reuse the global teamPointsById (fast path for users who
+      // joined before the tournament started — the common case).
+      let userTeamPoints = teamPointsById;
+      let userStatsByTeam = statsByTeam;
+      if (joinedAtMs !== null && joinedAtMs >= earliestKickoffMs) {
+        const userStats = aggregateStats(joinedAtMs);
+        const userPoints: Record<string, number> = {};
+        Object.entries(userStats).forEach(([id, s]) => {
+          userPoints[id] = calcTeamPoints(s);
+        });
+        userTeamPoints = userPoints;
+        userStatsByTeam = userStats;
+      }
+
+      const featuredPoints = featuredId ? userTeamPoints[featuredId] ?? 0 : 0;
       const drawnPoints = drawnIds.reduce(
-        (sum, teamId) => sum + (teamPointsById[teamId] ?? 0),
+        (sum, teamId) => sum + (userTeamPoints[teamId] ?? 0),
         0
       );
       const transferPenaltyPoints = transferPenaltyByUserId[userDoc.id] ?? 0;
@@ -558,11 +605,11 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       const totalScore =
         featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
 
-      // Tiebreaker: total goals scored by all portfolio teams (unweighted).
-      // More goals → higher rank.  If still tied, players share the same rank.
+      // Tiebreaker: total goals scored by all portfolio teams (unweighted)
+      // — also filtered by joinedAt for late joiners.
       const tiebreakGoals =
-        (featuredId ? (statsByTeam[featuredId]?.goalsScored ?? 0) : 0) +
-        drawnIds.reduce((sum, id) => sum + (statsByTeam[id]?.goalsScored ?? 0), 0);
+        (featuredId ? (userStatsByTeam[featuredId]?.goalsScored ?? 0) : 0) +
+        drawnIds.reduce((sum, id) => sum + (userStatsByTeam[id]?.goalsScored ?? 0), 0);
 
       const isMock = data.isMock === true;
 

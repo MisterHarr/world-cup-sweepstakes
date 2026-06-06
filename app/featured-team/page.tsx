@@ -402,6 +402,11 @@ export default function FeaturedTeamPage() {
                 of favourites and underdogs</span> — no matter who you choose as your Star —
                 so the game is fair for everyone.
               </p>
+              <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
+                <span className="font-semibold text-foreground">Joining after the tournament started?</span>
+                {" "}You'll only score from matches that haven't kicked off yet.
+                Historical results don't count.
+              </p>
             </div>
           </div>
 

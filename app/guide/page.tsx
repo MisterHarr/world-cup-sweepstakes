@@ -101,6 +101,7 @@ const FAQS = [
   { q: "What happens if my team loses on penalties?", a: "They lose the match — 0 points for the result. But they still earn 1.5 pts per goal scored in normal time and extra time." },
   { q: "Do penalty shootout goals count?", a: "No — only goals scored in normal time (90 mins) and extra time earn points (1.5 pts each). Shootout goals are just for deciding the winner." },
   { q: "What happens if two players finish on the same score?", a: "Tiebreaker: whoever's finishing portfolio teams scored more goals across the tournament wins. This is based on your 6 teams at the end (1 Star Team + 5 drawn) — not including any team you may have swapped out. If goals are also level, the prize pot is shared equally." },
+  { q: "Can I sign up after the tournament has started?", a: "Yes — you can join at any time. But you'll only score from matches that haven't kicked off yet when you complete your sign-up. Historical results don't count toward your score. So joining later means fewer matches to score from." },
   { q: "How much does a transfer cost? Give me an example.", a: "It depends on the tier gap. Teams are Tier 1 (elite, e.g. Brazil, Argentina) to Tier 4 (underdogs). Example: you hold Haiti (Tier 4) and upgrade to England (Tier 1) — cost is 3 + 3×4 = 15 pts. If England then win 3 knockout matches and score 6 goals with 2 clean sheets, they earn 3×3 + 6×1.5 + 2×1 = 20 pts — a net gain of +5 pts. Moving sideways (same tier) or downgrading costs a flat 2 pts regardless of tiers. You always see the exact cost before confirming." },
 ];
 
