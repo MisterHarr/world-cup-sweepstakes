@@ -117,13 +117,22 @@ function PotPanel({ uid }: { uid: string }) {
           const raw = data.potPaymentStatus;
           const status: PotPaymentStatus =
             raw === "paid" ? "paid" : raw === "opted_out" ? "opted_out" : "pending";
+          // Prefer the user's chosen username over their (possibly stale/
+          // "Anonymous") displayName — matches the convention used by the
+          // leaderboard recompute and other admin surfaces.
+          const username = typeof data.username === "string" ? data.username.trim() : "";
+          const displayName = typeof data.displayName === "string" ? data.displayName.trim() : "";
           return {
             uid: d.id,
-            displayName: typeof data.displayName === "string" ? data.displayName : d.id,
+            displayName: username || displayName || d.id,
             potPaymentStatus: status,
           };
         })
         .filter((r): r is UserPotRecord => r !== null);
+      // Firestore orders by the raw `displayName` field, which may differ from
+      // the resolved name above (username takes priority) — re-sort so the
+      // admin list stays alphabetical by what's actually shown.
+      records.sort((a, b) => a.displayName.localeCompare(b.displayName));
       setAllUsers(records);
     });
     return () => unsub();

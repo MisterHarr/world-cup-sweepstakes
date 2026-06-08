@@ -36,10 +36,10 @@ export type SquadVM = {
   drawn: SquadTeamVM[];
 };
 
-// Pagination kicks in only once the non-podium list exceeds this many rows.
-// 25 keeps all current users (and projected user count for the tournament)
-// on a single page so the Prev/Next buttons aren't needed.
-const OVERALL_PAGE_SIZE = 25;
+// Smaller pages keep the leaderboard fast to load and render. Prev/Next
+// controls are rendered as a sticky bar so they stay reachable without
+// scrolling — see the pagination block below.
+const OVERALL_PAGE_SIZE = 10;
 
 const Skeleton = ({ className }: { className: string }) => (
   <div className={`animate-pulse rounded bg-[var(--ff-hairline-muted)] ${className}`} />
@@ -539,29 +539,33 @@ export default function LeaderboardPanel({
           </div>
 
           {totalPages > 1 ? (
-            <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-[var(--ff-hairline)] bg-[var(--ff-bg-card)] px-3 py-2 font-ff-ui">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage <= 1}
-                className="min-h-[40px] rounded-md border border-[var(--ff-hairline)] px-3 py-2 text-sm font-semibold text-[var(--ff-fg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Prev
-              </button>
-              <p className="text-xs text-[var(--ff-fg-quiet)] sm:text-sm">
-                Page {currentPage} of {totalPages}
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-                }
-                disabled={currentPage >= totalPages}
-                className="min-h-[40px] rounded-md border border-[var(--ff-hairline)] px-3 py-2 text-sm font-semibold text-[var(--ff-fg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+            <>
+              {/* Spacer so the sticky bar below doesn't cover the last rows */}
+              <div className="h-[64px]" aria-hidden />
+              <div className="fixed inset-x-0 bottom-[calc(62px+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex w-full max-w-6xl items-center justify-between gap-2 border-t border-[var(--ff-hairline)] bg-[var(--ff-bg-blur)] px-4 py-2.5 font-ff-ui backdrop-blur-[20px]">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                  className="min-h-[40px] rounded-md border border-[var(--ff-hairline)] px-3 py-2 text-sm font-semibold text-[var(--ff-fg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Prev
+                </button>
+                <p className="text-xs text-[var(--ff-fg-quiet)] sm:text-sm">
+                  Page {currentPage} of {totalPages}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+                  }
+                  disabled={currentPage >= totalPages}
+                  className="min-h-[40px] rounded-md border border-[var(--ff-hairline)] px-3 py-2 text-sm font-semibold text-[var(--ff-fg-secondary)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Next
+                </button>
+              </div>
+            </>
           ) : null}
         </div>
       )}
