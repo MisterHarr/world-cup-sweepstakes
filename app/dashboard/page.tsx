@@ -1126,7 +1126,7 @@ function DashboardPageContent() {
   const topBarDisplayName = (userDocData.username as string | undefined)?.trim() || displayName || null;
 
   // What the *leaderboard* currently shows for this user — i.e. what everyone
-  // else (and the prize-pot admin) sees. A signup-time hiccup can leave
+  // else (and the admins) sees. A signup-time hiccup can leave
   // users/{uid}.displayName permanently set to the literal string "Anonymous"
   // (see lib/userBootstrap.ts fallback chain) when no name was available at
   // bootstrap. Surface a pointed nudge in that case rather than the routine

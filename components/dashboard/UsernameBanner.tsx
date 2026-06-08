@@ -23,9 +23,12 @@ interface Props {
    * The name currently shown for this user on the leaderboard (i.e. what
    * everyone else sees right now). When this resolves to the literal string
    * "Anonymous" — e.g. a signup hiccup meant no name was ever recorded — the
-   * banner switches to a more pointed warning so the player understands the
-   * stakes (organisers can't tell who they are for prize-pot tracking) rather
-   * than reading this as a routine "personalize your profile" suggestion.
+   * banner switches to a more pointed warning so the player understands
+   * they're literally showing up as "Anonymous" to everyone else (rather
+   * than reading this as a routine "personalize your profile" suggestion),
+   * and nudges them to pick literally any name or nickname instead — no
+   * pressure to reveal a real identity, e.g. "The Haaland Globetrotters"
+   * is a perfectly fine, fully anonymous-from-real-life choice.
    */
   currentPublicName?: string;
 }
@@ -102,8 +105,8 @@ export function UsernameBanner({
               <>
                 <span className="font-medium">You&apos;re showing as &quot;Anonymous&quot;</span>
                 <span className="text-[var(--ff-fg-secondary)]">
-                  {" "}on the leaderboard — pick a name so other players (and the
-                  organisers tracking entries) know who you are.
+                  {" "}on the leaderboard — pick any name or nickname so you
+                  stand out from the crowd.
                 </span>
               </>
             ) : (
@@ -149,7 +152,7 @@ export function UsernameBanner({
             </h2>
             <p className="text-sm text-[var(--ff-fg-secondary)] mb-3">
               {isStuckAnonymous
-                ? "Right now everyone — including the organisers tracking who's paid into the prize pot — sees you as “Anonymous”. Choose a name so you can be recognised."
+                ? "Right now you're showing up on the leaderboard as “Anonymous” — same as anyone else who hasn't picked a name yet. It can be anything you like, from your real name to a fun nickname like “The Haaland Globetrotters” — just enough to stand out from the crowd."
                 : "Shown on the leaderboard — not your Google account name."}
             </p>
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
