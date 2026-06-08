@@ -52,7 +52,8 @@ export function drawTierBalanced<T extends { id: string; tier: number; group?: s
   eligibleTeams: T[], // already excludes the star team
   count = 5,
   starTier = 0, // 0 = no compensation (legacy / unknown)
-  starGroup = ""  // group of the star team; drawn teams must be from different groups
+  starGroup = "",  // group of the star team; drawn teams must be from different groups
+  appearanceCounts: Record<string, number> = {} // teamId → times already in other portfolios
 ): T[] {
   // Full-squad target: 1×T1, 1×T2, 2×T3, 2×T4
   const targets: Record<number, number> = { 1: 1, 2: 1, 3: 2, 4: 2 };
@@ -66,6 +67,26 @@ export function drawTierBalanced<T extends { id: string; tier: number; group?: s
   // We draw tier-by-tier (T1 → T2 → T3 → T4) to preserve tier balance.
   const usedGroups = new Set<string>(starGroup ? [starGroup] : []);
   const result: T[] = [];
+
+  // Balanced shuffle: groups the pool by appearance count (ascending) and
+  // shuffles within each bucket.  Result: teams that have been drawn zero
+  // times come first (in random order); then teams drawn once; etc.
+  // This forces under-represented teams to be picked first, while still
+  // randomising the order of equally-rare teams.
+  function balancedOrder(pool: T[]): T[] {
+    const byCount = new Map<number, T[]>();
+    for (const team of pool) {
+      const c = appearanceCounts[team.id] ?? 0;
+      if (!byCount.has(c)) byCount.set(c, []);
+      byCount.get(c)!.push(team);
+    }
+    const sortedCounts = [...byCount.keys()].sort((a, b) => a - b);
+    const ordered: T[] = [];
+    for (const c of sortedCounts) {
+      ordered.push(...shuffle(byCount.get(c)!));
+    }
+    return ordered;
+  }
 
   function pickFromPool(pool: T[], needed: number): T[] {
     const picked: T[] = [];
@@ -82,7 +103,7 @@ export function drawTierBalanced<T extends { id: string; tier: number; group?: s
   for (const tier of [1, 2, 3, 4]) {
     const needed = targets[tier] ?? 0;
     if (needed <= 0) continue;
-    const pool = shuffle(eligibleTeams.filter((t) => t.tier === tier));
+    const pool = balancedOrder(eligibleTeams.filter((t) => t.tier === tier));
     result.push(...pickFromPool(pool, needed));
   }
 
@@ -93,7 +114,7 @@ export function drawTierBalanced<T extends { id: string; tier: number; group?: s
   // Fallback: fill remaining slots from the full pool respecting group constraint
   // (handles edge cases where tier pools run dry due to group exclusions)
   const resultIds = new Set(result.map((t) => t.id));
-  const fallbackPool = shuffle(eligibleTeams.filter((t) => !resultIds.has(t.id)));
+  const fallbackPool = balancedOrder(eligibleTeams.filter((t) => !resultIds.has(t.id)));
   result.push(...pickFromPool(fallbackPool, count - result.length));
 
   // Final safety net: if group constraint makes it impossible (shouldn't happen

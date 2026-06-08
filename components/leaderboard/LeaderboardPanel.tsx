@@ -145,7 +145,13 @@ export default function LeaderboardPanel({
   const rankedRows = useMemo(() => {
     const rows = [...visibleRows];
     rows.sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
-    return rows.map((row, index) => ({ ...row, viewRank: index + 1 }));
+    // Use the authoritative `rank` from Firestore (which correctly handles
+    // shared ranks for tied players). Falling back to index+1 only when the
+    // field is missing (legacy rows from before tiebreaker logic existed).
+    return rows.map((row, index) => ({
+      ...row,
+      viewRank: typeof row.rank === "number" && row.rank > 0 ? row.rank : index + 1,
+    }));
   }, [visibleRows]);
 
   const topThree = useMemo(() => rankedRows.slice(0, 3), [rankedRows]);

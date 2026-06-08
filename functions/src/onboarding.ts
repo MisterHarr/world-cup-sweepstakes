@@ -259,7 +259,36 @@ export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
     throw new HttpsError("failed-precondition", "Not enough teams to draw from.");
   }
 
-  const drawnTeams = drawTierBalanced(eligibleForDraw, 5, featuredTeam.tier, featuredTeam.group);
+  // Count how many times each team already appears across existing user
+  // portfolios (any role).  drawTierBalanced uses these counts to prefer
+  // teams that have been picked the fewest times — keeping the overall
+  // distribution even as more players sign up.
+  const appearanceCounts: Record<string, number> = {};
+  try {
+    const existingUsersSnap = await db.collection("users").get();
+    existingUsersSnap.docs.forEach((userDoc) => {
+      const data = userDoc.data() as Record<string, unknown>;
+      const portfolio = Array.isArray(data.portfolio)
+        ? (data.portfolio as Array<{ teamId?: unknown; role?: unknown }>)
+        : [];
+      portfolio.forEach((item) => {
+        const id = typeof item?.teamId === "string" ? item.teamId : null;
+        if (!id) return;
+        appearanceCounts[id] = (appearanceCounts[id] ?? 0) + 1;
+      });
+    });
+  } catch (err) {
+    // Non-fatal — if we can't read the count, fall back to pure random draw.
+    console.warn("confirmFeaturedTeam: unable to read appearance counts; using random draw:", err);
+  }
+
+  const drawnTeams = drawTierBalanced(
+    eligibleForDraw,
+    5,
+    featuredTeam.tier,
+    featuredTeam.group,
+    appearanceCounts,
+  );
   if (drawnTeams.length < 5) {
     throw new HttpsError(
       "failed-precondition",
@@ -349,13 +378,23 @@ export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
           : [];
         const alreadyPresent = rows.some((r) => r.userId === uid);
         if (!alreadyPresent) {
+          // Find the correct rank for a new user with totalScore=0 & tiebreakGoals=0.
+          // If there's already a row at the bottom with the same score+goals,
+          // the new user shares that rank.  Otherwise they're placed at the end.
+          const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+          const lastScore = typeof lastRow?.totalScore === "number" ? lastRow.totalScore : null;
+          const lastGoals = typeof lastRow?.tiebreakGoals === "number" ? lastRow.tiebreakGoals : 0;
+          const lastRank = typeof lastRow?.rank === "number" ? lastRow.rank : rows.length;
+          const sharesRankWithLast = lastScore === 0 && lastGoals === 0;
+          const newRank = sharesRankWithLast ? lastRank : rows.length + 1;
+
           const newRow = {
             userId: uid,
             displayName,
             totalScore: 0,
             tiebreakGoals: 0,
             badgeCount: 0,
-            rank: rows.length + 1, // last position; full recompute will resort
+            rank: newRank,
             department,
           };
           await lbRef.update({
