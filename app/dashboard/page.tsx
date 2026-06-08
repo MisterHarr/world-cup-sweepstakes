@@ -1125,6 +1125,17 @@ function DashboardPageContent() {
   // The name to show in top bar: prefer chosen username, fall back to Google name
   const topBarDisplayName = (userDocData.username as string | undefined)?.trim() || displayName || null;
 
+  // What the *leaderboard* currently shows for this user — i.e. what everyone
+  // else (and the prize-pot admin) sees. A signup-time hiccup can leave
+  // users/{uid}.displayName permanently set to the literal string "Anonymous"
+  // (see lib/userBootstrap.ts fallback chain) when no name was available at
+  // bootstrap. Surface a pointed nudge in that case rather than the routine
+  // "personalize your profile" suggestion — the player likely has no idea
+  // they're showing up as "Anonymous" to everyone else.
+  const leaderboardPublicName =
+    (userDocData.username as string | undefined)?.trim() ||
+    (typeof userDocData.displayName === "string" ? userDocData.displayName.trim() : "");
+
   async function handleSetUsername(username: string): Promise<void> {
     const fn = httpsCallable(functions, "setUsername");
     await fn({ username });
@@ -1591,6 +1602,7 @@ function DashboardPageContent() {
                   defaultValue={displayName}
                   onSave={handleSetUsername}
                   onDismiss={() => setUsernameBannerDismissed(true)}
+                  currentPublicName={leaderboardPublicName}
                 />
               </div>
             )}
@@ -1603,6 +1615,7 @@ function DashboardPageContent() {
                 forceOpen={usernameModalOpen}
                 onForceOpenChange={(open) => setUsernameModalOpen(open)}
                 hideBanner
+                currentPublicName={leaderboardPublicName}
               />
             )}
           </>

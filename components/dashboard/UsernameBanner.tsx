@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, ChevronRight } from "lucide-react";
+import { X, ChevronRight, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -19,6 +19,15 @@ interface Props {
   onForceOpenChange?: (open: boolean) => void;
   /** Hide the banner strip — render only the modal (used when opened via top bar after dismissal). */
   hideBanner?: boolean;
+  /**
+   * The name currently shown for this user on the leaderboard (i.e. what
+   * everyone else sees right now). When this resolves to the literal string
+   * "Anonymous" — e.g. a signup hiccup meant no name was ever recorded — the
+   * banner switches to a more pointed warning so the player understands the
+   * stakes (organisers can't tell who they are for prize-pot tracking) rather
+   * than reading this as a routine "personalize your profile" suggestion.
+   */
+  currentPublicName?: string;
 }
 
 const MAX = 30;
@@ -31,7 +40,9 @@ export function UsernameBanner({
   forceOpen,
   onForceOpenChange,
   hideBanner = false,
+  currentPublicName,
 }: Props) {
+  const isStuckAnonymous = (currentPublicName ?? "").trim().toLowerCase() === "anonymous";
   const [internalOpen, setInternalOpen] = useState(false);
   const [value, setValue] = useState(defaultValue);
   const [saving, setSaving] = useState(false);
@@ -75,16 +86,43 @@ export function UsernameBanner({
     <>
       {/* Banner — hidden when opened from top bar after user dismissed it */}
       {!hideBanner && (
-        <div className="flex items-center gap-3 rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
+        <div
+          className={cn(
+            "flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm",
+            isStuckAnonymous
+              ? "border-amber-500/40 bg-amber-500/10"
+              : "border-primary/30 bg-primary/10"
+          )}
+        >
+          {isStuckAnonymous && (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+          )}
           <span className="flex-1 text-[var(--ff-fg-primary)]">
-            <span className="font-medium">Set your display name</span>
-            <span className="text-[var(--ff-fg-secondary)]">
-              {" "}— how others see you on the leaderboard.
-            </span>
+            {isStuckAnonymous ? (
+              <>
+                <span className="font-medium">You&apos;re showing as &quot;Anonymous&quot;</span>
+                <span className="text-[var(--ff-fg-secondary)]">
+                  {" "}on the leaderboard — pick a name so other players (and the
+                  organisers tracking entries) know who you are.
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium">Set your display name</span>
+                <span className="text-[var(--ff-fg-secondary)]">
+                  {" "}— how others see you on the leaderboard.
+                </span>
+              </>
+            )}
           </span>
           <button
             onClick={() => { setValue(defaultValue); setError(""); setModalOpen(true); }}
-            className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shrink-0"
+            className={cn(
+              "flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors shrink-0",
+              isStuckAnonymous
+                ? "bg-amber-500 text-black hover:bg-amber-400"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
+            )}
           >
             Set name
             <ChevronRight className="h-3.5 w-3.5" />
@@ -107,10 +145,12 @@ export function UsernameBanner({
         >
           <div className="w-full max-w-sm rounded-2xl border border-border bg-[var(--ff-bg-chrome)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--ff-fg-primary)] mb-1">
-              Your display name
+              {isStuckAnonymous ? "Pick a name — you're currently “Anonymous”" : "Your display name"}
             </h2>
             <p className="text-sm text-[var(--ff-fg-secondary)] mb-3">
-              Shown on the leaderboard — not your Google account name.
+              {isStuckAnonymous
+                ? "Right now everyone — including the organisers tracking who's paid into the prize pot — sees you as “Anonymous”. Choose a name so you can be recognised."
+                : "Shown on the leaderboard — not your Google account name."}
             </p>
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
               ⚠️ Choose carefully — this can only be set once and cannot be changed later.
