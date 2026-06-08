@@ -160,18 +160,18 @@ export default function LeaderboardPanel({
     () => rankedRows.filter((u) => !topIds.has(u.id)),
     [rankedRows, topIds]
   );
+  // Paginate the non-podium list by ARRAY POSITION, not by rank value.
+  // Using rank for pagination breaks when many players share the same rank
+  // (e.g. all 15 tied at rank=1 pre-tournament) — the rank-based filter would
+  // exclude every non-podium row.  Array position works regardless of ties.
   const totalPages = useMemo(() => {
-    if (rankedRows.length === 0) return 1;
-    return Math.max(1, Math.ceil(rankedRows.length / OVERALL_PAGE_SIZE));
-  }, [rankedRows.length]);
+    if (filteredList.length === 0) return 1;
+    return Math.max(1, Math.ceil(filteredList.length / OVERALL_PAGE_SIZE));
+  }, [filteredList.length]);
   const pagedList = useMemo(() => {
-    const pageStartRank = (currentPage - 1) * OVERALL_PAGE_SIZE + 1;
-    const pageEndRank = currentPage * OVERALL_PAGE_SIZE;
-    const minListRank = Math.max(4, pageStartRank);
-    return rankedRows.filter(
-      (user) => user.viewRank >= minListRank && user.viewRank <= pageEndRank
-    );
-  }, [currentPage, rankedRows]);
+    const startIdx = (currentPage - 1) * OVERALL_PAGE_SIZE;
+    return filteredList.slice(startIdx, startIdx + OVERALL_PAGE_SIZE);
+  }, [currentPage, filteredList]);
 
   const pagedRowKey = useMemo(
     () => pagedList.map((u) => u.id).join("|"),
