@@ -27,8 +27,7 @@ interface Props {
    * they're literally showing up as "Anonymous" to everyone else (rather
    * than reading this as a routine "personalize your profile" suggestion),
    * and nudges them to pick literally any name or nickname instead — no
-   * pressure to reveal a real identity, e.g. "The Haaland Globetrotters"
-   * is a perfectly fine, fully anonymous-from-real-life choice.
+   * pressure to reveal a real identity; a made-up handle is fine.
    */
   currentPublicName?: string;
 }
@@ -105,8 +104,7 @@ export function UsernameBanner({
               <>
                 <span className="font-medium">You&apos;re showing as &quot;Anonymous&quot;</span>
                 <span className="text-[var(--ff-fg-secondary)]">
-                  {" "}on the leaderboard — pick any name or nickname so you
-                  stand out from the crowd.
+                  {" "}on the leaderboard — pick any name or nickname you like.
                 </span>
               </>
             ) : (
@@ -152,7 +150,7 @@ export function UsernameBanner({
             </h2>
             <p className="text-sm text-[var(--ff-fg-secondary)] mb-3">
               {isStuckAnonymous
-                ? "Right now you're showing up on the leaderboard as “Anonymous” — same as anyone else who hasn't picked a name yet. It can be anything you like, from your real name to a fun nickname like “The Haaland Globetrotters” — just enough to stand out from the crowd."
+                ? "You're currently showing as “Anonymous” on the leaderboard. Pick any name or nickname — whatever you like."
                 : "Shown on the leaderboard — not your Google account name."}
             </p>
             <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5 text-xs text-amber-600 dark:text-amber-400 font-medium">
