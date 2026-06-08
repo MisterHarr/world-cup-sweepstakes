@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { auth, db } from "@/lib/firebase";
@@ -140,6 +140,14 @@ export function AuthLandingPage() {
   const [bootstrapStatus, setBootstrapStatus] = useState<string>("");
   const [bootstrapFailed, setBootstrapFailed] = useState(false);
 
+  // Email signup races the auth-state listener: createUserWithEmailAndPassword
+  // signs the user in (firing onAuthStateChanged → ensureUserDoc) before our
+  // follow-up updateProfile() call has set the chosen display name on the Auth
+  // user. ensureUserDoc would then see an empty displayName and permanently
+  // bake "Anonymous" into the Firestore profile. Stash the chosen name here so
+  // the listener can use it as an override regardless of which call wins the race.
+  const pendingDisplayNameRef = useRef<string | null>(null);
+
   const signedIn = useMemo(() => Boolean(uid), [uid]);
 
   useEffect(() => {
@@ -172,12 +180,16 @@ export function AuthLandingPage() {
 
       if (!u) return;
 
-      // Bootstrap the user profile, then auto-navigate
+      // Bootstrap the user profile, then auto-navigate.
+      // Prefer a name we just chose during email signup (see pendingDisplayNameRef)
+      // over the Auth user's displayName, which may not have propagated yet.
+      const overrideDisplayName = pendingDisplayNameRef.current;
+      pendingDisplayNameRef.current = null;
       setContinuing(true);
       try {
         const result = await ensureUserDoc({
           uid: u.uid,
-          displayName: u.displayName ?? "",
+          displayName: overrideDisplayName || (u.displayName ?? ""),
           email: u.email ?? "",
           photoURL: u.photoURL,
         });
@@ -245,12 +257,16 @@ export function AuthLandingPage() {
 
     try {
       if (emailMode === "signup") {
+        const nextName = fullName.trim() || deriveDisplayNameFromEmail(trimmedEmail);
+        // Record the chosen name *before* creating the account — the
+        // onAuthStateChanged listener can fire and bootstrap the Firestore
+        // profile before updateProfile() below has set it on the Auth user.
+        pendingDisplayNameRef.current = nextName || null;
         const cred = await createUserWithEmailAndPassword(
           auth,
           trimmedEmail,
           password
         );
-        const nextName = fullName.trim() || deriveDisplayNameFromEmail(trimmedEmail);
         if (nextName && cred.user.displayName !== nextName) {
           await updateProfile(cred.user, { displayName: nextName });
           setDisplayName(nextName);
