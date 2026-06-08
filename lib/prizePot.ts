@@ -35,7 +35,7 @@ export const PRIZE_POT_CONFIG = {
   potName:
     asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_NAME) ||
     "World Cup 2026 Prize Pot",
-  amountPerEntry: asNumber(process.env.NEXT_PUBLIC_PRIZE_POT_AMOUNT, 5),
+  amountPerEntry: asNumber(process.env.NEXT_PUBLIC_PRIZE_POT_AMOUNT, 20),
   currency:
     asTrimmed(process.env.NEXT_PUBLIC_PRIZE_POT_CURRENCY) || "RM",
   /** URL of the pre-generated Touch 'n Go / DuitNow QR image. */

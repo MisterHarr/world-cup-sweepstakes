@@ -36,7 +36,10 @@ export type SquadVM = {
   drawn: SquadTeamVM[];
 };
 
-const OVERALL_PAGE_SIZE = 10;
+// Pagination kicks in only once the non-podium list exceeds this many rows.
+// 25 keeps all current users (and projected user count for the tournament)
+// on a single page so the Prev/Next buttons aren't needed.
+const OVERALL_PAGE_SIZE = 25;
 
 const Skeleton = ({ className }: { className: string }) => (
   <div className={`animate-pulse rounded bg-[var(--ff-hairline-muted)] ${className}`} />
