@@ -1,4 +1,9 @@
 // lib/userBootstrap.ts
+
+// Hard registration cutoff — mirrors the server-side constant in onboarding.ts.
+// Mexico vs South Africa, Estadio Azteca, 11 Jun 2026, 19:00 UTC (3 pm ET).
+const REGISTRATION_DEADLINE_MS = Date.parse("2026-06-11T19:00:00.000Z");
+
 import { db, functions } from "@/lib/firebase";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
@@ -65,6 +70,9 @@ export async function ensureUserDoc(params: {
   try {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
+      if (Date.now() >= REGISTRATION_DEADLINE_MS) {
+        throw new Error("Registration is now closed — the tournament has already started.");
+      }
       const fullCreatePayload = {
         uid,
         displayName: displayName || "Anonymous",

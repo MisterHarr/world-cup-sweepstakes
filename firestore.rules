@@ -136,12 +136,14 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
 
-      // Allow creating your doc with safe defaults only
+      // Allow creating your doc with safe defaults only — and only before the
+      // tournament begins (Mexico vs South Africa, 11 Jun 2026, 19:00 UTC).
       allow create: if signedIn()
         && request.auth.uid == uid
-        && isUserCreateValid(uid);
+        && isUserCreateValid(uid)
+        && request.time < timestamp.date(2026, 6, 11) + duration.time(19, 0, 0, 0);
 
       // Allow updates to profile fields only
       allow update: if signedIn()

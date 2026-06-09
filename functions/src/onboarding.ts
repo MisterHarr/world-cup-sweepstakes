@@ -17,6 +17,11 @@ type PortfolioItem = { teamId: string; role: "featured" | "drawn" };
 const ALLOWED_DEPARTMENTS = ["Primary", "Secondary", "Admin"] as const;
 type Department = (typeof ALLOWED_DEPARTMENTS)[number];
 
+// Hard registration cutoff — new user docs cannot be created on or after the
+// opening match kickoff. Mexico vs South Africa, Estadio Azteca, 11 Jun 2026,
+// 19:00 UTC (3 pm ET / 3 am MYT 12 Jun). Existing users are never affected.
+const REGISTRATION_DEADLINE_MS = Date.parse("2026-06-11T19:00:00.000Z");
+
 function asNonNegativeNumber(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     return null;
@@ -121,6 +126,16 @@ export const ensureUserProfile = onCall(CALL_OPTS, async (request) => {
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
   const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
+
+  // Block new registrations after the tournament has started.
+  // Existing users (snap.exists === true) always pass through unaffected.
+  if (!snap.exists && Date.now() >= REGISTRATION_DEADLINE_MS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Registration is now closed — the tournament has already started."
+    );
+  }
+
   const authToken = (request.auth?.token ?? {}) as Record<string, unknown>;
   const overrides =
     request.data && typeof request.data === "object"

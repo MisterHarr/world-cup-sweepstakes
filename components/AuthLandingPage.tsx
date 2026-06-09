@@ -129,7 +129,12 @@ export function AuthLandingPage() {
   const [authBusy, setAuthBusy] = useState(false);
   const [localAuthEmulator, setLocalAuthEmulator] = useState(false);
   const [authMethod, setAuthMethod] = useState<"google" | "email">("email");
-  const [emailMode, setEmailMode] = useState<"signup" | "signin">("signup");
+  // Registration closes the moment the tournament kicks off.
+  // Mexico vs South Africa, Estadio Azteca, 11 Jun 2026, 19:00 UTC (3 pm ET).
+  const registrationClosed = Date.now() >= Date.parse("2026-06-11T19:00:00.000Z");
+  const [emailMode, setEmailMode] = useState<"signup" | "signin">(
+    registrationClosed ? "signin" : "signup"
+  );
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -256,7 +261,7 @@ export function AuthLandingPage() {
     setAuthBusy(true);
 
     try {
-      if (emailMode === "signup") {
+      if (emailMode === "signup" && !registrationClosed) {
         const nextName = fullName.trim() || deriveDisplayNameFromEmail(trimmedEmail);
         // Record the chosen name *before* creating the account — the
         // onAuthStateChanged listener can fire and bootstrap the Firestore
@@ -454,6 +459,13 @@ export function AuthLandingPage() {
               </div>
               )}
 
+              {registrationClosed ? (
+                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-200 text-center">
+                  <span className="font-semibold">Registrations are closed.</span>
+                  {" "}The tournament has already started — only existing players can sign in.
+                </div>
+              ) : null}
+
               {localAuthEmulator ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 text-center">
                   Local testing is using the Firebase Auth Emulator. Real Google
@@ -530,7 +542,7 @@ export function AuthLandingPage() {
                     void handleEmailAuth();
                   }}
                 >
-                  {emailMode === "signup" ? (
+                  {emailMode === "signup" && !registrationClosed ? (
                     <div className="space-y-1">
                       <Label htmlFor="auth-full-name" className="text-xs">Full name (optional)</Label>
                       <Input
@@ -590,21 +602,23 @@ export function AuthLandingPage() {
                         Forgot password?
                       </button>
                     ) : <span />}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError("");
-                        setNotice("");
-                        setEmailMode((prev) =>
-                          prev === "signup" ? "signin" : "signup"
-                        );
-                      }}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
-                    >
-                      {emailMode === "signup"
-                        ? "Already have an account"
-                        : "Create account"}
-                    </button>
+                    {!registrationClosed && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError("");
+                          setNotice("");
+                          setEmailMode((prev) =>
+                            prev === "signup" ? "signin" : "signup"
+                          );
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                      >
+                        {emailMode === "signup"
+                          ? "Already have an account"
+                          : "Create account"}
+                      </button>
+                    )}
                   </div>
                 </form>
               )}
