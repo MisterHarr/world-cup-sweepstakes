@@ -18,6 +18,7 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 
+import { LockKeyhole } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -144,6 +145,7 @@ export function AuthLandingPage() {
   const [continuing, setContinuing] = useState(false);
   const [bootstrapStatus, setBootstrapStatus] = useState<string>("");
   const [bootstrapFailed, setBootstrapFailed] = useState(false);
+  const [showClosedModal, setShowClosedModal] = useState(false);
 
   // Email signup races the auth-state listener: createUserWithEmailAndPassword
   // signs the user in (firing onAuthStateChanged → ensureUserDoc) before our
@@ -459,13 +461,6 @@ export function AuthLandingPage() {
               </div>
               )}
 
-              {registrationClosed ? (
-                <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-200 text-center">
-                  <span className="font-semibold">Registrations are closed.</span>
-                  {" "}The tournament has already started — only existing players can sign in.
-                </div>
-              ) : null}
-
               {localAuthEmulator ? (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100 text-center">
                   Local testing is using the Firebase Auth Emulator. Real Google
@@ -533,6 +528,17 @@ export function AuthLandingPage() {
                           ? "Google unavailable locally"
                           : "Sign in with Google"}
                   </Button>
+                  {registrationClosed && (
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowClosedModal(true)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Sign up
+                      </button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <form
@@ -602,23 +608,27 @@ export function AuthLandingPage() {
                         Forgot password?
                       </button>
                     ) : <span />}
-                    {!registrationClosed && (
-                      <button
-                        type="button"
-                        onClick={() => {
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (registrationClosed) {
+                          setShowClosedModal(true);
+                        } else {
                           setError("");
                           setNotice("");
                           setEmailMode((prev) =>
                             prev === "signup" ? "signin" : "signup"
                           );
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
-                      >
-                        {emailMode === "signup"
+                        }
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+                    >
+                      {registrationClosed
+                        ? "Sign up"
+                        : emailMode === "signup"
                           ? "Already have an account"
                           : "Create account"}
-                      </button>
-                    )}
+                    </button>
                   </div>
                 </form>
               )}
@@ -646,6 +656,50 @@ export function AuthLandingPage() {
           )}
         </div>
       </div>
+
+      {/* Registration-closed modal — shown when someone taps "Sign up" after the deadline */}
+      {showClosedModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowClosedModal(false); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-[var(--ff-bg-chrome)] p-6 shadow-2xl">
+            <div className="flex flex-col items-center text-center gap-3 mb-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-[var(--ff-bg-card)]">
+                <LockKeyhole className="h-5 w-5 text-[var(--ff-fg-secondary)]" />
+              </div>
+              <h2 className="text-base font-semibold text-[var(--ff-fg-primary)]">
+                Registration is closed
+              </h2>
+              <p className="text-sm text-[var(--ff-fg-secondary)] leading-relaxed">
+                The Cup Draw 2026 sweepstakes kicked off on 11 June. The entry
+                window closed the moment the first ball was played — it
+                wouldn&apos;t be fair to let new players join once the scores
+                are already moving.
+              </p>
+              <p className="text-sm text-[var(--ff-fg-secondary)]">
+                Already registered?{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowClosedModal(false);
+                    setEmailMode("signin");
+                  }}
+                  className="font-medium text-[var(--ff-fg-primary)] underline underline-offset-2 hover:opacity-80 transition-opacity"
+                >
+                  Sign in here.
+                </button>
+              </p>
+            </div>
+            <button
+              onClick={() => setShowClosedModal(false)}
+              className="w-full rounded-xl border border-border py-2.5 text-sm font-medium text-[var(--ff-fg-secondary)] hover:bg-white/5 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
