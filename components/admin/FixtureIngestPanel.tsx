@@ -43,6 +43,13 @@ export function FixtureIngestPanel({
   const [preTournamentPreview, setPreTournamentPreview] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
 
+  // Fixture ingest loads static 2022 rehearsal data. Once the tournament has
+  // started (Mexico v South Africa, 11 Jun 2026, 19:00 UTC) this must never run
+  // — it would overwrite live standings with fake/historical results. The
+  // backend enforces this too; this just disables the controls and explains why.
+  const tournamentStarted =
+    Date.now() >= Date.parse("2026-06-11T19:00:00.000Z");
+
   async function runFixtureIngest() {
     setStatus("");
     setPreview("");
@@ -273,6 +280,16 @@ export function FixtureIngestPanel({
 
   return (
     <>
+      {tournamentStarted && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200">
+          <div className="font-semibold mb-1">🔒 Fixture ingest is locked</div>
+          The tournament has started, so loading fixture / rehearsal data is
+          disabled — it would overwrite the live standings with fake results.
+          Live scores now update automatically from the match feed. (This is
+          also enforced on the server.)
+        </div>
+      )}
+
       <div className="rounded-xl border border-slate-800/60 bg-slate-950/60 p-4 text-sm text-slate-300">
         Filters — optional, leave blank to load all matches:
       </div>
@@ -305,7 +322,7 @@ export function FixtureIngestPanel({
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <button
           onClick={runFixtureIngest}
-          disabled={!uid || running || !acknowledged || !dangerConfirmed}
+          disabled={tournamentStarted || !uid || running || !acknowledged || !dangerConfirmed}
           className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500/90 text-emerald-950 font-semibold disabled:opacity-50"
         >
           {running ? "Loading..." : "Load Match Data"}
@@ -313,7 +330,7 @@ export function FixtureIngestPanel({
 
         <button
           onClick={previewFixture}
-          disabled={!uid || previewing}
+          disabled={tournamentStarted || !uid || previewing}
           className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
         >
           {previewing ? "Checking..." : "Preview"}
@@ -343,7 +360,7 @@ export function FixtureIngestPanel({
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <button
             onClick={runResetFixtureIngest}
-            disabled={!uid || resetRunning || running || !acknowledged || !dangerConfirmed}
+            disabled={tournamentStarted || !uid || resetRunning || running || !acknowledged || !dangerConfirmed}
             className="w-full sm:w-auto px-4 py-2 rounded-xl bg-amber-500/90 text-amber-950 font-semibold disabled:opacity-50"
           >
             {resetRunning ? "Loading..." : "Clear & Reload"}
@@ -351,7 +368,7 @@ export function FixtureIngestPanel({
 
           <button
             onClick={previewResetFixture}
-            disabled={!uid || resetPreviewing || previewing || resetRunning}
+            disabled={tournamentStarted || !uid || resetPreviewing || previewing || resetRunning}
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
           >
             {resetPreviewing ? "Checking..." : "Preview"}
@@ -376,7 +393,7 @@ export function FixtureIngestPanel({
         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
           <button
             onClick={runPreTournamentIngest}
-            disabled={!uid || preTournamentRunning || !acknowledged || !dangerConfirmed}
+            disabled={tournamentStarted || !uid || preTournamentRunning || !acknowledged || !dangerConfirmed}
             className="w-full sm:w-auto px-4 py-2 rounded-xl bg-sky-500/90 text-sky-950 font-semibold disabled:opacity-50"
           >
             {preTournamentRunning ? "Importing..." : "Import History"}
@@ -384,7 +401,7 @@ export function FixtureIngestPanel({
 
           <button
             onClick={previewPreTournament}
-            disabled={!uid || preTournamentPreviewing}
+            disabled={tournamentStarted || !uid || preTournamentPreviewing}
             className="w-full sm:w-auto px-4 py-2 rounded-xl border border-slate-700/60 bg-slate-950/70 text-slate-100 disabled:opacity-50"
           >
             {preTournamentPreviewing ? "Checking..." : "Preview"}

@@ -349,17 +349,17 @@ const DashboardBracket = ({
             {/* Home side */}
             <div className="space-y-0.5">
               {(t1Yellow > 0 || t1Red > 0) && (
-                <div className="flex items-center gap-1.5 mb-1">
+                <div className="flex items-center gap-2 mb-1">
                   {t1Yellow > 0 && (
-                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
-                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-yellow-400" />
-                      {t1Yellow > 1 ? `×${t1Yellow}` : ""}
+                    <span className="inline-flex items-center gap-1 font-ff-ui text-[10px] font-semibold text-yellow-400" title={`${t1Yellow} yellow card${t1Yellow > 1 ? "s" : ""}`}>
+                      <span className="inline-block w-[7px] h-[10px] rounded-[1px] bg-yellow-400" />
+                      {t1Yellow}
                     </span>
                   )}
                   {t1Red > 0 && (
-                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
-                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-red-500" />
-                      {t1Red > 1 ? `×${t1Red}` : ""}
+                    <span className="inline-flex items-center gap-1 font-ff-ui text-[10px] font-semibold text-red-500" title={`${t1Red} red card${t1Red > 1 ? "s" : ""}`}>
+                      <span className="inline-block w-[7px] h-[10px] rounded-[1px] bg-red-500" />
+                      {t1Red}
                     </span>
                   )}
                 </div>
@@ -376,17 +376,17 @@ const DashboardBracket = ({
             {/* Away side */}
             <div className="space-y-0.5 text-right">
               {(t2Yellow > 0 || t2Red > 0) && (
-                <div className="flex flex-row-reverse items-center gap-1.5 mb-1">
+                <div className="flex flex-row-reverse items-center gap-2 mb-1">
                   {t2Yellow > 0 && (
-                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-yellow-400">
-                      {t2Yellow > 1 ? `×${t2Yellow}` : ""}
-                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-yellow-400" />
+                    <span className="inline-flex items-center gap-1 font-ff-ui text-[10px] font-semibold text-yellow-400" title={`${t2Yellow} yellow card${t2Yellow > 1 ? "s" : ""}`}>
+                      {t2Yellow}
+                      <span className="inline-block w-[7px] h-[10px] rounded-[1px] bg-yellow-400" />
                     </span>
                   )}
                   {t2Red > 0 && (
-                    <span className="inline-flex items-center gap-0.5 font-ff-ui text-[9px] text-red-500">
-                      {t2Red > 1 ? `×${t2Red}` : ""}
-                      <span className="inline-block w-[6px] h-[8px] rounded-[1px] bg-red-500" />
+                    <span className="inline-flex items-center gap-1 font-ff-ui text-[10px] font-semibold text-red-500" title={`${t2Red} red card${t2Red > 1 ? "s" : ""}`}>
+                      {t2Red}
+                      <span className="inline-block w-[7px] h-[10px] rounded-[1px] bg-red-500" />
                     </span>
                   )}
                 </div>

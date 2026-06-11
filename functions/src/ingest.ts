@@ -44,6 +44,24 @@ import {
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
 const SCHEDULE = "every 10 minutes";
 
+/**
+ * Tournament kickoff (Mexico v South Africa, 11 Jun 2026, 19:00 UTC).
+ *
+ * The fixture-replay providers below read static 2022 World Cup data
+ * (worldcup2022.json / pretournament2022.json) — a pre-tournament rehearsal
+ * tool. Once the real tournament is underway, live scores come exclusively
+ * from the football-data provider via the scheduled poll, and any fixture
+ * ingest would inject fake/historical results into production (this happened
+ * on 2026-06-11). From kickoff onward the fixture sources return nothing and
+ * the admin fixture-ingest callables refuse to run, so 2022 data can never
+ * re-enter production no matter how the path is triggered (UI, direct call,
+ * or a mis-set liveOps provider).
+ */
+const TOURNAMENT_START_MS = Date.parse("2026-06-11T19:00:00.000Z");
+function tournamentHasStarted(): boolean {
+  return Date.now() >= TOURNAMENT_START_MS;
+}
+
 export type LiveScoresProvider =
   | "stub"
   | "fixture"
@@ -388,6 +406,13 @@ export async function writeLiveOpsHealth(data: {
 }
 
 function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
+  if (tournamentHasStarted()) {
+    console.warn(
+      "[ingest] Fixture replay (2022 data) is disabled — the tournament has started. Returning no matches."
+    );
+    return [];
+  }
+
   const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
   const cutoffIso = asIsoOrNull(options.cutoffIso);
 
@@ -407,6 +432,13 @@ function getFixtureMatches(options: FixtureOptions = {}): ProviderMatch[] {
 }
 
 function getPreTournamentFixtures(options: FixtureOptions = {}): ProviderMatch[] {
+  if (tournamentHasStarted()) {
+    console.warn(
+      "[ingest] Pre-tournament fixture replay (2022 data) is disabled — the tournament has started. Returning no matches."
+    );
+    return [];
+  }
+
   const maxMatches = asNonNegativeInteger(options.maxMatches ?? 0);
   const cutoffIso = asIsoOrNull(options.cutoffIso);
 
@@ -1080,6 +1112,13 @@ export const adminIngestFixture = onCall(
   async (request) => {
     requireAdmin(request);
 
+    if (tournamentHasStarted()) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Fixture ingest is locked: the tournament has started. Live scores come from the automatic feed — loading the 2022 rehearsal data now would corrupt the standings."
+      );
+    }
+
     const maxMatches = Number(request.data?.maxMatches ?? 0);
     const cutoffIso = asString(request.data?.cutoffIso) ?? null;
     const dryRun = request.data?.dryRun === true;
@@ -1142,6 +1181,13 @@ export const adminResetFixtureIngest = onCall(
   CALL_OPTS,
   async (request) => {
     requireAdmin(request);
+
+    if (tournamentHasStarted()) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Fixture reset is locked: the tournament has started. Clearing and reloading from the 2022 rehearsal data now would wipe the live standings."
+      );
+    }
 
     const maxMatches = Number(request.data?.maxMatches ?? 0);
     const cutoffIso = asString(request.data?.cutoffIso) ?? null;
@@ -1222,6 +1268,13 @@ export const adminIngestPreTournament = onCall(
   CALL_OPTS,
   async (request) => {
     requireAdmin(request);
+
+    if (tournamentHasStarted()) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Pre-tournament import is locked: the tournament has started. Importing the 2022 history now would inject fake results into the live standings."
+      );
+    }
 
     const maxMatches = Number(request.data?.maxMatches ?? 0);
     const cutoffIso = asString(request.data?.cutoffIso) ?? null;
