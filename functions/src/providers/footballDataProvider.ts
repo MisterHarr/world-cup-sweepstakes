@@ -97,11 +97,16 @@ function toProviderStage(value: unknown): MatchStage {
  * Extract yellow and red card counts per team from the football-data.org
  * `bookings` array.  Requires the Deep Data plan.
  *
- * Card types returned by the API:
- *   YELLOW_CARD      → yellow card
- *   RED_CARD         → straight red
- *   YELLOW_RED_CARD  → second yellow (counts as a red; the first yellow was
- *                      already recorded as YELLOW_CARD earlier in the array)
+ * Card types returned by the v4 API (short forms):
+ *   YELLOW      → yellow card
+ *   RED         → straight red
+ *   YELLOW_RED  → second yellow (sending-off; counts as a red. The first
+ *                 yellow was recorded as a separate YELLOW entry earlier.)
+ *
+ * The long forms (YELLOW_CARD / RED_CARD / YELLOW_RED_CARD) are also accepted
+ * defensively in case the provider ever reverts to verbose enum values — a
+ * silent mismatch here zeroes out every card and breaks scoring (see the
+ * 2026-06-11 MEX v RSA incident).
  */
 function extractCards(
   raw: Record<string, unknown>,
@@ -136,13 +141,14 @@ function extractCards(
     const isAway = awayId && teamId === awayId;
     if (!isHome && !isAway) continue;
 
-    if (card === "YELLOW_CARD") {
-      if (isHome) result.homeYellowCards += 1;
-      else result.awayYellowCards += 1;
-    } else if (card === "RED_CARD" || card === "YELLOW_RED_CARD") {
-      // YELLOW_RED_CARD is a second yellow → treated as a red for scoring
+    // Any card containing RED is a sending-off (straight red OR second yellow).
+    // Check RED first so YELLOW_RED is not miscounted as a plain yellow.
+    if (card === "RED" || card === "RED_CARD" || card === "YELLOW_RED" || card === "YELLOW_RED_CARD") {
       if (isHome) result.homeRedCards += 1;
       else result.awayRedCards += 1;
+    } else if (card === "YELLOW" || card === "YELLOW_CARD") {
+      if (isHome) result.homeYellowCards += 1;
+      else result.awayYellowCards += 1;
     }
   }
 
