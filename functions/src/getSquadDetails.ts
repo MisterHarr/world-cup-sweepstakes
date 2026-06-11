@@ -49,9 +49,14 @@ function toInitials(value: string | null): string | null {
 }
 
 /**
- * Calculate total points contributed by a team from aggregate fields
- * using the same formula as scoring/dashboard:
- * 3*W + D + GS + CS - RC - 0.5*YC
+ * Calculate total points contributed by a team from aggregate fields.
+ * MUST stay in lockstep with calcTeamPoints() in scoring.ts and the rate
+ * table in DashboardPortfolio.tsx:
+ *   3*W + 1*D + 1.5*GS + 1*CS - 1*RC - 0.25*YC
+ *
+ * (Previously this used GS×1 and YC×0.5, so the leaderboard squad slide-out
+ * disagreed with both the real leaderboard and the dashboard breakdown —
+ * e.g. South Africa's 2R/2Y showed -3 here vs the correct -2.5.)
  */
 function calculateTeamContributionFromDoc(data: unknown): number {
   const source = isRecord(data) ? data : {};
@@ -62,7 +67,7 @@ function calculateTeamContributionFromDoc(data: unknown): number {
   const redCards = asNumber(source.redCards);
   const yellowCards = asNumber(source.yellowCards);
 
-  return wins * 3 + draws + goalsScored + cleanSheets - redCards - yellowCards * 0.5;
+  return wins * 3 + draws + goalsScored * 1.5 + cleanSheets - redCards - yellowCards * 0.25;
 }
 
 export const getSquadDetails = onCall(CALL_OPTS, async (request) => {
