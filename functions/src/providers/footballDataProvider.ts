@@ -229,6 +229,75 @@ function toWinner(value: unknown): "HOME" | "AWAY" | null {
   return null;
 }
 
+/**
+ * Cap on per-match detail fetches per ingest run. The Deep Data plan allows
+ * 30 requests/minute; staying at 25 leaves headroom for the list call and any
+ * retries. In practice only a handful of matches are LIVE/FINISHED inside the
+ * scheduled poll's time window, so this cap is rarely approached — it only
+ * bites on a full manual re-ingest late in the tournament, where the most
+ * recent matches (sorted below) are the ones that still need enrichment.
+ */
+const MAX_DETAIL_FETCHES = 25;
+
+/**
+ * Enrich FINISHED/LIVE matches with per-match detail.
+ *
+ * The competition LIST endpoint (/competitions/{id}/matches) returns EMPTY
+ * `bookings[]` and `goals[]` arrays even on the Deep Data plan — that data
+ * only populates on the per-match DETAIL endpoint (/matches/{id}). Without
+ * this pass, card penalties and goal scorers are silently lost (the cause of
+ * the 2026-06-11 MEX v RSA zero-cards incident). SCHEDULED matches have no
+ * bookings yet, so they are skipped to conserve the rate-limit budget.
+ *
+ * Mutates the passed matches in place.
+ */
+async function enrichWithMatchDetail(
+  matches: ProviderMatch[],
+  cfg: { baseUrl: string; token: string; timeoutMs: number; maxRetries: number }
+): Promise<void> {
+  const needsDetail = matches
+    .filter((m) => m.status === "FINISHED" || m.status === "LIVE")
+    // Most recent kickoff first, so a busy match-day is always covered first
+    // when the cap is hit on a large re-ingest.
+    .sort((a, b) => {
+      const ax = a.kickoffTime ? Date.parse(a.kickoffTime) : 0;
+      const bx = b.kickoffTime ? Date.parse(b.kickoffTime) : 0;
+      return bx - ax;
+    })
+    .slice(0, MAX_DETAIL_FETCHES);
+
+  for (const match of needsDetail) {
+    const numericId = match.matchId.replace(/^fd-/, "");
+    const url = `${cfg.baseUrl}/matches/${encodeURIComponent(numericId)}`;
+    try {
+      const detail = await fetchJsonWithRetry(
+        url,
+        { method: "GET", headers: { "X-Auth-Token": cfg.token, Accept: "application/json" } },
+        cfg.timeoutMs,
+        cfg.maxRetries
+      );
+      if (!isRecord(detail)) continue;
+
+      const homeProvId = isRecord(detail.homeTeam) ? detail.homeTeam.id : undefined;
+      const awayProvId = isRecord(detail.awayTeam) ? detail.awayTeam.id : undefined;
+
+      const cards = extractCards(detail, homeProvId, awayProvId);
+      match.homeRedCards = cards.homeRedCards;
+      match.homeYellowCards = cards.homeYellowCards;
+      match.awayRedCards = cards.awayRedCards;
+      match.awayYellowCards = cards.awayYellowCards;
+
+      const goals = extractGoals(detail, homeProvId, awayProvId);
+      if (goals.length) match.goals = goals;
+    } catch (err) {
+      // Non-fatal: keep the list-derived match (scores/status still correct),
+      // just without card/scorer enrichment. The next poll retries it.
+      const reason = err instanceof Error ? err.message : String(err);
+      console.warn(`[ingest] detail enrichment failed for ${match.matchId}: ${reason}`);
+    }
+  }
+}
+
 export async function getFootballDataMatches(
   options: { maxMatches: number; cutoffIso: string | null }
 ): Promise<ProviderMatch[]> {
@@ -353,6 +422,13 @@ export async function getFootballDataMatches(
     );
   }
   const limited = filterAndLimitMatches(mapped, options);
+
+  // The LIST endpoint returns empty bookings[]/goals[]; enrich FINISHED/LIVE
+  // matches from the per-match DETAIL endpoint so card penalties and scorers
+  // are populated. Done after limiting so we never fetch detail for matches
+  // that were filtered out.
+  await enrichWithMatchDetail(limited, { baseUrl, token, timeoutMs, maxRetries });
+
   console.log(
     `[ingest] provider loaded ${limited.length} mapped matches` +
       ` (${rawMatches.length} raw from API, ${dropped} dropped)` +
