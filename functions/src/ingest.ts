@@ -43,13 +43,20 @@ import {
   type ScheduleEntry,
 } from "./pollingWindow";
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
-// Fire every 2 minutes so live matches appear (and scores/cards update) within
-// ~2 min of kickoff instead of lagging up to a full 10-minute cycle. The
-// polling gate (computePollingGate) makes off-window ticks near-free — it does
-// a single time-bounded query that matches 0 docs when no match is in its
-// [kickoff − 10 min, kickoff + duration] window — so the extra ticks only do
-// real fetch/write work while a match is actually in progress.
-const SCHEDULE = "every 2 minutes";
+// Fire every 3 minutes so live matches appear (and scores/cards update) within
+// ~3 min of kickoff instead of lagging up to a full 10-minute cycle, while
+// staying comfortably inside Firestore's free tier (the non-negotiable cost
+// constraint). Two things keep this free:
+//   1. The polling gate (computePollingGate) makes off-window ticks near-free —
+//      a single time-bounded query that matches 0 docs when nothing is within
+//      its [kickoff − 10 min, kickoff + duration] window. So idle days/hours
+//      cost essentially nothing no matter how often we tick.
+//   2. isDifferent() no longer rewrites every match every tick (it ignores the
+//      always-changing providerRevision), so an active poll writes only the
+//      matches actually in progress, not all ~72.
+// 3-min (vs 2-min) keeps reads on the busiest match days (~12 h of overlapping
+// windows) near ~30k/day — well under the 50k/day free read quota, with margin.
+const SCHEDULE = "every 3 minutes";
 
 /**
  * Tournament kickoff (Mexico v South Africa, 11 Jun 2026, 19:00 UTC).
@@ -606,6 +613,13 @@ function isDifferent(
 ): boolean {
   if (!existing) return true;
 
+  // NOTE: providerRevision is deliberately NOT compared here. It is set to
+  // Date.now() on every poll, so including it made every match look "changed"
+  // and forced a rewrite of all ~72 matches on every single tick. At a 2-minute
+  // cadence that blew past Firestore's free write tier for no benefit. We now
+  // write a match only when a field players actually see (score, status,
+  // minute, cards, etc.) has changed — so an idle poll writes nothing, and a
+  // live match writes only the handful of matches in progress.
   const fields: Array<
     | "homeTeamId"
     | "awayTeamId"
@@ -624,7 +638,6 @@ function isDifferent(
     | "homeScorePens"
     | "awayScorePens"
     | "winner"
-    | "providerRevision"
   > = [
     "homeTeamId",
     "awayTeamId",
@@ -643,15 +656,9 @@ function isDifferent(
     "homeScorePens",
     "awayScorePens",
     "winner",
-    "providerRevision",
   ];
 
-  return fields.some((field) => {
-    const current = existing[field];
-    const next =
-      field === "providerRevision" ? incoming.revision : incoming[field];
-    return current !== next;
-  });
+  return fields.some((field) => existing[field] !== incoming[field]);
 }
 
 export type IngestOptions = {
