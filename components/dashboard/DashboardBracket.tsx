@@ -495,6 +495,13 @@ const DashboardBracket = ({
         })}
       </div>
 
+      {activeTab === "live" && (
+        <p className="flex items-center gap-1.5 px-0.5 font-ff-ui text-[11px] text-[var(--ff-fg-faint)]">
+          <span aria-hidden>⏱</span>
+          Live scores update on a ~5&nbsp;minute delay.
+        </p>
+      )}
+
       {activeTab === "upcoming" && (
         <div className="relative">
           <svg

@@ -43,20 +43,19 @@ import {
   type ScheduleEntry,
 } from "./pollingWindow";
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
-// Fire every 3 minutes so live matches appear (and scores/cards update) within
-// ~3 min of kickoff instead of lagging up to a full 10-minute cycle, while
-// staying comfortably inside Firestore's free tier (the non-negotiable cost
-// constraint). Two things keep this free:
-//   1. The polling gate (computePollingGate) makes off-window ticks near-free —
-//      a single time-bounded query that matches 0 docs when nothing is within
-//      its [kickoff − 10 min, kickoff + duration] window. So idle days/hours
-//      cost essentially nothing no matter how often we tick.
-//   2. isDifferent() no longer rewrites every match every tick (it ignores the
-//      always-changing providerRevision), so an active poll writes only the
-//      matches actually in progress, not all ~72.
-// 3-min (vs 2-min) keeps reads on the busiest match days (~12 h of overlapping
-// windows) near ~30k/day — well under the 50k/day free read quota, with margin.
-const SCHEDULE = "every 3 minutes";
+// The function fires every 5 minutes, but does real work at one of two
+// effective cadences (see the cadence gate inside the handler):
+//   • LIVE period  — a match is in play or kicks off within 10 min → poll on
+//     every tick (~5-min refresh of live scores; kickoffs caught promptly).
+//   • Quiet/idle   — no live or imminent match → drop to a 10-min cadence (and
+//     fully off-window ticks return for free via the polling gate).
+// This keeps the project inside Firestore's free tier (the non-negotiable cost
+// constraint): idle days cost ~nothing, and even a busy match day stays well
+// under the 50k/day read quota. isDifferent() also no longer rewrites every
+// match each tick (it ignores the always-changing providerRevision), so a poll
+// writes only the matches actually changing. Users are told scores carry a
+// ~5-minute delay.
+const SCHEDULE = "every 5 minutes";
 
 /**
  * Tournament kickoff (Mexico v South Africa, 11 Jun 2026, 19:00 UTC).
@@ -1003,6 +1002,31 @@ export const ingestLiveScores = onSchedule(
         }
       }
       console.log("[ingest] Live match detected outside time window — continuing.");
+    }
+
+    // ── Cadence gate ────────────────────────────────────────────────────────
+    // The job ticks every 5 minutes. Run the full poll on every tick only while
+    // we're in a "live period" (a match is actually LIVE, or kicks off within
+    // the next 10 minutes so we catch the transition promptly). During the
+    // quieter in-window stretches — most notably the tail after a match has
+    // finished but its window is still open — halve the rate to an effective
+    // 10-minute cadence by skipping every other 5-minute tick. Fully off-window
+    // ticks already returned above for free, so idle time costs ~nothing.
+    const anyLiveInWindow = windowSnap.docs.some((d) => d.get("status") === "LIVE");
+    const anyImminentKickoff = windowSnap.docs.some((d) => {
+      const k = Date.parse(String(d.get("kickoffTime") ?? ""));
+      return !Number.isNaN(k) && k >= nowMs && k <= nowMs + POLLING_PRE_KICKOFF_MS;
+    });
+    const inLivePeriod = anyLiveInWindow || anyImminentKickoff || gate === "check-live";
+    if (!inLivePeriod) {
+      // Even 5-minute slot → run; odd slot → skip (→ 10-min effective cadence).
+      const isTenMinuteSlot = Math.floor(nowMs / (5 * 60 * 1000)) % 2 === 0;
+      if (!isTenMinuteSlot) {
+        console.log(
+          "[ingest] Quiet window (no live or imminent match) — running at 10-min cadence, skipping this tick."
+        );
+        return;
+      }
     }
 
     await recordIngestAttempt({
