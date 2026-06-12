@@ -43,7 +43,13 @@ import {
   type ScheduleEntry,
 } from "./pollingWindow";
 import { CALL_OPTS, HEAVY_CALL_OPTS, REGION } from "./runtimeConfig";
-const SCHEDULE = "every 10 minutes";
+// Fire every 2 minutes so live matches appear (and scores/cards update) within
+// ~2 min of kickoff instead of lagging up to a full 10-minute cycle. The
+// polling gate (computePollingGate) makes off-window ticks near-free — it does
+// a single time-bounded query that matches 0 docs when no match is in its
+// [kickoff − 10 min, kickoff + duration] window — so the extra ticks only do
+// real fetch/write work while a match is actually in progress.
+const SCHEDULE = "every 2 minutes";
 
 /**
  * Tournament kickoff (Mexico v South Africa, 11 Jun 2026, 19:00 UTC).
