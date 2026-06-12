@@ -825,6 +825,14 @@ function DashboardPageContent() {
             ts: number;
           };
           if (Date.now() - ts < MATCH_CACHE_TTL && Array.isArray(cached?.matches)) {
+            // Stale-while-revalidate: paint the cached schedule instantly for a
+            // fast first render, but DO NOT stop here — fall through to re-read
+            // the summary doc below so the view is always fresh. The cache alone
+            // could be up to MATCH_CACHE_TTL stale, which previously left a
+            // just-finished match stuck in "Upcoming" (its FINISHED status only
+            // reaches the client via the live-listener cache-bust, which never
+            // fires if the match finished before the page was loaded). The
+            // revalidation is a single document read, so the cost is negligible.
             const { grouped, latestUpdatedAt } = processSnapshotDocs(
               cached.matches.map((m) => ({ id: String(m.id ?? ""), data: () => m }))
             );
@@ -838,12 +846,12 @@ function DashboardPageContent() {
               setMatchTeamFlags((prev) => ({ ...prev, ...cached.teamFlags }));
               matchTeamFlagsRef.current = { ...matchTeamFlagsRef.current, ...cached.teamFlags };
             }
-            return;
           }
         }
       } catch { /* ignore corrupt cache */ }
 
-      // Cache miss — read the single summary document (1 Firestore read)
+      // Read the single summary document (1 Firestore read) — always done, both
+      // on a cache miss and to revalidate a cache hit (see note above).
       const summarySnap = await getDoc(doc(db, "settings", "matchSummary"));
       if (cancelled) return;
 
