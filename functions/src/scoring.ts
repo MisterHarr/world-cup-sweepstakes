@@ -2,6 +2,7 @@ import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "./auth";
+import { patchMatchSummary } from "./matchSummary";
 import {
   getErrorMessage,
   markScoresDirty,
@@ -221,6 +222,14 @@ export const adminUpsertMatch = onCall(CALL_OPTS, async (request) => {
   });
 
   await ref.set(payload, { merge: true });
+
+  // Keep the client-facing settings/matchSummary aggregate in sync. The
+  // dashboard reads matches from that single doc, not the matches collection,
+  // so a manual correction (e.g. fixing card counts) must propagate here or
+  // the change is invisible to players.
+  await patchMatchSummary(db, [{ id: matchId, data: payload }]).catch((err) =>
+    console.error("[adminUpsertMatch] patchMatchSummary failed (non-fatal):", err)
+  );
 
   return { ok: true, matchId };
 });
