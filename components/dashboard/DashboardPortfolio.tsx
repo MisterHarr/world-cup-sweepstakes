@@ -67,10 +67,14 @@ function easeOutCubic(t: number): number {
   return 1 - (1 - t) ** 3;
 }
 
-function formatScoreOneDecimal(value: number): string {
-  return Number(value).toLocaleString(undefined, {
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
+// Render a score with the same natural precision the rest of the app uses
+// (the leaderboard, scoring engine, etc): up to 2 decimal places, with
+// trailing zeros trimmed. Forcing 1 dp here rounded −0.25 (one yellow) to
+// −0.3 and 5.75 to 5.8 — visibly inconsistent with the leaderboard total.
+function formatScore(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return Number(value.toFixed(2)).toLocaleString(undefined, {
+    maximumFractionDigits: 2,
   });
 }
 
@@ -217,7 +221,7 @@ function SquadCard({
               isFeatured ? "text-[36px]" : "text-[28px]",
               isEliminated ? "text-[var(--ff-danger)]" : "text-white",
             )}>
-              {formatScoreOneDecimal(points)}
+              {formatScore(points)}
             </div>
           </div>
         </div>
@@ -323,7 +327,7 @@ function TeamDetailModal({
           <div className="absolute bottom-3 right-3 z-10 text-right">
             <div className="text-[8px] text-white/60 uppercase tracking-wider leading-none mb-0.5">pts</div>
             <div className={cn("font-ff-display text-[32px] font-black leading-none tabular-nums", isEliminated ? "text-[var(--ff-danger)]" : "text-white")}>
-              {formatScoreOneDecimal(points)}
+              {formatScore(points)}
             </div>
           </div>
         </div>
@@ -373,7 +377,7 @@ function TeamDetailModal({
               : `${s.value} × ${s.rate > 0 ? `+${s.rate}` : s.rate}`;
             const contribStr = contribution === 0
               ? "0"
-              : `${contribution > 0 ? "+" : ""}${Number.isInteger(contribution) ? contribution : contribution.toFixed(1)}`;
+              : `${contribution > 0 ? "+" : ""}${formatScore(contribution)}`;
             return (
               <button
                 key={s.key}
@@ -517,7 +521,7 @@ export default function DashboardPortfolio({
     return () => { if (countUpRafRef.current != null) { cancelAnimationFrame(countUpRafRef.current); countUpRafRef.current = null; } };
   }, [userStats.score, prefersReducedMotion, userId]);
 
-  const scoreDisplay = useMemo(() => formatScoreOneDecimal(displayScore), [displayScore]);
+  const scoreDisplay = useMemo(() => formatScore(displayScore), [displayScore]);
 
   const [modalTeam, setModalTeam] = useState<{ team: DashboardTeam; isFeatured: boolean; points: number } | null>(null);
 
