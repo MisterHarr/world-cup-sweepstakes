@@ -518,6 +518,7 @@ function toNormalizedMatchUpdate(
     awayYellowCards: match.awayYellowCards,
     homeRedCards: match.homeRedCards,
     awayRedCards: match.awayRedCards,
+    cardsEnriched: match.cardsEnriched === true,
     minute: match.minute ?? null,
     homeScoreHT: match.homeScoreHT ?? null,
     awayScoreHT: match.awayScoreHT ?? null,
@@ -732,8 +733,26 @@ export async function applyNormalizedMatchUpdates(
 
   validMatches.forEach((match) => {
     const existing = existingById[match.canonicalMatchId];
-    if (!isDifferent(existing, match)) return;
-    if (isScoringRelevantChange(existing, match)) hasScoringRelevantChange = true;
+
+    // When the per-match DETAIL endpoint failed (or wasn't fetched), the list
+    // endpoint gave us card counts of zero. Treat those zeros as "no data" and
+    // preserve whatever is already in Firestore — otherwise a transient detail
+    // failure silently wipes the YC/RC counts and breaks scoring (the bug that
+    // caused MEX/RSA and USA/PAR to lose their cards mid-tournament).
+    const skipCardOverwrite =
+      match.cardsEnriched !== true && existing !== undefined;
+    const effectiveMatch = skipCardOverwrite
+      ? {
+          ...match,
+          homeRedCards: Number(existing?.homeRedCards ?? 0),
+          homeYellowCards: Number(existing?.homeYellowCards ?? 0),
+          awayRedCards: Number(existing?.awayRedCards ?? 0),
+          awayYellowCards: Number(existing?.awayYellowCards ?? 0),
+        }
+      : match;
+
+    if (!isDifferent(existing, effectiveMatch)) return;
+    if (isScoringRelevantChange(existing, effectiveMatch)) hasScoringRelevantChange = true;
 
     updates.push({
       ref: db.collection(collectionName).doc(match.canonicalMatchId),
@@ -746,10 +765,10 @@ export async function applyNormalizedMatchUpdates(
         status: match.status,
         stage: match.stage,
         kickoffTime: match.kickoffTime,
-        homeRedCards: match.homeRedCards,
-        homeYellowCards: match.homeYellowCards,
-        awayRedCards: match.awayRedCards,
-        awayYellowCards: match.awayYellowCards,
+        homeRedCards: effectiveMatch.homeRedCards,
+        homeYellowCards: effectiveMatch.homeYellowCards,
+        awayRedCards: effectiveMatch.awayRedCards,
+        awayYellowCards: effectiveMatch.awayYellowCards,
         minute: match.minute ?? null,
         homeScoreHT: match.homeScoreHT ?? null,
         awayScoreHT: match.awayScoreHT ?? null,
@@ -970,6 +989,18 @@ export const ingestLiveScores = onSchedule(
     if (windowSnap.empty) {
       // No match doc falls in the active window → guaranteed skip, 0 reads charged.
       console.log("[ingest] No match in polling window. Skipping.");
+      return;
+    }
+
+    // If every match in the window is already FINISHED, there is nothing left
+    // to poll — skip immediately.  Without this check the function would keep
+    // hitting the API (at 10-min cadence) for up to 2 h after the last group
+    // match or 3 h 40 m after a knockout match, costing reads for no benefit.
+    const allFinished = windowSnap.docs.every(
+      (d) => d.get("status") === "FINISHED"
+    );
+    if (allFinished) {
+      console.log("[ingest] All matches in window are FINISHED — skipping.");
       return;
     }
 

@@ -286,6 +286,7 @@ async function enrichWithMatchDetail(
       match.homeYellowCards = cards.homeYellowCards;
       match.awayRedCards = cards.awayRedCards;
       match.awayYellowCards = cards.awayYellowCards;
+      match.cardsEnriched = true;
 
       const goals = extractGoals(detail, homeProvId, awayProvId);
       if (goals.length) match.goals = goals;

@@ -26,6 +26,12 @@ export type ProviderMatch = {
   homeYellowCards: number;
   awayRedCards: number;
   awayYellowCards: number;
+  /**
+   * True if the card counts came from a successful per-match DETAIL fetch.
+   * The competition LIST endpoint returns empty bookings[] and would yield
+   * zeros — writers must NOT clobber existing card data when this is false.
+   */
+  cardsEnriched?: boolean;
   // Live / richer display data (Deep Data plan)
   minute?: number | null;
   homeScoreHT?: number | null;
@@ -65,6 +71,8 @@ export type NormalizedMatchUpdate = {
   awayYellowCards?: number;
   homeRedCards?: number;
   awayRedCards?: number;
+  /** See ProviderMatch.cardsEnriched — false means "list-derived zeros, do not overwrite". */
+  cardsEnriched?: boolean;
   // Rich display fields
   minute?: number | null;
   homeScoreHT?: number | null;
