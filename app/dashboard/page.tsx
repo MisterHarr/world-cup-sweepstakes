@@ -653,9 +653,15 @@ function DashboardPageContent() {
           .map((r: unknown, idx: number) => {
             const row = isRecord(r) ? r : {};
             const id = resolveLeaderboardUserId(row);
+            const prevRaw = row.previousRank;
+            const previousRank =
+              typeof prevRaw === "number" && Number.isFinite(prevRaw)
+                ? prevRaw
+                : null;
             return {
               id,
               rank: Number(row.rank ?? idx + 1),
+              previousRank,
               name: String(row.displayName ?? row.name ?? "Anonymous"),
               totalScore: Number(row.totalScore ?? 0),
               teams: [], // drawer is hydrated via getSquadDetails
@@ -1393,11 +1399,12 @@ function DashboardPageContent() {
       Number.isFinite(userDocScore) && userDocScore !== 0
         ? userDocScore
         : localDerivedScore;
-    if (!uid || !leaderboardData.length) return { score: fallbackScore, rank: null };
+    if (!uid || !leaderboardData.length) return { score: fallbackScore, rank: null, previousRank: null };
     const userEntry = leaderboardData.find((u) => u.id === uid);
     return {
       score: userEntry?.totalScore ?? fallbackScore,
       rank: userEntry?.rank ?? null,
+      previousRank: userEntry?.previousRank ?? null,
     };
   }, [uid, leaderboardData, userDocData, localDerivedScore]);
 

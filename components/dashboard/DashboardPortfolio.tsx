@@ -41,6 +41,7 @@ type DashboardPortfolioProps = {
   userStats: {
     score: number;
     rank: number | null;
+    previousRank: number | null;
   };
   leaderboardCount: number;
   teamStats: {
@@ -441,22 +442,7 @@ export default function DashboardPortfolio({
   onTeamExpand,
   calculateTeamPoints,
 }: DashboardPortfolioProps) {
-  const previousRank = useMemo(() => {
-    if (typeof window === "undefined") return null;
-    if (!userId) return null;
-    if (!userStats.rank) return null;
-    const key = `dashboard:rank:${userId}`;
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? Number(raw) : NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }, [userId, userStats.rank]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!userId) return;
-    if (!userStats.rank) return;
-    window.localStorage.setItem(`dashboard:rank:${userId}`, String(userStats.rank));
-  }, [userId, userStats.rank]);
+  const previousRank = userStats.previousRank;
 
   const rankTrend = useMemo(() => {
     if (!userStats.rank) return "none" as const;

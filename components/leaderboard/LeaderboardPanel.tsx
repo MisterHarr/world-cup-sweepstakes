@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 export type LBUser = {
   id: string;
   rank: number;
+  previousRank?: number | null;
   name: string;
   totalScore: number;
   teams?: Array<{

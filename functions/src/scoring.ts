@@ -323,6 +323,7 @@ type LeaderboardRow = {
   totalScore: number;
   badgeCount: number;
   rank: number;
+  previousRank: number | null;
   department: string | null;
   /** Sum of goals scored by all portfolio teams — used as first tiebreaker. */
   tiebreakGoals: number;
@@ -630,6 +631,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
           tiebreakGoals,
           badgeCount,
           rank: 0,
+          previousRank: null,
           department,
         });
       }
@@ -646,6 +648,23 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     if (!isShadowTarget) {
       await commitBatches(userUpdates);
+    }
+
+    // Capture each user's rank from the previous leaderboard snapshot so the
+    // client can show up/down arrows without relying on localStorage.
+    const oldLeaderboardSnap = await leaderboardRef.get();
+    const oldRankByUserId: Record<string, number> = {};
+    if (oldLeaderboardSnap.exists) {
+      const oldRows = (oldLeaderboardSnap.data() as Record<string, unknown>).rows;
+      if (Array.isArray(oldRows)) {
+        for (const r of oldRows) {
+          if (r && typeof r === "object" && typeof (r as Record<string, unknown>).userId === "string") {
+            const rec = r as Record<string, unknown>;
+            const rank = Number(rec.rank);
+            if (Number.isFinite(rank)) oldRankByUserId[rec.userId as string] = rank;
+          }
+        }
+      }
     }
 
     rows.sort((a, b) => {
@@ -665,6 +684,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
           row.tiebreakGoals === prev.tiebreakGoals;
         row.rank = sharedWithPrev ? prev.rank : idx + 1;
       }
+      row.previousRank = oldRankByUserId[row.userId] ?? null;
     });
 
     await leaderboardRef.set(
