@@ -212,6 +212,15 @@ export function AuthLandingPage() {
         router.push(confirmed ? "/dashboard" : "/featured-team");
       } catch (err) {
         console.error("ensureUserDoc failed:", err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const isClosedError =
+          errMsg.includes("closed") || errMsg.includes("failed-precondition");
+        if (isClosedError && registrationClosed) {
+          await signOut(auth).catch(() => {});
+          setShowClosedModal(true);
+          setContinuing(false);
+          return;
+        }
         setBootstrapStatus("Profile bootstrap failed.");
         setBootstrapFailed(true);
         setContinuing(false);

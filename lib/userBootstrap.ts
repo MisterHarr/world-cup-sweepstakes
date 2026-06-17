@@ -65,14 +65,30 @@ export async function ensureUserDoc(params: {
     }
   }
 
+  if (Date.now() >= REGISTRATION_DEADLINE_MS) {
+    const ref = doc(db, "users", uid);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      throw new Error("Registration is now closed — the tournament has already started.");
+    }
+    await setDoc(
+      ref,
+      {
+        displayName: displayName || "Anonymous",
+        email: email || "",
+        photoURL: photoURL ?? null,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return { created: false, bootstrapPath: "clientFallback" };
+  }
+
   const ref = doc(db, "users", uid);
 
   try {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
-      if (Date.now() >= REGISTRATION_DEADLINE_MS) {
-        throw new Error("Registration is now closed — the tournament has already started.");
-      }
       const fullCreatePayload = {
         uid,
         displayName: displayName || "Anonymous",

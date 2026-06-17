@@ -162,6 +162,13 @@ export const assignDrawnTeams = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
 
+  if (Date.now() >= REGISTRATION_DEADLINE_MS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Registration is now closed — the tournament has already started."
+    );
+  }
+
   const db = admin.firestore();
 
   // Read the static teams collection outside the transaction — 48 docs, never
@@ -243,6 +250,17 @@ export const confirmFeaturedTeam = onCall(CALL_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+
+  if (Date.now() >= REGISTRATION_DEADLINE_MS) {
+    const db = admin.firestore();
+    const existingSnap = await db.collection("users").doc(uid).get();
+    if (!existingSnap.exists || !isRecord(existingSnap.data()?.entry)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Registration is now closed — the tournament has already started."
+      );
+    }
   }
 
   const requestData = isRecord(request.data) ? request.data : {};
@@ -561,6 +579,14 @@ export const setDepartment = onCall(CALL_OPTS, async (request) => {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
+
+  if (!snap.exists && Date.now() >= REGISTRATION_DEADLINE_MS) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Registration is now closed — the tournament has already started."
+    );
+  }
+
   const existing = (snap.exists ? snap.data() : {}) as Record<string, unknown>;
   const existingDept =
     typeof existing.department === "string" ? existing.department : null;
