@@ -27,6 +27,10 @@ const metadataBaseUrl =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3001";
 
 const description = `${BRANDING.tagline} Play along with ${BRANDING.shortName}.`;
+const currentBuildId =
+  process.env.VERCEL_GIT_COMMIT_SHA ??
+  process.env.NEXT_PUBLIC_BUILD_ID ??
+  "dev";
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
@@ -71,7 +75,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fontFfDisplay.variable} ${fontFfUi.variable}`}>
       <body className="antialiased">
-        <BuildSync />
+        <BuildSync currentBuildId={currentBuildId} />
         <OfflineIndicator />
         <AuthSignedOutRedirect />
         <PageLiftRoot>{children}</PageLiftRoot>

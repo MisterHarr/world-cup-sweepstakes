@@ -66,7 +66,7 @@ import {
 // transition LIVE→FINISHED, at which point both caches are explicitly busted.
 const MATCH_CACHE_KEY = "ff_matches_v4"; // bump suffix to bust stale entries (v4: card data in summary)
 const MATCH_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
-const TEAMS_CACHE_KEY = "ff_teams_v3";   // bump suffix to bust stale entries (v3: post-2022-cleanup team stats)
+const TEAMS_CACHE_KEY = "ff_teams_v4";   // bump suffix to bust stale entries (v4: transfer-market eliminated-state refresh)
 const TEAMS_CACHE_TTL = 4 * 60 * 60 * 1000; // 4 hours
 
 const LeaderboardPanel = dynamicImport(
