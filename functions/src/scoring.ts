@@ -392,10 +392,14 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     // Aggregate per-team stats from a match subset.
     // `minKickoffMs` excludes matches that kicked off at or before that
-    // timestamp — used to give late joiners scoring only from matches that
-    // start AFTER they signed up.  Pass null to include all matches.
+    // timestamp; `maxKickoffMs` excludes matches that kicked off at or after.
+    // Used both for late-joiner filtering (per-user) and for per-team
+    // ownership windows when a user has transferred (forward-only scoring).
+    // Pass null on either bound for "no limit".
     function aggregateStats(
-      minKickoffMs: number | null
+      minKickoffMs: number | null,
+      maxKickoffMs: number | null = null,
+      teamFilter: Set<string> | null = null
     ): Record<string, TeamStats> {
       const stats: Record<string, TeamStats> = {};
       matchesSnap.docs.forEach((docSnap) => {
@@ -404,11 +408,15 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
         if (!status || !eligibleStatuses.includes(status)) return;
         if (data.isScoringEligible === false) return; // placeholder fixtures never count
 
-        // Late-joiner filter: skip matches that kicked off before the user joined.
-        if (minKickoffMs !== null) {
+        // Window filter — applies to late joiners (min) and per-team
+        // ownership windows for transferred teams (min and/or max).
+        if (minKickoffMs !== null || maxKickoffMs !== null) {
           const kickoffRaw = typeof data.kickoffTime === "string" ? data.kickoffTime : "";
           const kickoffMs = Date.parse(kickoffRaw);
-          if (!Number.isNaN(kickoffMs) && kickoffMs <= minKickoffMs) return;
+          if (!Number.isNaN(kickoffMs)) {
+            if (minKickoffMs !== null && kickoffMs <= minKickoffMs) return;
+            if (maxKickoffMs !== null && kickoffMs >= maxKickoffMs) return;
+          }
         }
 
         const homeTeamId = asString(data.homeTeamId);
@@ -418,6 +426,7 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
         if (!homeTeamId || !awayTeamId) return;
         if (homeScore === null || awayScore === null) return;
+        if (teamFilter && !teamFilter.has(homeTeamId) && !teamFilter.has(awayTeamId)) return;
 
         if (!stats[homeTeamId]) stats[homeTeamId] = emptyStats();
         if (!stats[awayTeamId]) stats[awayTeamId] = emptyStats();
@@ -525,6 +534,12 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
     const excludeMockUsersFromLeaderboard =
       mockUserSettings.excludeMockUsersFromLeaderboard !== false;
     const transferPenaltyByUserId: Record<string, number> = {};
+    type TransferEvent = {
+      dropTeamId: string;
+      pickupTeamId: string;
+      atMs: number;
+    };
+    const transferEventsByUserId: Record<string, TransferEvent[]> = {};
 
     transferEventsSnap.docs.forEach((transferEventDoc) => {
       const data = transferEventDoc.data() as Record<string, unknown>;
@@ -540,7 +555,22 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
       transferPenaltyByUserId[uid] =
         (transferPenaltyByUserId[uid] ?? 0) + penaltyPoints;
+
+      // Capture per-user transfer history for forward-only scoring windows.
+      const dropTeamId = asString(data.dropTeamId);
+      const pickupTeamId = asString(data.pickupTeamId);
+      const atMs = asNumberOrNull(data.createdAtMs);
+      if (dropTeamId && pickupTeamId && atMs !== null) {
+        if (!transferEventsByUserId[uid]) transferEventsByUserId[uid] = [];
+        transferEventsByUserId[uid].push({ dropTeamId, pickupTeamId, atMs });
+      }
     });
+
+    // Sort each user's transfers chronologically so window stitching is correct
+    // when a player makes multiple transfers.
+    Object.values(transferEventsByUserId).forEach((events) =>
+      events.sort((a, b) => a.atMs - b.atMs)
+    );
 
     const userUpdates: BatchUpdate[] = [];
 
@@ -588,38 +618,104 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
         if (!Number.isNaN(parsed)) joinedAtMs = parsed;
       }
 
-      // If joinedAt exists AND at least one match has kicked off before it,
-      // recompute team points using only matches that started after joinedAt.
-      // Otherwise reuse the global teamPointsById (fast path for users who
-      // joined before the tournament started — the common case).
-      let userTeamPoints = teamPointsById;
-      let userStatsByTeam = statsByTeam;
-      if (joinedAtMs !== null && joinedAtMs >= earliestKickoffMs) {
-        const userStats = aggregateStats(joinedAtMs);
-        const userPoints: Record<string, number> = {};
-        Object.entries(userStats).forEach(([id, s]) => {
-          userPoints[id] = calcTeamPoints(s);
-        });
-        userTeamPoints = userPoints;
-        userStatsByTeam = userStats;
+      // Forward-only scoring with per-team ownership windows.
+      //
+      // For each team currently in the squad we sum stats only from matches
+      // kicked off while the team was IN the squad. For users who transferred,
+      // teams they dropped also contribute the points they earned BEFORE the
+      // drop (so you keep the points your old team built up, and the new team
+      // only earns from matches that kick off after you picked them).
+      //
+      // Window boundaries:
+      //   • joinedAt  — entry.confirmedAt (late-joiner floor)
+      //   • dropAt    — transferEvent.createdAtMs for the team you dropped
+      //   • pickupAt  — transferEvent.createdAtMs for the team you picked up
+      //
+      // Most users have no transfers and their team-stats reduce to the
+      // global aggregation (fast path), so this is cheap.
+      const userTransfers = transferEventsByUserId[userDoc.id] ?? [];
+      const baseFloorMs =
+        joinedAtMs !== null && joinedAtMs >= earliestKickoffMs ? joinedAtMs : null;
+
+      // Build the set of all teams that matter to this user (currently owned
+      // PLUS any team they previously dropped), and the (start, end) window
+      // for each. A user can transfer multiple times in/out of the same team
+      // in principle — we keep a list of windows per team and sum across them.
+      type Window = { start: number | null; end: number | null };
+      const ownership: Record<string, Window[]> = {};
+
+      const addWindow = (teamId: string, start: number | null, end: number | null) => {
+        if (!ownership[teamId]) ownership[teamId] = [];
+        ownership[teamId].push({ start, end });
+      };
+
+      // Start with the initial squad windows ([joinedAt, ∞)).
+      if (featuredId) addWindow(featuredId, baseFloorMs, null);
+      drawnIds.forEach((id) => addWindow(id, baseFloorMs, null));
+
+      // Apply each transfer in order: close the drop team's open window at
+      // the transfer time, open a new window for the pickup team starting
+      // at the transfer time.
+      for (const ev of userTransfers) {
+        const openWindows = ownership[ev.dropTeamId];
+        if (openWindows) {
+          // Close the most recent open window for this team.
+          for (let i = openWindows.length - 1; i >= 0; i--) {
+            if (openWindows[i].end === null) {
+              openWindows[i] = { start: openWindows[i].start, end: ev.atMs };
+              break;
+            }
+          }
+        }
+        addWindow(ev.pickupTeamId, ev.atMs, null);
       }
 
-      const featuredPoints = featuredId ? userTeamPoints[featuredId] ?? 0 : 0;
-      const drawnPoints = drawnIds.reduce(
-        (sum, teamId) => sum + (userTeamPoints[teamId] ?? 0),
-        0
-      );
+      // For users with no transfers and no late-joiner offset, this whole
+      // section reduces to a lookup in teamPointsById (no extra aggregation).
+      const canUseGlobalStats = userTransfers.length === 0 && baseFloorMs === null;
+
+      const pointsForTeam = (teamId: string): { points: number; goals: number } => {
+        if (canUseGlobalStats) {
+          return {
+            points: teamPointsById[teamId] ?? 0,
+            goals: statsByTeam[teamId]?.goalsScored ?? 0,
+          };
+        }
+        const windows = ownership[teamId];
+        if (!windows || windows.length === 0) return { points: 0, goals: 0 };
+        let totalPoints = 0;
+        let totalGoals = 0;
+        const filter = new Set<string>([teamId]);
+        for (const w of windows) {
+          const stats = aggregateStats(w.start, w.end, filter)[teamId];
+          if (!stats) continue;
+          totalPoints += calcTeamPoints(stats);
+          totalGoals += stats.goalsScored;
+        }
+        return { points: totalPoints, goals: totalGoals };
+      };
+
+      // Sum: featured ×2, all currently-owned drawn ×1, plus any team
+      // previously dropped (its window has end<∞) at ×1.
+      const allRelevantTeamIds = Object.keys(ownership);
+      let featuredPoints = 0;
+      let drawnPoints = 0;
+      let tiebreakGoals = 0;
+      for (const teamId of allRelevantTeamIds) {
+        const { points, goals } = pointsForTeam(teamId);
+        if (teamId === featuredId) {
+          featuredPoints += points;
+        } else {
+          drawnPoints += points;
+        }
+        tiebreakGoals += goals;
+      }
+
       const transferPenaltyPoints = transferPenaltyByUserId[userDoc.id] ?? 0;
       const badgeCount = readBadgeCount(data);
 
       const totalScore =
         featuredPoints * 2 + drawnPoints - transferPenaltyPoints;
-
-      // Tiebreaker: total goals scored by all portfolio teams (unweighted)
-      // — also filtered by joinedAt for late joiners.
-      const tiebreakGoals =
-        (featuredId ? (userStatsByTeam[featuredId]?.goalsScored ?? 0) : 0) +
-        drawnIds.reduce((sum, id) => sum + (userStatsByTeam[id]?.goalsScored ?? 0), 0);
 
       const isMock = data.isMock === true;
 

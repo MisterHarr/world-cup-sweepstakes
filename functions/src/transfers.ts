@@ -9,12 +9,15 @@ const TRANSFER_WINDOW_DOC = "transferWindow";
 const TRANSFER_SCORING_VERSION = "v2-tiered-cost";
 
 // Tiered transfer cost system
-// Calibrated for post-group-stage window: top teams earn ~15-20 pts across
-// remaining knockout matches, so costs must stay well below that ceiling.
-const BASE_COST = 3;           // Flat fee for any transfer
-const UPGRADE_MULTIPLIER = 4;  // Per tier step when upgrading
-const FLAT_DOWNGRADE_COST = 2; // Flat cost when moving to a lower tier
-const MINIMUM_COST = 2;        // Floor
+// Calibrated for forward-only scoring (you keep your old team's points up to
+// the transfer moment and only earn from the new team from then on). The
+// penalty's job under that model is just to discourage frivolous swapping,
+// not to claw back retroactive snipes — so it's lower than under the old
+// retroactive model.
+const BASE_COST = 2;           // Flat fee for any transfer (was 3)
+const UPGRADE_MULTIPLIER = 3;  // Per tier step when upgrading (was 4)
+const FLAT_DOWNGRADE_COST = 1; // Flat cost when moving to a lower tier (was 2)
+const MINIMUM_COST = 1;        // Floor (was 2)
 
 type PortfolioRole = "featured" | "drawn";
 type PortfolioItem = { teamId: string; role: PortfolioRole };
