@@ -21,12 +21,12 @@ export interface TransferCostCalculation {
   transferType: 'upgrade' | 'downgrade' | 'lateral';
 }
 
-// Calibrated for post-group-stage window: top teams earn ~15-20 pts across
-// remaining knockout matches, so costs must stay well below that ceiling.
-const BASE_COST = 3;           // Flat fee for any transfer
-const UPGRADE_MULTIPLIER = 4;  // Per tier step when upgrading
-const FLAT_DOWNGRADE_COST = 2; // Flat cost when moving to a lower tier
-const MINIMUM_COST = 2;        // Floor
+// Lowered on 2026-06-28 alongside forward-only scoring — the penalty no
+// longer compensates for retroactive points snipes, so it's smaller.
+const BASE_COST = 2;           // Flat fee for any transfer
+const UPGRADE_MULTIPLIER = 3;  // Per tier step when upgrading
+const FLAT_DOWNGRADE_COST = 1; // Flat cost when moving to a lower tier
+const MINIMUM_COST = 1;        // Floor
 
 /**
  * Calculate the cost of a transfer based on team tiers

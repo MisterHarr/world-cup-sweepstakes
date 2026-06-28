@@ -3,6 +3,7 @@ import { Barlow_Condensed, Inter } from "next/font/google";
 import "./globals.css";
 
 import { AuthSignedOutRedirect } from "@/components/AuthSignedOutRedirect";
+import { BuildSync } from "@/components/BuildSync";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { PageLiftRoot } from "@/components/PageLiftRoot";
 import { BRANDING, themeColorHex } from "@/lib/branding";
@@ -70,6 +71,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${fontFfDisplay.variable} ${fontFfUi.variable}`}>
       <body className="antialiased">
+        <BuildSync />
         <OfflineIndicator />
         <AuthSignedOutRedirect />
         <PageLiftRoot>{children}</PageLiftRoot>

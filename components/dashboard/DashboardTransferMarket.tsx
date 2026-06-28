@@ -17,11 +17,13 @@ export type MarketTeam = {
   tier?: number;
 };
 
-// Mirrors the server-side calculateTransferCost in functions/src/transfers.ts
-const BASE_COST = 3;
-const UPGRADE_MULTIPLIER = 4;  // per tier step when upgrading
-const FLAT_DOWNGRADE_COST = 2; // flat cost for any downgrade
-const MINIMUM_COST = 2;
+// Mirrors the server-side calculateTransferCost in functions/src/transfers.ts.
+// Lowered on 2026-06-28 when forward-only scoring was introduced — the penalty
+// no longer compensates for retroactive points snipes, so it's smaller.
+const BASE_COST = 2;
+const UPGRADE_MULTIPLIER = 3;  // per tier step when upgrading
+const FLAT_DOWNGRADE_COST = 1; // flat cost for any downgrade
+const MINIMUM_COST = 1;
 
 function calculateTransferCost(dropTier: number, pickupTier: number): number {
   const tierDifference = pickupTier - dropTier;
