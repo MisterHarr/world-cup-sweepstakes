@@ -87,7 +87,12 @@ function SquadReleaseCard({
   onClick: () => void;
 }) {
   const scoreFmtLocal = (n: number) =>
-    Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 1 }) : "0";
+    Number.isFinite(n)
+      ? n.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : "0.00";
   const isEliminated = team.status === "eliminated";
 
   return (
@@ -297,7 +302,12 @@ const DashboardTransferMarket = ({
   };
 
   const scoreFmt = (n: number) =>
-    Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 1 }) : String(n);
+    Number.isFinite(n)
+      ? n.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : String(n);
 
   const acknowledgeSuccess = () => {
     setIsConfirmed(false);
