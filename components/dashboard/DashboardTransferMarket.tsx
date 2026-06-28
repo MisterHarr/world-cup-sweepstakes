@@ -98,7 +98,7 @@ function SquadReleaseCard({
         selected
           ? "scale-[0.96] border-[rgba(239,68,68,0.6)] ring-1 ring-[rgba(239,68,68,0.35)]"
           : isEliminated
-          ? "border-white/5 hover:border-white/15"
+          ? "border-[rgba(239,68,68,0.5)]"
           : "border-white/10 hover:border-white/25"
       )}
     >
@@ -107,33 +107,48 @@ function SquadReleaseCard({
         <img
           src={team.flagUrl}
           alt={team.name}
-          className={cn(
-            "absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]",
-            isEliminated ? "opacity-25 grayscale" : "opacity-55"
-          )}
+          className="absolute inset-0 h-full w-full object-cover opacity-55 transition-transform duration-300 group-hover:scale-[1.03]"
         />
       ) : (
         <div className="absolute inset-0 bg-white/5 flex items-center justify-center">
           <span className="text-xl font-black text-white/10 tracking-tight">{team.id.slice(0, 3).toUpperCase()}</span>
         </div>
       )}
-      {/* Gradient overlay */}
+      {/* Gradient overlay — matches MyTeams */}
       <div className={cn(
         "absolute inset-0 bg-gradient-to-t from-black/95 via-black/55 to-transparent",
-        selected && "from-[#1a0505]/95 via-[#1a0505]/55"
+        selected && "from-[#1a0505]/95 via-[#1a0505]/55",
+        isEliminated && !selected && "from-[#1a0505]/98 via-[#1a0505]/60"
       )} />
-      {/* Eliminated badge */}
+
+      {/* Eliminated — diagonal stamp overlay (matches MyTeams SquadCard) */}
       {isEliminated && !selected && (
-        <div className="absolute top-2 left-2 z-20 rounded-md bg-[#ef4444]/80 px-1.5 py-0.5 backdrop-blur-sm">
-          <span className="font-ff-ui text-[9px] font-bold uppercase tracking-wider text-white">Out</span>
+        <div className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden" aria-hidden>
+          <div className="absolute inset-0 bg-red-950/30" />
+          <span
+            className="relative select-none font-ff-display font-black uppercase tracking-[0.18em] text-red-500/70 mix-blend-screen"
+            style={{
+              fontSize: "clamp(11px, 4.5cqw, 18px)",
+              transform: "rotate(-32deg)",
+              textShadow: "0 0 24px rgba(239,68,68,0.5)",
+              letterSpacing: "0.2em",
+              whiteSpace: "nowrap",
+              border: "1.5px solid rgba(239,68,68,0.35)",
+              padding: "3px 10px",
+              borderRadius: "3px",
+            }}
+          >
+            Eliminated
+          </span>
         </div>
       )}
+
       {/* Content */}
-      <div className="absolute bottom-0 inset-x-0 z-10 px-2.5 pb-2 pt-5">
+      <div className="absolute bottom-0 inset-x-0 z-20 px-2.5 pb-2 pt-5">
         <div className="flex items-end justify-between gap-1">
           <p className={cn(
             "min-w-0 truncate font-black leading-tight text-[13px]",
-            selected ? "text-[#ef4444]" : isEliminated ? "text-white/50 line-through" : "text-white"
+            selected ? "text-[#ef4444]" : "text-white"
           )}>
             {team.name}
           </p>
@@ -141,7 +156,7 @@ function SquadReleaseCard({
             <div className="text-[7px] uppercase tracking-wider text-white/50 font-semibold leading-none mb-0.5">pts</div>
             <div className={cn(
               "font-ff-display font-black leading-none tabular-nums text-[22px]",
-              selected ? "text-[#ef4444]" : isEliminated ? "text-white/50" : "text-white"
+              selected ? "text-[#ef4444]" : isEliminated ? "text-[var(--ff-danger)]" : "text-white"
             )}>
               {scoreFmtLocal(team.points ?? 0)}
             </div>
@@ -150,7 +165,7 @@ function SquadReleaseCard({
       </div>
       {/* Selected indicator */}
       {selected && (
-        <div className="absolute top-2 right-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-[#ef4444]">
+        <div className="absolute top-2 right-2 z-30 flex h-5 w-5 items-center justify-center rounded-full bg-[#ef4444]">
           <span className="font-ff-ui text-[10px] font-bold text-white">✕</span>
         </div>
       )}
