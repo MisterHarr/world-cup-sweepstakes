@@ -649,9 +649,21 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
         ownership[teamId].push({ start, end });
       };
 
-      // Start with the initial squad windows ([joinedAt, ∞)).
+      // Reconstruct the ORIGINAL drawn squad by reverse-applying transfers
+      // to the current portfolio. drawnIds reflects the squad AFTER transfers
+      // (Germany is in it for EdiHa, Haiti is gone) — so if we seeded windows
+      // from drawnIds directly, the pickup team would get double-counted
+      // (once as a current squad member, once again from the transfer event).
+      const originalDrawnIds = new Set<string>(drawnIds);
+      for (const ev of userTransfers) {
+        originalDrawnIds.delete(ev.pickupTeamId);
+        originalDrawnIds.add(ev.dropTeamId);
+      }
+
+      // Featured cannot be transferred, so its window is simply [joinedAt, ∞).
       if (featuredId) addWindow(featuredId, baseFloorMs, null);
-      drawnIds.forEach((id) => addWindow(id, baseFloorMs, null));
+      // Initial drawn squad windows ([joinedAt, ∞)).
+      originalDrawnIds.forEach((id) => addWindow(id, baseFloorMs, null));
 
       // Apply each transfer in order: close the drop team's open window at
       // the transfer time, open a new window for the pickup team starting
