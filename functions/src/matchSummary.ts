@@ -15,7 +15,8 @@ import { FieldValue } from "firebase-admin/firestore";
  */
 export async function patchMatchSummary(
   db: FirebaseFirestore.Firestore,
-  updatedEntries: Array<{ id: string; data: Record<string, unknown> }>
+  updatedEntries: Array<{ id: string; data: Record<string, unknown> }>,
+  removedIds: string[] = []
 ): Promise<void> {
   const summaryRef = db.collection("settings").doc("matchSummary");
   const existing = await summaryRef.get();
@@ -24,10 +25,15 @@ export async function patchMatchSummary(
     ? (existingData.matches as Record<string, unknown>[])
     : [];
 
+  // Skip placeholder matches that have been superseded by real fixtures in the
+  // matches collection. Without this, deleting a placeholder doc from `matches`
+  // doesn't propagate here and the UI keeps showing duplicate R32/R16/etc rows.
+  const removeSet = new Set(removedIds);
+
   // Build a map keyed by matchId so we can merge efficiently
   const matchMap: Record<string, Record<string, unknown>> = {};
   existingMatches.forEach((m) => {
-    if (typeof m.id === "string") matchMap[m.id] = m;
+    if (typeof m.id === "string" && !removeSet.has(m.id)) matchMap[m.id] = m;
   });
 
   // Overwrite the changed entries with compact, plain-JSON data

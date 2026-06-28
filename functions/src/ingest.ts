@@ -843,6 +843,7 @@ export async function applyNormalizedMatchUpdates(
   // Only runs for the live provider writing to the public collection — not for
   // fixture replay or shadow mode.
   let deletedPlaceholders = 0;
+  const deletedPlaceholderIds: string[] = [];
   if (options.source === "football-data" && collectionName === "matches") {
     const knockoutStagesWritten = new Set(
       updates
@@ -865,6 +866,7 @@ export async function applyNormalizedMatchUpdates(
         let delCount = 0;
         for (const doc of toDelete) {
           delBatch.delete(doc.ref);
+          deletedPlaceholderIds.push(doc.id);
           delCount += 1;
           if (delCount >= 400) {
             await delBatch.commit();
@@ -886,10 +888,12 @@ export async function applyNormalizedMatchUpdates(
   // collection.  This single-doc summary (settings/matchSummary) is what the
   // frontend reads instead of issuing 104 separate document reads.
   // Cost: 1 read (existing summary) + 1 write per ingest cycle.
-  if (collectionName === "matches" && updates.length > 0) {
-    patchMatchSummary(db, updates.map((u) => ({ id: u.ref.id, data: u.data }))).catch(
-      (err) => console.error("[ingest] patchMatchSummary failed (non-fatal):", err)
-    );
+  if (collectionName === "matches" && (updates.length > 0 || deletedPlaceholderIds.length > 0)) {
+    patchMatchSummary(
+      db,
+      updates.map((u) => ({ id: u.ref.id, data: u.data })),
+      deletedPlaceholderIds
+    ).catch((err) => console.error("[ingest] patchMatchSummary failed (non-fatal):", err));
   }
 
   return {

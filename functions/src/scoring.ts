@@ -506,16 +506,46 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     const teamUpdates: BatchUpdate[] = [];
 
+    // Derive elimination from match data. A team is eliminated when they have
+    // no upcoming or live match and have already played at least one. This
+    // catches both group-stage non-advancers (no R32 fixture for them after
+    // their 3 group games are done) and knockout losers (no further fixture
+    // after they're knocked out).
+    const teamUpcomingCount: Record<string, number> = {};
+    const teamPlayedCount: Record<string, number> = {};
+    matchesSnap.docs.forEach((d) => {
+      const m = d.data() as Record<string, unknown>;
+      if (m.isScoringEligible === false) return;
+      const home = asString(m.homeTeamId);
+      const away = asString(m.awayTeamId);
+      const status = asStatus(m.status);
+      if (!status) return;
+      [home, away].forEach((id) => {
+        if (!id) return;
+        if (status === "SCHEDULED" || status === "LIVE") {
+          teamUpcomingCount[id] = (teamUpcomingCount[id] ?? 0) + 1;
+        }
+        if (status === "FINISHED" || status === "LIVE") {
+          teamPlayedCount[id] = (teamPlayedCount[id] ?? 0) + 1;
+        }
+      });
+    });
+
     teamsSnap.docs.forEach((teamDoc) => {
       const teamId = teamDoc.id;
       const stats = statsByTeam[teamId] ?? emptyStats();
       const points = calcTeamPoints(stats);
       teamPointsById[teamId] = points;
 
+      const isEliminated =
+        (teamPlayedCount[teamId] ?? 0) > 0 &&
+        (teamUpcomingCount[teamId] ?? 0) === 0;
+
       teamUpdates.push({
         ref: teamDoc.ref,
         data: {
           ...stats,
+          isEliminated,
           lastUpdated: FieldValue.serverTimestamp(),
         },
       });
