@@ -132,6 +132,7 @@ export default function StandaloneLeaderboardPage() {
           flagUrl: String(featuredRaw.flagUrl ?? ""),
           role: "featured",
           contribution: Number(featuredRaw.contribution ?? 0),
+          isEliminated: featuredRaw.isEliminated === true,
         }
       : null;
 
@@ -146,6 +147,7 @@ export default function StandaloneLeaderboardPage() {
           flagUrl: String(teamData.flagUrl ?? ""),
           role: "drawn" as const,
           contribution: Number(teamData.contribution ?? 0),
+          isEliminated: teamData.isEliminated === true,
         };
       })
       .filter((team: SquadTeamVM) => Boolean(team.id));

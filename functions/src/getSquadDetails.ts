@@ -9,6 +9,7 @@ type TeamOut = {
   tier?: number;
   flagUrl?: string;
   contribution: number;
+  isEliminated?: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,6 +153,7 @@ export const getSquadDetails = onCall(CALL_OPTS, async (request) => {
       tier: asNumber(data.tier),
       flagUrl: asString(data.flagUrl) ?? undefined,
       contribution: baseContribution * multiplier,
+      isEliminated: data.isEliminated === true,
     };
   });
 
@@ -175,6 +177,7 @@ export const getSquadDetails = onCall(CALL_OPTS, async (request) => {
           tier: asNumber(data.tier),
           flagUrl: asString(data.flagUrl) ?? undefined,
           contribution: baseContribution * multiplier,
+          isEliminated: data.isEliminated === true,
         };
       }
     }

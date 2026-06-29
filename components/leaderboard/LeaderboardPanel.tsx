@@ -27,6 +27,7 @@ export type SquadTeamVM = {
   flagUrl?: string;
   role: "featured" | "drawn";
   contribution: number;
+  isEliminated?: boolean;
 };
 
 export type SquadVM = {
@@ -655,6 +656,7 @@ export default function LeaderboardPanel({
                   {squadTeams.length > 0 ? (
                     squadTeams.filter((team) => !String(team.id ?? "").startsWith("PO_")).map((team) => {
                       const isStarTeam = team.role === "featured";
+                      const isEliminated = team.isEliminated === true;
                       const tier = Number(team.tier ?? 0) || 4;
                       const teamId = String(team.id ?? "-");
                       const flagUrl = String(team.flagUrl ?? "");
@@ -680,10 +682,14 @@ export default function LeaderboardPanel({
                         <div
                           key={`${team.role}:${teamId}`}
                           className={[
-                            "relative overflow-hidden rounded-xl border border-white/10",
+                            "relative overflow-hidden rounded-xl border",
                             "aspect-[4/3]",
                             "shadow-[0_8px_20px_rgba(0,0,0,0.28)]",
-                            isStarTeam ? "ring-1 ring-orange-400/50" : "",
+                            isEliminated
+                              ? "border-[rgba(239,68,68,0.5)]"
+                              : isStarTeam
+                                ? "border-white/10 ring-1 ring-orange-400/50"
+                                : "border-white/10",
                           ].join(" ")}
                         >
                           {/* Flag — full-bleed background */}
@@ -700,7 +706,32 @@ export default function LeaderboardPanel({
                           )}
 
                           {/* Deep gradient — covers bottom 65% so score dominates */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
+                          <div className={[
+                            "absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 to-transparent",
+                            isEliminated ? "from-[#1a0505]/98 via-[#1a0505]/65" : "",
+                          ].join(" ")} />
+
+                          {/* Eliminated — diagonal stamp overlay (matches My Teams SquadCard) */}
+                          {isEliminated && (
+                            <div className="absolute inset-0 z-10 flex items-center justify-center overflow-hidden" aria-hidden>
+                              <div className="absolute inset-0 bg-red-950/30" />
+                              <span
+                                className="relative select-none font-black uppercase tracking-[0.18em] text-red-500/70 mix-blend-screen"
+                                style={{
+                                  fontSize: "clamp(10px, 4cqw, 16px)",
+                                  transform: "rotate(-32deg)",
+                                  textShadow: "0 0 24px rgba(239,68,68,0.5)",
+                                  letterSpacing: "0.2em",
+                                  whiteSpace: "nowrap",
+                                  border: "1.5px solid rgba(239,68,68,0.35)",
+                                  padding: "3px 10px",
+                                  borderRadius: "3px",
+                                }}
+                              >
+                                Eliminated
+                              </span>
+                            </div>
+                          )}
 
                           {/* Star team badge — top left, compact */}
                           {isStarTeam && (
@@ -713,7 +744,7 @@ export default function LeaderboardPanel({
                           )}
 
                           {/* Bottom content */}
-                          <div className="absolute bottom-0 inset-x-0 z-10 px-2.5 pb-2 pt-1">
+                          <div className="absolute bottom-0 inset-x-0 z-20 px-2.5 pb-2 pt-1">
                             {/* Name + tier on one line */}
                             <div className="flex items-center justify-between gap-1 mb-0.5">
                               <span className="font-bold text-[12px] text-white leading-none truncate">
@@ -730,7 +761,10 @@ export default function LeaderboardPanel({
                             {/* Points — big */}
                             <div className="flex items-baseline justify-between gap-1">
                               <span className="text-[8px] uppercase tracking-wider text-white/65 font-semibold">pts</span>
-                              <span className="text-4xl font-black text-white leading-none tabular-nums tracking-tight">
+                              <span className={[
+                                "text-4xl font-black leading-none tabular-nums tracking-tight",
+                                isEliminated ? "text-[var(--ff-danger)]" : "text-white",
+                              ].join(" ")}>
                                 {points}
                               </span>
                             </div>

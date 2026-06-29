@@ -1262,6 +1262,7 @@ function DashboardPageContent() {
           flagUrl: String(featuredRaw.flagUrl ?? ""),
           role: "featured",
           contribution: Number(featuredRaw.contribution ?? 0),
+          isEliminated: featuredRaw.isEliminated === true,
         }
       : null;
 
@@ -1276,6 +1277,7 @@ function DashboardPageContent() {
         flagUrl: String(team.flagUrl ?? ""),
         role: "drawn" as const,
         contribution: Number(team.contribution ?? 0),
+        isEliminated: team.isEliminated === true,
         };
       })
       .filter((t: SquadTeamVM) => Boolean(t.id));
@@ -1302,6 +1304,7 @@ function DashboardPageContent() {
             role: "featured",
             contribution:
               calculateTeamPoints(teamsById[String(featuredTeamId)] ?? null) * 2,
+            isEliminated: teamsById[String(featuredTeamId)]?.isEliminated === true,
           }
         : null;
       const localDrawn: SquadTeamVM[] = (drawnTeamIds ?? []).slice(0, 5).map((teamId) => {
@@ -1315,6 +1318,7 @@ function DashboardPageContent() {
           flagUrl: String(team?.flagUrl ?? ""),
           role: "drawn" as const,
           contribution: calculateTeamPoints(team),
+          isEliminated: team?.isEliminated === true,
         };
       });
 
