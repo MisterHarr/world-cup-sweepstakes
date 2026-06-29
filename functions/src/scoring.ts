@@ -506,29 +506,64 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
 
     const teamUpdates: BatchUpdate[] = [];
 
-    // Derive elimination from match data. A team is eliminated when they have
-    // no upcoming or live match and have already played at least one. This
-    // catches both group-stage non-advancers (no R32 fixture for them after
-    // their 3 group games are done) and knockout losers (no further fixture
-    // after they're knocked out).
-    const teamUpcomingCount: Record<string, number> = {};
-    const teamPlayedCount: Record<string, number> = {};
+    // Derive elimination from actual match RESULTS, not fixture availability.
+    // Using "no upcoming fixture" as the signal (the previous approach) wrongly
+    // flagged knockout WINNERS as eliminated whenever the next round's bracket
+    // hadn't been populated yet by the provider — e.g. Canada beat South
+    // Africa in the R32 but had no R16 fixture for a day or two while the
+    // bracket was still TBD, so they got marked eliminated right after winning.
+    //
+    // Correct rule:
+    //   • Knockout (non-GROUP) loser in a FINISHED match → eliminated, full
+    //     stop, regardless of whether their next-round fixture exists yet.
+    //   • Group stage: a team is out once (a) they've played all their group
+    //     matches AND (b) the R32 bracket is fully resolved (at least one real,
+    //     non-placeholder R32 fixture exists — by construction in ingest.ts's
+    //     supersession step, all 16 real R32 fixtures land in the same write,
+    //     so "any real R32 fixture exists" means the full lineup is known) AND
+    //     (c) the team does not appear in that real R32 lineup.
+    const knockoutEliminated = new Set<string>();
+    let r32LineupResolved = false;
+    const r32TeamIds = new Set<string>();
+
     matchesSnap.docs.forEach((d) => {
       const m = d.data() as Record<string, unknown>;
-      if (m.isScoringEligible === false) return;
+      const stage = asStage(m.stage);
+      const status = asStatus(m.status);
       const home = asString(m.homeTeamId);
       const away = asString(m.awayTeamId);
-      const status = asStatus(m.status);
-      if (!status) return;
-      [home, away].forEach((id) => {
-        if (!id) return;
-        if (status === "SCHEDULED" || status === "LIVE") {
-          teamUpcomingCount[id] = (teamUpcomingCount[id] ?? 0) + 1;
-        }
-        if (status === "FINISHED" || status === "LIVE") {
-          teamPlayedCount[id] = (teamPlayedCount[id] ?? 0) + 1;
-        }
-      });
+      if (!stage || !status || !home || !away) return;
+
+      if (stage === "R32" && m.isPlaceholder !== true) {
+        r32LineupResolved = true;
+        r32TeamIds.add(home);
+        r32TeamIds.add(away);
+      }
+
+      if (stage === "GROUP" || status !== "FINISHED") return;
+
+      const homeScore = asNumberOrNull(m.homeScore);
+      const awayScore = asNumberOrNull(m.awayScore);
+      if (homeScore === null || awayScore === null) return;
+
+      const winnerField = asString(m.winner); // "HOME" | "AWAY" for pens/ET deciders
+      let loser: string | null = null;
+      if (homeScore > awayScore) loser = away;
+      else if (awayScore > homeScore) loser = home;
+      else if (winnerField === "HOME") loser = away;
+      else if (winnerField === "AWAY") loser = home;
+
+      if (loser) knockoutEliminated.add(loser);
+    });
+
+    const teamPlayedGroupCount: Record<string, number> = {};
+    matchesSnap.docs.forEach((d) => {
+      const m = d.data() as Record<string, unknown>;
+      if (asStage(m.stage) !== "GROUP" || asStatus(m.status) !== "FINISHED") return;
+      const home = asString(m.homeTeamId);
+      const away = asString(m.awayTeamId);
+      if (home) teamPlayedGroupCount[home] = (teamPlayedGroupCount[home] ?? 0) + 1;
+      if (away) teamPlayedGroupCount[away] = (teamPlayedGroupCount[away] ?? 0) + 1;
     });
 
     teamsSnap.docs.forEach((teamDoc) => {
@@ -537,9 +572,12 @@ export async function recomputeScoresCore(options: RecomputeOptions) {
       const points = calcTeamPoints(stats);
       teamPointsById[teamId] = points;
 
-      const isEliminated =
-        (teamPlayedCount[teamId] ?? 0) > 0 &&
-        (teamUpcomingCount[teamId] ?? 0) === 0;
+      const missedGroupAdvancement =
+        r32LineupResolved &&
+        (teamPlayedGroupCount[teamId] ?? 0) >= 3 &&
+        !r32TeamIds.has(teamId);
+
+      const isEliminated = knockoutEliminated.has(teamId) || missedGroupAdvancement;
 
       teamUpdates.push({
         ref: teamDoc.ref,
